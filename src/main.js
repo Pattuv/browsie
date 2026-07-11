@@ -7,6 +7,8 @@ if (started) {
   app.quit();
 }
 
+let onboardingAnimatedThisSession = false;
+
 const createWindow = () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -37,6 +39,10 @@ const createWindow = () => {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   ipcMain.handle('open-external', (_event, url) => shell.openExternal(url));
+  ipcMain.handle('should-animate-onboarding', () => !onboardingAnimatedThisSession);
+  ipcMain.handle('mark-onboarding-played', () => {
+    onboardingAnimatedThisSession = true;
+  });
 
   createWindow();
 

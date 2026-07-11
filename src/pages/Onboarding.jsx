@@ -12,11 +12,6 @@ const REST_STAGGER_MS = 160;
 const REST_LAYOUT_MS = TITLE_DELAY_MS + BLUR_DURATION_MS + POST_TITLE_DELAY_MS;
 const REST_FADE_START_MS = REST_LAYOUT_MS + TITLE_MOVE_MS + 50;
 const GUIDE_URL = 'https://theodocs.super.site/theo-help-center';
-const ONBOARDING_PLAYED_KEY = 'theo-onboarding-played';
-
-function hasPlayedOnboarding() {
-  return localStorage.getItem(ONBOARDING_PLAYED_KEY) === 'true';
-}
 
 function revealClass(shouldAnimate, visible) {
   if (!shouldAnimate) {
@@ -49,39 +44,67 @@ function ActionLines({ className, mirrored = false }) {
 }
 
 function Onboarding() {
-  const shouldAnimate = useRef(!hasPlayedOnboarding());
+  const shouldAnimate = useRef(true);
   const titleRef = useRef(null);
   const titleStartRect = useRef(null);
-  const titleFlipPlayed = useRef(!shouldAnimate.current);
-  const [showTitle, setShowTitle] = useState(!shouldAnimate.current);
-  const [showRestLayout, setShowRestLayout] = useState(!shouldAnimate.current);
-  const [showMascot, setShowMascot] = useState(!shouldAnimate.current);
-  const [showSubtitle, setShowSubtitle] = useState(!shouldAnimate.current);
-  const [showButton, setShowButton] = useState(!shouldAnimate.current);
-  const [showCard, setShowCard] = useState(!shouldAnimate.current);
+  const titleFlipPlayed = useRef(false);
+  const [showTitle, setShowTitle] = useState(false);
+  const [showRestLayout, setShowRestLayout] = useState(false);
+  const [showMascot, setShowMascot] = useState(false);
+  const [showSubtitle, setShowSubtitle] = useState(false);
+  const [showButton, setShowButton] = useState(false);
+  const [showCard, setShowCard] = useState(false);
 
   useEffect(() => {
-    if (!shouldAnimate.current) {
-      return undefined;
-    }
+    let timers = [];
+    let cancelled = false;
 
-    localStorage.setItem(ONBOARDING_PLAYED_KEY, 'true');
+    const showAll = () => {
+      titleFlipPlayed.current = true;
+      setShowTitle(true);
+      setShowRestLayout(true);
+      setShowMascot(true);
+      setShowSubtitle(true);
+      setShowButton(true);
+      setShowCard(true);
+    };
 
-    const timers = [
-      setTimeout(() => setShowTitle(true), TITLE_DELAY_MS),
-      setTimeout(() => {
-        if (titleRef.current) {
-          titleStartRect.current = titleRef.current.getBoundingClientRect();
-        }
-        setShowRestLayout(true);
-      }, REST_LAYOUT_MS),
-      setTimeout(() => setShowMascot(true), REST_FADE_START_MS),
-      setTimeout(() => setShowSubtitle(true), REST_FADE_START_MS + REST_STAGGER_MS),
-      setTimeout(() => setShowButton(true), REST_FADE_START_MS + REST_STAGGER_MS * 2),
-      setTimeout(() => setShowCard(true), REST_FADE_START_MS + REST_STAGGER_MS * 3),
-    ];
+    const startAnimation = () => {
+      window.theo?.markOnboardingPlayed();
 
-    return () => timers.forEach(clearTimeout);
+      timers = [
+        setTimeout(() => setShowTitle(true), TITLE_DELAY_MS),
+        setTimeout(() => {
+          if (titleRef.current) {
+            titleStartRect.current = titleRef.current.getBoundingClientRect();
+          }
+          setShowRestLayout(true);
+        }, REST_LAYOUT_MS),
+        setTimeout(() => setShowMascot(true), REST_FADE_START_MS),
+        setTimeout(() => setShowSubtitle(true), REST_FADE_START_MS + REST_STAGGER_MS),
+        setTimeout(() => setShowButton(true), REST_FADE_START_MS + REST_STAGGER_MS * 2),
+        setTimeout(() => setShowCard(true), REST_FADE_START_MS + REST_STAGGER_MS * 3),
+      ];
+    };
+
+    window.theo?.shouldAnimateOnboarding().then((animate) => {
+      if (cancelled) {
+        return;
+      }
+
+      shouldAnimate.current = animate;
+
+      if (animate) {
+        startAnimation();
+      } else {
+        showAll();
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+    };
   }, []);
 
   useLayoutEffect(() => {
