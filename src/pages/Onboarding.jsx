@@ -173,7 +173,7 @@ function Onboarding() {
 
         {showRestLayout && (
           <div
-            className={`group relative inline-flex items-center my-15 text-black transition-all duration-300 ease-out hover:scale-110 has-[:active]:scale-100 ${revealClass(shouldAnimate.current, showButton)}`}
+            className={`group relative inline-flex items-center my-15 text-black transition-all duration-300 ease-out hover:scale-110 has-active:scale-100 ${revealClass(shouldAnimate.current, showButton)}`}
           >
             <ActionLines className="absolute right-full mr-10" />
             <button className="cursor-pointer bg-black ring-8 ring-black/70 text-white px-6 py-4 rounded-full tracking-tight transition-all duration-300 ease-out group-hover:py-6 group-hover:ring-0">
