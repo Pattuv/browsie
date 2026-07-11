@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
@@ -8,6 +8,56 @@ if (started) {
 }
 
 let onboardingAnimatedThisSession = false;
+
+const disableZoom = (webContents) => {
+  webContents.setVisualZoomLevelLimits(1, 1);
+  webContents.setZoomFactor(1);
+
+  webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') {
+      return;
+    }
+
+    const hasZoomModifier = input.control || input.meta;
+    const isZoomKey = ['+', '-', '=', '0', 'Plus', 'Minus'].includes(input.key);
+
+    if (hasZoomModifier && isZoomKey) {
+      event.preventDefault();
+    }
+  });
+};
+
+const setAppMenu = () => {
+  const template = [
+    ...(process.platform === 'darwin'
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: 'about' },
+              { type: 'separator' },
+              { role: 'services' },
+              { type: 'separator' },
+              { role: 'hide' },
+              { role: 'hideOthers' },
+              { role: 'unhide' },
+              { type: 'separator' },
+              { role: 'quit' },
+            ],
+          },
+        ]
+      : []),
+    { role: 'fileMenu' },
+    { role: 'editMenu' },
+    {
+      label: 'View',
+      submenu: [{ role: 'togglefullscreen' }],
+    },
+    { role: 'windowMenu' },
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+};
 
 const createWindow = () => {
   // Create the browser window.
@@ -25,6 +75,8 @@ const createWindow = () => {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
+
+  disableZoom(mainWindow.webContents);
 
   // and load the index.html of the app.
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
@@ -44,6 +96,7 @@ app.whenReady().then(() => {
     onboardingAnimatedThisSession = true;
   });
 
+  setAppMenu();
   createWindow();
 
   // On OS X it's common to re-create a window in the app when the
