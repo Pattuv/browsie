@@ -16,7 +16,20 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "Bricolage Grotesque";
+  src: url("./assets/fonts/Bricolage/BricolageGrotesque-VariableFont_opsz,wdth,wght.ttf") format("truetype");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 @layer base {
+  * {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
   body {
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
@@ -25,5 +38,25 @@
 @layer components {
   .inter {
     font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .bric {
+    font-family: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  @keyframes blur-fade-in {
+    from {
+      opacity: 0;
+      filter: blur(12px);
+    }
+
+    to {
+      opacity: 1;
+      filter: blur(0);
+    }
+  }
+
+  .enter-blur {
+    animation: blur-fade-in 0.55s ease-out both;
   }
 }

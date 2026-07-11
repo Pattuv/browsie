@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
@@ -10,10 +10,15 @@ if (started) {
 const createWindow = () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1150,
+    height: 800,
+    minWidth: 680,
+    minHeight: 480,
     titleBarStyle: 'hidden',
-    trafficLightPosition: { x: 16, y: 16 },
+    trafficLightPosition: { x: 32, y: 32 },
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
@@ -31,6 +36,8 @@ const createWindow = () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  ipcMain.handle('open-external', (_event, url) => shell.openExternal(url));
+
   createWindow();
 
   // On OS X it's common to re-create a window in the app when the
