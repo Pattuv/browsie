@@ -75,17 +75,17 @@ This split is the foundation for secure auth. **Do not collapse it.**
 - `src/App.tsx` mounts **only** `Dashboard` — no routing, no login, no session check.
 - `src/onboarding-layer/Dashboard.tsx` is the caretaker welcome UI (“Welcome, Caretaker”, CTA “Open browser for Pratyush”, support guide card).
 - Hardcoded name **Pratyush** appears in the CTA and guide copy — this will become `firstName` from Google.
-- Onboarding animation persistence is **session-only in memory** via IPC:
-  - `should-animate-onboarding`
-  - `mark-onboarding-played`
-  - backed by `onboardingAnimatedThisSession` in `main.js` (resets every app launch)
+- Dashboard animation persistence is **session-only in memory** via IPC:
+  - `should-animate-dashboard`
+  - `mark-dashboard-played`
+  - backed by `dashboardAnimatedThisSession` in `main.ts` (resets every app launch)
 
 ### Preload API today (`window.theo`)
 
 ```js
 openExternal(url)
-shouldAnimateOnboarding()
-markOnboardingPlayed()
+shouldAnimateDashboard()
+markDashboardPlayed()
 ```
 
 No auth methods yet.
@@ -94,8 +94,8 @@ No auth methods yet.
 
 ```js
 'open-external'
-'should-animate-onboarding'
-'mark-onboarding-played'
+'should-animate-dashboard'
+'mark-dashboard-played'
 ```
 
 Window: hidden title bar, traffic lights at `{ x: 32, y: 32 }`, zoom disabled, preload attached. Default Electron `webPreferences` otherwise (keep `contextIsolation` on; do **not** enable `nodeIntegration` for the renderer).
@@ -307,8 +307,8 @@ Extend `window.theo` (keep existing helpers):
 window.theo = {
   // existing
   openExternal(url: string): Promise<void>
-  shouldAnimateOnboarding(): Promise<boolean>
-  markOnboardingPlayed(): Promise<void>
+  shouldAnimateDashboard(): Promise<boolean>
+  markDashboardPlayed(): Promise<void>
 
   // new
   auth: {

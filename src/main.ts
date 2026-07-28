@@ -7,7 +7,7 @@ if (started) {
   app.quit();
 }
 
-let onboardingAnimatedThisSession = false;
+let dashboardAnimatedThisSession = false;
 
 const disableZoom = (webContents: Electron.WebContents) => {
   webContents.setVisualZoomLevelLimits(1, 1);
@@ -86,14 +86,13 @@ const createWindow = () => {
   }
 };
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
+// This method will be called when Electron has finished initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   ipcMain.handle('open-external', (_event, url: string) => shell.openExternal(url));
-  ipcMain.handle('should-animate-onboarding', () => !onboardingAnimatedThisSession);
-  ipcMain.handle('mark-onboarding-played', () => {
-    onboardingAnimatedThisSession = true;
+  ipcMain.handle('should-animate-dashboard', () => !dashboardAnimatedThisSession);
+  ipcMain.handle('mark-dashboard-played', () => {
+    dashboardAnimatedThisSession = true;
   });
 
   setAppMenu();

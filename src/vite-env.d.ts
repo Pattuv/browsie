@@ -30,8 +30,8 @@ declare module '*.webp' {
 
 interface TheoAPI {
   openExternal: (url: string) => Promise<void>;
-  shouldAnimateOnboarding: () => Promise<boolean>;
-  markOnboardingPlayed: () => Promise<void>;
+  shouldAnimateDashboard: () => Promise<boolean>;
+  markDashboardPlayed: () => Promise<void>;
 }
 
 interface Window {

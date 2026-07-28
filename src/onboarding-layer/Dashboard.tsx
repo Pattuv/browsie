@@ -75,7 +75,7 @@ function Dashboard() {
     };
 
     const startAnimation = () => {
-      window.theo?.markOnboardingPlayed();
+      window.theo?.markDashboardPlayed();
 
       timers = [
         setTimeout(() => setShowTitle(true), TITLE_DELAY_MS),
@@ -92,7 +92,7 @@ function Dashboard() {
       ];
     };
 
-    window.theo?.shouldAnimateOnboarding().then((animate) => {
+    window.theo?.shouldAnimateDashboard().then((animate) => {
       if (cancelled) {
         return;
       }
