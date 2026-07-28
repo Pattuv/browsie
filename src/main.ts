@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, shell, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
@@ -9,7 +9,7 @@ if (started) {
 
 let onboardingAnimatedThisSession = false;
 
-const disableZoom = (webContents) => {
+const disableZoom = (webContents: Electron.WebContents) => {
   webContents.setVisualZoomLevelLimits(1, 1);
   webContents.setZoomFactor(1);
 
@@ -28,21 +28,21 @@ const disableZoom = (webContents) => {
 };
 
 const setAppMenu = () => {
-  const template = [
+  const template: MenuItemConstructorOptions[] = [
     ...(process.platform === 'darwin'
       ? [
           {
             label: app.name,
             submenu: [
-              { role: 'about' },
-              { type: 'separator' },
-              { role: 'services' },
-              { type: 'separator' },
-              { role: 'hide' },
-              { role: 'hideOthers' },
-              { role: 'unhide' },
-              { type: 'separator' },
-              { role: 'quit' },
+              { role: 'about' as const },
+              { type: 'separator' as const },
+              { role: 'services' as const },
+              { type: 'separator' as const },
+              { role: 'hide' as const },
+              { role: 'hideOthers' as const },
+              { role: 'unhide' as const },
+              { type: 'separator' as const },
+              { role: 'quit' as const },
             ],
           },
         ]
@@ -90,7 +90,7 @@ const createWindow = () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
-  ipcMain.handle('open-external', (_event, url) => shell.openExternal(url));
+  ipcMain.handle('open-external', (_event, url: string) => shell.openExternal(url));
   ipcMain.handle('should-animate-onboarding', () => !onboardingAnimatedThisSession);
   ipcMain.handle('mark-onboarding-played', () => {
     onboardingAnimatedThisSession = true;

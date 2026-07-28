@@ -1,9 +1,9 @@
-import Onboarding from './pages/Onboarding.jsx';
+import Dashboard from './onboarding-layer/Dashboard';
 
 function App() {
   return (
     <div className="h-screen min-h-full">
-      <Onboarding />
+      <Dashboard />
     </div>
   );
 }

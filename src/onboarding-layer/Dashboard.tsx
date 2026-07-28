@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import wordmark from '../assets/wordmark.svg';
 import mascot from '../assets/mascot.png';
 import guidebook from '../assets/guidebook.png';
@@ -13,7 +13,7 @@ const REST_LAYOUT_MS = TITLE_DELAY_MS + BLUR_DURATION_MS + POST_TITLE_DELAY_MS;
 const REST_FADE_START_MS = REST_LAYOUT_MS + TITLE_MOVE_MS + 50;
 const GUIDE_URL = 'https://theodocs.super.site/theo-help-center';
 
-function revealClass(shouldAnimate, visible) {
+function revealClass(shouldAnimate: boolean, visible: boolean): string {
   if (!shouldAnimate) {
     return '';
   }
@@ -25,7 +25,12 @@ function openGuide() {
   window.theo?.openExternal(GUIDE_URL);
 }
 
-function ActionLines({ className, mirrored = false }) {
+type ActionLinesProps = {
+  className?: string;
+  mirrored?: boolean;
+};
+
+function ActionLines({ className, mirrored = false }: ActionLinesProps) {
   return (
     <svg
       width="28"
@@ -43,10 +48,10 @@ function ActionLines({ className, mirrored = false }) {
   );
 }
 
-function Onboarding() {
+function Dashboard() {
   const shouldAnimate = useRef(true);
-  const titleRef = useRef(null);
-  const titleStartRect = useRef(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const titleStartRect = useRef<DOMRect | null>(null);
   const titleFlipPlayed = useRef(false);
   const [showTitle, setShowTitle] = useState(false);
   const [showRestLayout, setShowRestLayout] = useState(false);
@@ -56,7 +61,7 @@ function Onboarding() {
   const [showCard, setShowCard] = useState(false);
 
   useEffect(() => {
-    let timers = [];
+    let timers: ReturnType<typeof setTimeout>[] = [];
     let cancelled = false;
 
     const showAll = () => {
@@ -188,7 +193,7 @@ function Onboarding() {
             role="link"
             tabIndex={0}
             onClick={openGuide}
-            onKeyDown={(e) => {
+            onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 openGuide();
@@ -220,4 +225,4 @@ function Onboarding() {
   );
 }
 
-export default Onboarding;
+export default Dashboard;
