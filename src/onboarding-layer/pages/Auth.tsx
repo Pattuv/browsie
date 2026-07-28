@@ -1,4 +1,4 @@
-import onboardingBg from '../assets/onboardingbg.png';
+import onboardingBg from '../../assets/onboardingbg.png';
 
 function Auth() {
   return (

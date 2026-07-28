@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
-import wordmark from '../assets/wordmark.svg';
-import mascot from '../assets/mascot.png';
-import guidebook from '../assets/guidebook.png';
+import wordmark from '../../assets/wordmark.svg';
+import mascot from '../../assets/mascot.png';
+import guidebook from '../../assets/guidebook.png';
 
 const TITLE_DELAY_MS = 500;
 const BLUR_DURATION_MS = 550;
