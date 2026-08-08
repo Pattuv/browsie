@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, Menu, shell, type MenuItemConstructorOptions } from 'electron';
+import fs from 'node:fs';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
@@ -8,6 +9,16 @@ if (started) {
 }
 
 let dashboardAnimatedThisSession = false;
+
+type UserMode = 'caretaker' | 'independent';
+
+const userModePath = () => path.join(app.getPath('userData'), 'user-mode.json');
+
+const hasUserMode = () => fs.existsSync(userModePath());
+
+const saveUserMode = (mode: UserMode) => {
+  fs.writeFileSync(userModePath(), JSON.stringify({ mode }, null, 2));
+};
 
 const disableZoom = (webContents: Electron.WebContents) => {
   webContents.setVisualZoomLevelLimits(1, 1);
@@ -59,8 +70,20 @@ const setAppMenu = () => {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 };
 
-const createWindow = () => {
-  // Create the browser window.
+const loadRenderer = (window: BrowserWindow, windowKind?: 'menu-picker') => {
+  const search = windowKind ? `?window=${windowKind}` : '';
+
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    window.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}${search}`);
+    return;
+  }
+
+  window.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), {
+    search: search.replace(/^\?/, ''),
+  });
+};
+
+const createMainWindow = () => {
   const mainWindow = new BrowserWindow({
     width: 1150,
     height: 800,
@@ -77,13 +100,48 @@ const createWindow = () => {
   });
 
   disableZoom(mainWindow.webContents);
+  loadRenderer(mainWindow);
 
-  // and load the index.html of the app.
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
-  } else {
-    mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
+  return mainWindow;
+};
+
+const createMenuPickerWindow = () => {
+  const menuPickerWindow = new BrowserWindow({
+    width: 640,
+    height: 600,
+    minWidth: 640,
+    minHeight: 600,
+    titleBarStyle: 'hidden',
+    trafficLightPosition: { x: 32, y: 32 },
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+
+  disableZoom(menuPickerWindow.webContents);
+  loadRenderer(menuPickerWindow, 'menu-picker');
+
+  // Create main before this window finishes closing so window-all-closed
+  // does not quit the app on Windows/Linux during the handoff.
+  menuPickerWindow.on('close', () => {
+    if (hasUserMode()) {
+      createMainWindow();
+    }
+  });
+
+  return menuPickerWindow;
+};
+
+const createWindow = () => {
+  if (!hasUserMode()) {
+    createMenuPickerWindow();
+    return;
   }
+
+  createMainWindow();
 };
 
 // This method will be called when Electron has finished initialization and is ready to create browser windows.
@@ -93,6 +151,15 @@ app.whenReady().then(() => {
   ipcMain.handle('should-animate-dashboard', () => !dashboardAnimatedThisSession);
   ipcMain.handle('mark-dashboard-played', () => {
     dashboardAnimatedThisSession = true;
+  });
+  ipcMain.handle('save-user-mode', (event, mode: UserMode) => {
+    // Independent mode is stubbed in the UI until that experience ships.
+    if (mode !== 'caretaker') {
+      throw new Error('Only caretaker mode is available right now.');
+    }
+
+    saveUserMode(mode);
+    BrowserWindow.fromWebContents(event.sender)?.close();
   });
 
   setAppMenu();

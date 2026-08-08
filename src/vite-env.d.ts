@@ -28,10 +28,13 @@ declare module '*.webp' {
   export default src;
 }
 
+type UserMode = 'caretaker' | 'independent';
+
 interface BrowsieAPI {
   openExternal: (url: string) => Promise<void>;
   shouldAnimateDashboard: () => Promise<boolean>;
   markDashboardPlayed: () => Promise<void>;
+  saveUserMode: (mode: UserMode) => Promise<void>;
 }
 
 interface Window {
