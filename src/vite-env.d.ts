@@ -28,14 +28,14 @@ declare module '*.webp' {
   export default src;
 }
 
-interface TheoAPI {
+interface BrowsieAPI {
   openExternal: (url: string) => Promise<void>;
   shouldAnimateDashboard: () => Promise<boolean>;
   markDashboardPlayed: () => Promise<void>;
 }
 
 interface Window {
-  theo?: TheoAPI;
+  browsie?: BrowsieAPI;
 }
 
 declare namespace React {

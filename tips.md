@@ -1,4 +1,4 @@
-# Architecture Tips for Theo
+# Architecture Tips for Browsie
 
 ## Build Order
 

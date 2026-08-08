@@ -1,6 +1,6 @@
 {
-  "name": "theo-browser",
-  "productName": "Theo",
+  "name": "browsie-browser",
+  "productName": "Browsie",
   "version": "1.0.0",
   "description": "An agentic browser designed for visually impaired users.",
   "main": ".vite/build/main.js",
@@ -40,6 +40,7 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.2",
+    "bootstrap-icons": "^1.13.1",
     "electron-squirrel-startup": "^1.0.1",
     "lucide-react": "^1.24.0",
     "react": "^19.2.7",

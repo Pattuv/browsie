@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "bootstrap-icons/font/bootstrap-icons.css";
 
 @font-face {
   font-family: "Inter";
@@ -65,5 +66,14 @@
 
   .enter-blur {
     animation: blur-fade-in 0.55s ease-out both;
+  }
+
+  /* Electron hidden-titlebar window drag (onboarding shell) */
+  .app-region-drag {
+    -webkit-app-region: drag;
+  }
+
+  .app-region-no-drag {
+    -webkit-app-region: no-drag;
   }
 }

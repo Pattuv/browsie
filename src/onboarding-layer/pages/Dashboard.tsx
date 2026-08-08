@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
-import wordmark from '../../assets/wordmark.svg';
+import Boiler from '../../components/Boiler';
 import mascot from '../../assets/mascot.png';
 import guidebook from '../../assets/guidebook.png';
 
@@ -11,7 +11,7 @@ const TITLE_MOVE_EASING = 'cubic-bezier(0.72, 0, 0.28, 1)';
 const REST_STAGGER_MS = 160;
 const REST_LAYOUT_MS = TITLE_DELAY_MS + BLUR_DURATION_MS + POST_TITLE_DELAY_MS;
 const REST_FADE_START_MS = REST_LAYOUT_MS + TITLE_MOVE_MS + 50;
-const GUIDE_URL = 'https://theodocs.super.site/theo-help-center';
+const GUIDE_URL = 'https://browsiedocs.super.site/browsie-help-center';
 
 function revealClass(shouldAnimate: boolean, visible: boolean): string {
   if (!shouldAnimate) {
@@ -22,7 +22,7 @@ function revealClass(shouldAnimate: boolean, visible: boolean): string {
 }
 
 function openGuide() {
-  window.theo?.openExternal(GUIDE_URL);
+  window.browsie?.openExternal(GUIDE_URL);
 }
 
 type ActionLinesProps = {
@@ -75,7 +75,7 @@ function Dashboard() {
     };
 
     const startAnimation = () => {
-      window.theo?.markDashboardPlayed();
+      window.browsie?.markDashboardPlayed();
 
       timers = [
         setTimeout(() => setShowTitle(true), TITLE_DELAY_MS),
@@ -92,7 +92,7 @@ function Dashboard() {
       ];
     };
 
-    window.theo?.shouldAnimateDashboard().then((animate) => {
+    window.browsie?.shouldAnimateDashboard().then((animate) => {
       if (cancelled) {
         return;
       }
@@ -145,18 +145,12 @@ function Dashboard() {
   }, [showRestLayout]);
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <header
-        className="h-10 shrink-0 flex items-center pl-14"
-        style={{ WebkitAppRegion: 'drag' }}
-      >
-        <img src={wordmark} alt="Theo" className="h-5" />
-      </header>
+    <Boiler>
       <div className="flex flex-1 flex-col items-center justify-center p-5 gap-2">
         {showRestLayout && (
           <img
             src={mascot}
-            alt="Theo"
+            alt="Browsie"
             className={`h-25 -mb-4 ${revealClass(shouldAnimate.current, showMascot)}`}
           />
         )}
@@ -205,7 +199,7 @@ function Dashboard() {
               <h2 className="text-xl font-light tracking-tight">For support:</h2>
               <p className="text-sm text-zinc-500 font-light leading-snug tracking-tight">
                 Learn how you can help{' '}
-                <span className="font-semibold text-zinc-800">Pratyush</span> use Theo to the
+                <span className="font-semibold text-zinc-800">Pratyush</span> use Browsie to the
                 best of their ability.
               </p>
               <span className="w-fit text-sm font-medium tracking-tight">Go to guide →</span>
@@ -219,9 +213,9 @@ function Dashboard() {
         )}
       </div>
       <footer className="shrink-0 text-xs text-center text-zinc-300 pb-2">
-        theo v.0.0.1   |   currently under development
+        browsie v.0.0.1   |   currently under development
       </footer>
-    </div>
+    </Boiler>
   );
 }
 
