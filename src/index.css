@@ -68,6 +68,100 @@
     animation: blur-fade-in 0.55s ease-out both;
   }
 
+  .enter-blur-slow {
+    animation: blur-fade-in 1.05s ease-out both;
+  }
+
+  @keyframes blur-fade-out {
+    from {
+      opacity: 1;
+      filter: blur(0);
+    }
+
+    to {
+      opacity: 0;
+      filter: blur(12px);
+    }
+  }
+
+  .exit-blur {
+    animation: blur-fade-out 0.55s ease-in both;
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  .enter-fade {
+    animation: fade-in 0.5s ease-out both;
+  }
+
+  .enter-fade-slow {
+    animation: fade-in 1s ease-out both;
+  }
+
+  @keyframes slide-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(36px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .enter-slide-fade {
+    animation: slide-fade-in 0.75s cubic-bezier(0.72, 0, 0.28, 1) both;
+  }
+
+  @keyframes slide-in-down {
+    from {
+      transform: translateY(-28%);
+      opacity: 0;
+    }
+
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes slide-in-up {
+    from {
+      transform: translateY(36%);
+      opacity: 0;
+    }
+
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .slide-in-down {
+    animation: slide-in-down 0.8s cubic-bezier(0.72, 0, 0.28, 1) both;
+  }
+
+  .slide-in-up {
+    animation: slide-in-up 0.8s cubic-bezier(0.72, 0, 0.28, 1) both;
+  }
+
+  .slide-in-down-slow {
+    animation: slide-in-down 1.15s cubic-bezier(0.72, 0, 0.28, 1) both;
+  }
+
+  .slide-in-up-slow {
+    animation: slide-in-up 1.15s cubic-bezier(0.72, 0, 0.28, 1) both;
+  }
+
   /* Electron hidden-titlebar window drag (onboarding shell) */
   .app-region-drag {
     -webkit-app-region: drag;

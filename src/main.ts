@@ -85,7 +85,7 @@ const loadRenderer = (window: BrowserWindow, windowKind?: 'menu-picker') => {
 
 const createMainWindow = () => {
   const mainWindow = new BrowserWindow({
-    width: 1150,
+    width: 1250,
     height: 800,
     minWidth: 680,
     minHeight: 480,
@@ -136,12 +136,7 @@ const createMenuPickerWindow = () => {
 };
 
 const createWindow = () => {
-  if (!hasUserMode()) {
-    createMenuPickerWindow();
-    return;
-  }
-
-  createMainWindow();
+  createMenuPickerWindow();
 };
 
 // This method will be called when Electron has finished initialization and is ready to create browser windows.
