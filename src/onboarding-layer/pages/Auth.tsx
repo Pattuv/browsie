@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import mascot from '../../assets/mascot.svg';
 import cloudGraphic from '../../assets/cloudgraphic.png';
+import setupSoundtrack from '../../assets/setupsoundtrack.mp3';
 
 const WHITE_HOLD_MS = 1000;
 const BLUR_MS = 1000;
@@ -26,6 +27,16 @@ function Auth() {
   const [phase, setPhase] = useState<Phase>('white');
   const mascotMotionRef = useRef<HTMLDivElement>(null);
   const mascotStartTop = useRef<number | null>(null);
+
+  useEffect(() => {
+    const audio = new Audio(setupSoundtrack);
+    audio.loop = true;
+    void audio.play();
+
+    return () => {
+      audio.pause();
+    };
+  }, []);
 
   useEffect(() => {
     const timers = [

@@ -28,6 +28,11 @@ declare module '*.webp' {
   export default src;
 }
 
+declare module '*.mp3' {
+  const src: string;
+  export default src;
+}
+
 type UserMode = 'caretaker' | 'independent';
 
 interface BrowsieAPI {
