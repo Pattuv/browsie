@@ -25,7 +25,7 @@ function MenuPickerLayer() {
 
   return (
     <div className="relative flex h-screen min-h-full flex-col bg-white px-8 pb-7 pt-14">
-      <header className="app-region-drag absolute inset-x-0 top-4 z-10 flex h-10 items-center pl-16">
+      <header className="app-region-drag absolute inset-x-0 top-0 z-10 flex h-14 items-center pl-16 pt-4">
         <img src={wordmark} alt="Browsie" className="h-5" />
       </header>
 

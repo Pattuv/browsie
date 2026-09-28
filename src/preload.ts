@@ -4,5 +4,6 @@ contextBridge.exposeInMainWorld('browsie', {
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
   shouldAnimateDashboard: () => ipcRenderer.invoke('should-animate-dashboard'),
   markDashboardPlayed: () => ipcRenderer.invoke('mark-dashboard-played'),
-  saveUserMode: (mode: 'caretaker' | 'independent') => ipcRenderer.invoke('save-user-mode', mode),
+  getUserMode: () => ipcRenderer.invoke('get-user-mode'),
+  saveUserMode:(mode: 'caretaker' | 'independent') => ipcRenderer.invoke('save-user-mode', mode),
 });

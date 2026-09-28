@@ -20,6 +20,15 @@ const saveUserMode = (mode: UserMode) => {
   fs.writeFileSync(userModePath(), JSON.stringify({ mode }, null, 2));
 };
 
+const readUserMode = (): UserMode | null => {
+  try {
+    const { mode } = JSON.parse(fs.readFileSync(userModePath(), 'utf8'));
+    return mode === 'caretaker' || mode === 'independent' ? mode : null;
+  } catch {
+    return null;
+  }
+};
+
 const disableZoom = (webContents: Electron.WebContents) => {
   webContents.setVisualZoomLevelLimits(1, 1);
   webContents.setZoomFactor(1);
@@ -153,6 +162,7 @@ app.whenReady().then(() => {
   ipcMain.handle('mark-dashboard-played', () => {
     dashboardAnimatedThisSession = true;
   });
+  ipcMain.handle('get-user-mode', () => readUserMode());
   ipcMain.handle('save-user-mode', (event, mode: UserMode) => {
     // Independent mode is stubbed in the UI until that experience ships.
     if (mode !== 'caretaker') {
