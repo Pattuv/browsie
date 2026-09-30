@@ -50,7 +50,7 @@ const disableZoom = (webContents: Electron.WebContents) => {
   });
 };
 
-/** Shared chrome: mac keeps traffic lights; Windows gets custom caption buttons + resize. */
+/** Shared chrome: mac keeps traffic lights; Windows/Linux render custom caption buttons in the renderer. */
 const windowChromeOptions = (): Partial<BrowserWindowConstructorOptions> => {
   if (isMac) {
     return {
@@ -64,15 +64,13 @@ const windowChromeOptions = (): Partial<BrowserWindowConstructorOptions> => {
   }
 
   return {
-    frame: false,
-    transparent: false,
+    titleBarStyle: 'hidden',
     backgroundColor: '#ffffff',
     autoHideMenuBar: true,
     minimizable: true,
     maximizable: true,
     resizable: true,
     fullscreenable: false,
-    thickFrame: true,
   };
 };
 
@@ -141,7 +139,6 @@ const createMainWindow = () => {
     height: 800,
     minWidth: 680,
     minHeight: 480,
-    show: false,
     ...windowChromeOptions(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -149,14 +146,11 @@ const createMainWindow = () => {
     },
   });
 
+  // BrowserWindow has no `maximized` constructor option; this is the equivalent.
+  mainWindow.maximize();
   disableZoom(mainWindow.webContents);
   wireWindowStateEvents(mainWindow);
   loadRenderer(mainWindow);
-
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.maximize();
-    mainWindow.show();
-  });
 
   return mainWindow;
 };
@@ -167,7 +161,6 @@ const createMenuPickerWindow = () => {
     height: 600,
     minWidth: 640,
     minHeight: 600,
-    show: false,
     ...windowChromeOptions(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -177,10 +170,6 @@ const createMenuPickerWindow = () => {
   disableZoom(menuPickerWindow.webContents);
   wireWindowStateEvents(menuPickerWindow);
   loadRenderer(menuPickerWindow, 'menu-picker');
-
-  menuPickerWindow.once('ready-to-show', () => {
-    menuPickerWindow.show();
-  });
 
   // Create main before this window finishes closing so window-all-closed
   // does not quit the app on Windows/Linux during the handoff.
@@ -220,28 +209,22 @@ app.whenReady().then(() => {
     saveUserMode(mode);
     BrowserWindow.fromWebContents(event.sender)?.close();
   });
-  ipcMain.handle('get-platform', () => process.platform);
   ipcMain.handle('window-minimize', (event) => {
     BrowserWindow.fromWebContents(event.sender)?.minimize();
   });
-  ipcMain.handle('window-maximize', (event) => {
+  ipcMain.handle('window-toggle-maximize', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
-    if (!win) {
-      return false;
-    }
-    if (win.isMaximized()) {
+
+    if (win?.isMaximized()) {
       win.unmaximize();
-      return false;
+    } else {
+      win?.maximize();
     }
-    win.maximize();
-    return true;
   });
   ipcMain.handle('window-close', (event) => {
     BrowserWindow.fromWebContents(event.sender)?.close();
   });
-  ipcMain.handle('window-is-maximized', (event) => {
-    return BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false;
-  });
+  ipcMain.handle('window-is-maximized', (event) => BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false);
 
   setAppMenu();
   createWindow();

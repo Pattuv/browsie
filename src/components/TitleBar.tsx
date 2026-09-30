@@ -1,110 +1,94 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { Copy, Minus, Square, X, type LucideIcon } from 'lucide-react';
 
-type WindowControlsProps = {
-  maximizable?: boolean;
+type CaptionButtonProps = {
+  label: string;
+  icon: LucideIcon;
+  iconSize: number;
+  danger?: boolean;
+  onClick: () => void;
 };
 
-/** Windows caption buttons: minimize (−), maximize (□ / ❐), close (×). */
-function WindowControls({ maximizable = true }: WindowControlsProps) {
+function CaptionButton({ label, icon: Icon, iconSize, danger = false, onClick }: CaptionButtonProps) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={`group flex h-full w-12 cursor-pointer items-center justify-center text-zinc-800 transition-colors duration-200 ease-out ${
+        danger ? 'hover:text-[#e81123]' : ''
+      }`}
+    >
+      <Icon
+        size={iconSize}
+        strokeWidth={2}
+        aria-hidden="true"
+        className="transition-transform duration-200 ease-out group-hover:scale-125 group-active:scale-95"
+      />
+    </button>
+  );
+}
+
+function WindowControls({ className = 'h-10' }: { className?: string }) {
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
-    if (!maximizable) {
-      return undefined;
-    }
-
     let cancelled = false;
 
-    void window.browsie?.windowIsMaximized().then((value) => {
+    window.browsie?.isWindowMaximized().then((value) => {
       if (!cancelled) {
         setMaximized(value);
       }
     });
 
-    const unsubscribe = window.browsie?.onWindowMaximizedChanged((value) => {
-      setMaximized(value);
-    });
+    const unsubscribe = window.browsie?.onWindowMaximizedChange(setMaximized);
 
     return () => {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [maximizable]);
+  }, []);
 
   return (
-    <div className="app-region-no-drag absolute top-0 right-0 z-50 flex h-10">
-      <button
-        type="button"
-        aria-label="Minimize"
-        className="flex h-10 w-11 items-center justify-center text-zinc-700 transition-colors hover:bg-zinc-100"
-        onClick={() => void window.browsie?.windowMinimize()}
-      >
-        <svg width="10" height="1" viewBox="0 0 10 1" aria-hidden="true">
-          <rect width="10" height="1" fill="currentColor" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        aria-label={maximized ? 'Restore' : 'Maximize'}
-        disabled={!maximizable}
-        aria-disabled={!maximizable}
-        className={`flex h-10 w-11 items-center justify-center transition-colors ${
-          maximizable
-            ? 'text-zinc-700 hover:bg-zinc-100'
-            : 'cursor-default text-zinc-300'
-        }`}
-        onClick={() => {
-          if (!maximizable) {
-            return;
-          }
-          void window.browsie?.windowMaximize();
-        }}
-      >
-        {maximized ? (
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-            <path d="M2.5 2.5H8.5V8.5" stroke="currentColor" strokeWidth="1" />
-            <rect x="1" y="3.5" width="5.5" height="5.5" stroke="currentColor" strokeWidth="1" />
-          </svg>
-        ) : (
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-            <rect x="1" y="1" width="8" height="8" stroke="currentColor" strokeWidth="1" />
-          </svg>
-        )}
-      </button>
-      <button
-        type="button"
-        aria-label="Close"
-        className="flex h-10 w-12 items-center justify-center text-zinc-700 transition-colors hover:bg-[#e81123] hover:text-white"
-        onClick={() => void window.browsie?.windowClose()}
-      >
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-          <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.2" />
-        </svg>
-      </button>
+    <div className={`app-region-no-drag absolute top-0 right-0 z-50 flex ${className}`}>
+      <CaptionButton label="Minimize" icon={Minus} iconSize={16} onClick={() => window.browsie?.minimizeWindow()} />
+      <CaptionButton
+        label={maximized ? 'Restore' : 'Maximize'}
+        icon={maximized ? Copy : Square}
+        iconSize={13}
+        onClick={() => window.browsie?.toggleMaximizeWindow()}
+      />
+      <CaptionButton label="Close" icon={X} iconSize={16} danger onClick={() => window.browsie?.closeWindow()} />
     </div>
   );
 }
 
 type TitleBarProps = {
-  /** Optional leading content (e.g. wordmark). Mac keeps left padding for traffic lights. */
+  /** Optional leading content (e.g. wordmark). */
   children?: ReactNode;
-  maximizable?: boolean;
+  /** Sizing for the caption button strip (default `h-10`), so it can match a page's own top bar. */
+  controlsClassName?: string;
 };
 
-function TitleBar({ children, maximizable = true }: TitleBarProps) {
+/**
+ * Drag region for the hidden title bar. On macOS it leaves room for the traffic lights;
+ * elsewhere it stops short of the custom caption buttons.
+ */
+function TitleBar({ children, controlsClassName }: TitleBarProps) {
   const isMac = window.browsie?.platform === 'darwin';
-  const showWindowControls = !isMac;
 
   return (
     <>
+      {/* Drag region must not overlap the caption buttons, or Windows swallows their clicks. */}
       <header
-        className={`app-region-drag absolute inset-x-0 top-0 z-10 flex h-10 items-center ${
-          isMac ? 'pl-16' : 'pl-4'
-        } ${showWindowControls ? 'pr-36' : 'pr-4'}`}
+        className={`app-region-drag absolute top-0 left-0 z-10 flex h-10 items-center ${
+          isMac ? 'right-0 pl-16 pr-4' : 'right-36 pl-4'
+        }`}
       >
         {children}
       </header>
-      {showWindowControls ? <WindowControls maximizable={maximizable} /> : null}
+      {isMac ? null : <WindowControls className={controlsClassName} />}
     </>
   );
 }

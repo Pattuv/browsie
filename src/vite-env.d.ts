@@ -42,11 +42,11 @@ interface BrowsieAPI {
   markDashboardPlayed: () => Promise<void>;
   getUserMode: () => Promise<UserMode | null>;
   saveUserMode: (mode: UserMode) => Promise<void>;
-  windowMinimize: () => Promise<void>;
-  windowMaximize: () => Promise<boolean>;
-  windowClose: () => Promise<void>;
-  windowIsMaximized: () => Promise<boolean>;
-  onWindowMaximizedChanged: (callback: (maximized: boolean) => void) => () => void;
+  minimizeWindow: () => Promise<void>;
+  toggleMaximizeWindow: () => Promise<void>;
+  closeWindow: () => Promise<void>;
+  isWindowMaximized: () => Promise<boolean>;
+  onWindowMaximizedChange: (callback: (maximized: boolean) => void) => () => void;
 }
 
 interface Window {
