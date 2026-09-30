@@ -4,7 +4,8 @@ import TitleBar from '../components/TitleBar';
 function OnboardingLayer() {
   return (
     <div className="relative h-screen min-h-full">
-      <TitleBar maximizable={false} />
+      <TitleBar />
+
       <div className="h-full min-h-full">
         <Auth />
       </div>

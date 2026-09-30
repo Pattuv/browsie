@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
 import Boiler from '../../components/Boiler';
-import mascot from '../../assets/mascot.png';
-import guidebook from '../../assets/guidebook.png';
+import mascot from '../../assets/mascot.svg';
+import wordmark from '../../assets/wordmark.svg';
+import book from '../../assets/paint icons/book.png';
 
 const TITLE_DELAY_MS = 500;
 const BLUR_DURATION_MS = 550;
@@ -11,6 +13,7 @@ const TITLE_MOVE_EASING = 'cubic-bezier(0.72, 0, 0.28, 1)';
 const REST_STAGGER_MS = 160;
 const REST_LAYOUT_MS = TITLE_DELAY_MS + BLUR_DURATION_MS + POST_TITLE_DELAY_MS;
 const REST_FADE_START_MS = REST_LAYOUT_MS + TITLE_MOVE_MS + 50;
+const NOTCH_DROP_MS = REST_FADE_START_MS + REST_STAGGER_MS * 3 + BLUR_DURATION_MS + 150;
 const GUIDE_URL = 'https://browsiedocs.super.site/browsie-help-center';
 
 function revealClass(shouldAnimate: boolean, visible: boolean): string {
@@ -48,6 +51,50 @@ function ActionLines({ className, mirrored = false }: ActionLinesProps) {
   );
 }
 
+const NOTCH_EAR_SIZE = 10;
+
+function notchEarStyle(side: 'left' | 'right') {
+  const corner = side === 'left' ? '0 100%' : '100% 100%';
+
+  return {
+    width: NOTCH_EAR_SIZE,
+    height: NOTCH_EAR_SIZE,
+    background: `radial-gradient(circle at ${corner}, transparent ${NOTCH_EAR_SIZE - 0.5}px, black ${NOTCH_EAR_SIZE}px)`,
+  };
+}
+
+type ModeNotchProps = {
+  mode: UserMode;
+  animate: boolean;
+};
+
+function ModeNotch({ mode, animate }: ModeNotchProps) {
+  return (
+    <div className={`pointer-events-none absolute inset-x-0 -top-px z-30 mx-auto flex w-fit ${animate ? 'notch-drop' : ''}`}>
+      <span className="-mr-px" style={notchEarStyle('left')} aria-hidden="true" />
+      <div className="bric flex h-9 items-center gap-1.5 rounded-b-2xl bg-black px-5 text-sm tracking-tight text-white">
+        <span className="h-1.5 w-1.5 rounded-full bg-green-500" aria-hidden="true" />
+        {mode} mode
+      </div>
+      <span className="-ml-px" style={notchEarStyle('right')} aria-hidden="true" />
+    </div>
+  );
+}
+
+// Placeholder until auth lands and we can show the signed-in Google profile photo.
+function ProfileAvatar() {
+  return (
+    <button
+      type="button"
+      aria-label="Profile"
+      title="Profile"
+      className="app-region-no-drag flex h-7 w-7 cursor-pointer items-end justify-center overflow-hidden rounded-full bg-zinc-300"
+    >
+      <i className="bi bi-person-fill -mb-1.5 text-2xl leading-none text-white" aria-hidden="true" />
+    </button>
+  );
+}
+
 function Dashboard() {
   const shouldAnimate = useRef(true);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -59,6 +106,22 @@ function Dashboard() {
   const [showSubtitle, setShowSubtitle] = useState(false);
   const [showButton, setShowButton] = useState(false);
   const [showCard, setShowCard] = useState(false);
+  const [showNotch, setShowNotch] = useState(false);
+  const [mode, setMode] = useState<UserMode | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    window.browsie?.getUserMode().then((savedMode) => {
+      if (!cancelled) {
+        setMode(savedMode);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let timers: ReturnType<typeof setTimeout>[] = [];
@@ -72,6 +135,7 @@ function Dashboard() {
       setShowSubtitle(true);
       setShowButton(true);
       setShowCard(true);
+      setShowNotch(true);
     };
 
     const startAnimation = () => {
@@ -89,6 +153,7 @@ function Dashboard() {
         setTimeout(() => setShowSubtitle(true), REST_FADE_START_MS + REST_STAGGER_MS),
         setTimeout(() => setShowButton(true), REST_FADE_START_MS + REST_STAGGER_MS * 2),
         setTimeout(() => setShowCard(true), REST_FADE_START_MS + REST_STAGGER_MS * 3),
+        setTimeout(() => setShowNotch(true), NOTCH_DROP_MS),
       ];
     };
 
@@ -144,21 +209,44 @@ function Dashboard() {
     return undefined;
   }, [showRestLayout]);
 
+  const isMac = window.browsie?.platform === 'darwin';
+
   return (
     <Boiler>
+      <div
+        className={`absolute inset-x-0 z-20 flex h-8 items-center justify-between ${
+          isMac ? 'top-6 pl-[4.5rem] pr-10' : 'top-1 pl-5 pr-40'
+        }`}
+      >
+        <img src={wordmark} alt="Browsie" className="pointer-events-none h-5 -translate-y-1" />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="Settings"
+            title="Settings"
+            className="app-region-no-drag flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl text-black transition-colors duration-200 ease-out hover:bg-zinc-200/70"
+          >
+            <SlidersHorizontal size={18} strokeWidth={2} aria-hidden="true" />
+          </button>
+          <ProfileAvatar />
+        </div>
+      </div>
+
+      {mode && showNotch && <ModeNotch mode={mode} animate={shouldAnimate.current} />}
+
       <div className="flex flex-1 flex-col items-center justify-center p-5 gap-2">
         {showRestLayout && (
           <img
             src={mascot}
             alt="Browsie"
-            className={`h-25 -mb-4 ${revealClass(shouldAnimate.current, showMascot)}`}
+            className={`h-30 ${revealClass(shouldAnimate.current, showMascot)}`}
           />
         )}
 
         {showTitle && (
           <h1
             ref={titleRef}
-            className={`shrink-0 text-3xl text-center bric tracking-tighter ${shouldAnimate.current ? 'enter-blur' : ''}`}
+            className={`shrink-0 text-4xl text-center bric tracking-tighter ${shouldAnimate.current ? 'enter-blur' : ''}`}
           >
             Welcome, Caretaker
           </h1>
@@ -193,27 +281,27 @@ function Dashboard() {
                 openGuide();
               }
             }}
-            className={`relative w-full max-w-md min-h-44 overflow-hidden rounded-3xl border border-black bg-[#F9F0F9] px-6 py-8 mt-3 cursor-pointer ${revealClass(shouldAnimate.current, showCard)}`}
+            className={`relative flex w-full max-w-md min-h-40 items-center overflow-hidden rounded-[2rem] border border-zinc-300 bg-[#F7F7F7] px-8 py-8 mt-4 cursor-pointer ${revealClass(shouldAnimate.current, showCard)}`}
           >
-            <div className="relative z-10 max-w-[62%] flex flex-col gap-2">
-              <h2 className="text-xl font-light tracking-tight">For support:</h2>
-              <p className="text-sm text-zinc-500 font-light leading-snug tracking-tight">
+            <div className="relative z-10 max-w-[55%] flex flex-col gap-1.5">
+              <h2 className="text-xl tracking-tight">For support:</h2>
+              <p className="text-xs text-zinc-500 font-light leading-snug tracking-tight">
                 Learn how you can help{' '}
                 <span className="font-semibold text-zinc-800">Pratyush</span> use Browsie to the
                 best of their ability.
               </p>
-              <span className="w-fit text-sm font-medium tracking-tight">Go to guide →</span>
+              <span className="mt-1 w-fit text-xs font-medium tracking-tight">Go to guide →</span>
             </div>
             <img
-              src={guidebook}
+              src={book}
               alt="Caretaker Guide"
-              className="pointer-events-none absolute right-5 -bottom-22 w-52 rotate-12"
+              className="pointer-events-none absolute right-6 top-1/2 w-40 -translate-y-1/2"
             />
           </div>
         )}
       </div>
-      <footer className="shrink-0 text-xs text-center text-zinc-300 pb-2">
-        browsie v.0.0.1   |   currently under development
+      <footer className="shrink-0 text-[0.65rem] text-center text-zinc-400 pb-2">
+        v.1.3.4   |   Implementing Google OAuth
       </footer>
     </Boiler>
   );

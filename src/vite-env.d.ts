@@ -40,6 +40,7 @@ interface BrowsieAPI {
   openExternal: (url: string) => Promise<void>;
   shouldAnimateDashboard: () => Promise<boolean>;
   markDashboardPlayed: () => Promise<void>;
+  getUserMode: () => Promise<UserMode | null>;
   saveUserMode: (mode: UserMode) => Promise<void>;
   windowMinimize: () => Promise<void>;
   windowMaximize: () => Promise<boolean>;
