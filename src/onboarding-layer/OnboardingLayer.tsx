@@ -9,7 +9,7 @@ function OnboardingLayer() {
       <TitleBar controlsClassName="h-12 *:pt-4" />
 
       <div className="h-full min-h-full">
-        <Dashboard />
+        <Auth />
       </div>
     </div>
   );
