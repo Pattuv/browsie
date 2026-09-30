@@ -1,9 +1,10 @@
 import Auth from './pages/Auth';
+import TitleBar from '../components/TitleBar';
 
 function OnboardingLayer() {
   return (
     <div className="relative h-screen min-h-full">
-      <header className="app-region-drag absolute inset-x-0 top-4 z-10 h-10" />
+      <TitleBar maximizable={false} />
       <div className="h-full min-h-full">
         <Auth />
       </div>

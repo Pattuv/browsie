@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, shell, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, shell, type BrowserWindowConstructorOptions, type MenuItemConstructorOptions } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
@@ -11,6 +11,9 @@ if (started) {
 let dashboardAnimatedThisSession = false;
 
 type UserMode = 'caretaker' | 'independent';
+
+const isMac = process.platform === 'darwin';
+const isWindows = process.platform === 'win32';
 
 const userModePath = () => path.join(app.getPath('userData'), 'user-mode.json');
 
@@ -38,9 +41,40 @@ const disableZoom = (webContents: Electron.WebContents) => {
   });
 };
 
+/** Shared chrome: mac keeps traffic lights; Windows gets custom caption buttons + resize. */
+const windowChromeOptions = (): Partial<BrowserWindowConstructorOptions> => {
+  if (isMac) {
+    return {
+      titleBarStyle: 'hidden',
+      trafficLightPosition: { x: 32, y: 32 },
+      minimizable: false,
+      maximizable: false,
+      resizable: true,
+      fullscreenable: false,
+    };
+  }
+
+  return {
+    frame: false,
+    transparent: false,
+    backgroundColor: '#ffffff',
+    autoHideMenuBar: true,
+    minimizable: true,
+    maximizable: true,
+    resizable: true,
+    fullscreenable: false,
+    thickFrame: true,
+  };
+};
+
 const setAppMenu = () => {
+  if (isWindows) {
+    Menu.setApplicationMenu(null);
+    return;
+  }
+
   const template: MenuItemConstructorOptions[] = [
-    ...(process.platform === 'darwin'
+    ...(isMac
       ? [
           {
             label: app.name,
@@ -83,17 +117,26 @@ const loadRenderer = (window: BrowserWindow, windowKind?: 'menu-picker') => {
   });
 };
 
+const wireWindowStateEvents = (window: BrowserWindow) => {
+  const notify = () => {
+    window.webContents.send('window-maximized-changed', window.isMaximized());
+  };
+
+  window.on('maximize', notify);
+  window.on('unmaximize', notify);
+};
+
 const createMainWindow = () => {
   const mainWindow = new BrowserWindow({
-    width: 1250,
-    height: 800,
-    minWidth: 680,
-    minHeight: 480,
-    titleBarStyle: 'hidden',
-    trafficLightPosition: { x: 32, y: 32 },
-    minimizable: false,
+    width: 720,
+    height: 640,
+    minWidth: 640,
+    minHeight: 560,
+    maxWidth: 900,
+    maxHeight: 760,
+    show: false,
+    ...windowChromeOptions(),
     maximizable: false,
-    fullscreenable: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       autoplayPolicy: 'no-user-gesture-required',
@@ -101,7 +144,12 @@ const createMainWindow = () => {
   });
 
   disableZoom(mainWindow.webContents);
+  wireWindowStateEvents(mainWindow);
   loadRenderer(mainWindow);
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
 
   return mainWindow;
 };
@@ -112,18 +160,20 @@ const createMenuPickerWindow = () => {
     height: 600,
     minWidth: 640,
     minHeight: 600,
-    titleBarStyle: 'hidden',
-    trafficLightPosition: { x: 32, y: 32 },
-    minimizable: false,
-    maximizable: false,
-    fullscreenable: false,
+    show: false,
+    ...windowChromeOptions(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
 
   disableZoom(menuPickerWindow.webContents);
+  wireWindowStateEvents(menuPickerWindow);
   loadRenderer(menuPickerWindow, 'menu-picker');
+
+  menuPickerWindow.once('ready-to-show', () => {
+    menuPickerWindow.show();
+  });
 
   // Create main before this window finishes closing so window-all-closed
   // does not quit the app on Windows/Linux during the handoff.
@@ -162,6 +212,28 @@ app.whenReady().then(() => {
     saveUserMode(mode);
     BrowserWindow.fromWebContents(event.sender)?.close();
   });
+  ipcMain.handle('get-platform', () => process.platform);
+  ipcMain.handle('window-minimize', (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.minimize();
+  });
+  ipcMain.handle('window-maximize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) {
+      return false;
+    }
+    if (win.isMaximized()) {
+      win.unmaximize();
+      return false;
+    }
+    win.maximize();
+    return true;
+  });
+  ipcMain.handle('window-close', (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.close();
+  });
+  ipcMain.handle('window-is-maximized', (event) => {
+    return BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false;
+  });
 
   setAppMenu();
   createWindow();
@@ -179,7 +251,7 @@ app.whenReady().then(() => {
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  if (!isMac) {
     app.quit();
   }
 });

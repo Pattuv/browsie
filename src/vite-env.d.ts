@@ -36,10 +36,16 @@ declare module '*.mp3' {
 type UserMode = 'caretaker' | 'independent';
 
 interface BrowsieAPI {
+  platform: NodeJS.Platform;
   openExternal: (url: string) => Promise<void>;
   shouldAnimateDashboard: () => Promise<boolean>;
   markDashboardPlayed: () => Promise<void>;
   saveUserMode: (mode: UserMode) => Promise<void>;
+  windowMinimize: () => Promise<void>;
+  windowMaximize: () => Promise<boolean>;
+  windowClose: () => Promise<void>;
+  windowIsMaximized: () => Promise<boolean>;
+  onWindowMaximizedChanged: (callback: (maximized: boolean) => void) => () => void;
 }
 
 interface Window {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import TitleBar from '../components/TitleBar';
 import wordmark from '../assets/wordmark.svg';
 import caretakerIcon from '../assets/paint icons/caretaker.svg';
 import independentIcon from '../assets/paint icons/independent.svg';
@@ -25,9 +26,9 @@ function MenuPickerLayer() {
 
   return (
     <div className="relative flex h-screen min-h-full flex-col bg-white px-8 pb-7 pt-14">
-      <header className="app-region-drag absolute inset-x-0 top-4 z-10 flex h-10 items-center pl-16">
+      <TitleBar>
         <img src={wordmark} alt="Browsie" className="h-5" />
-      </header>
+      </TitleBar>
 
       <div className="app-region-no-drag flex flex-1 flex-col items-center">
         <h1 className="bric text-center text-3xl tracking-tighter text-zinc-900 mt-8">
