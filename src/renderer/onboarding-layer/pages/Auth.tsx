@@ -185,10 +185,10 @@ function Auth({ playIntro }: AuthProps) {
           <img
             src={cloudGraphic}
             alt=""
-            className="slide-in-up-slow pointer-events-none absolute inset-x-0 bottom-0 z-0 w-full"
+            className={`pointer-events-none absolute inset-x-0 bottom-0 z-0 w-full ${playIntro ? 'slide-in-up-slow' : ''}`}
           />
           <svg
-            className="slide-in-down-slow pointer-events-none absolute inset-x-0 top-0 z-[1] h-[46%] w-full overflow-visible"
+            className={`pointer-events-none absolute inset-x-0 top-0 z-[1] h-[46%] w-full overflow-visible ${playIntro ? 'slide-in-down-slow' : ''}`}
             viewBox="0 0 100 100"
             preserveAspectRatio="none"
             aria-hidden="true"
@@ -274,8 +274,8 @@ function Auth({ playIntro }: AuthProps) {
             {showScene && (
               <div className="flex flex-col items-center gap-9">
                 <h1
-                  className="enter-blur bric text-center text-6xl font-normal tracking-tighter"
-                  style={{ animationDelay: `${COPY_BLUR_DELAY_MS}ms` }}
+                  className={`bric text-center text-6xl font-normal tracking-tighter ${playIntro ? 'enter-blur' : ''}`}
+                  style={playIntro ? { animationDelay: `${COPY_BLUR_DELAY_MS}ms` } : undefined}
                 >
                   Welcome to Browsie
                 </h1>
@@ -283,8 +283,8 @@ function Auth({ playIntro }: AuthProps) {
                   <button
                     type="button"
                     onClick={handleSignInClick}
-                    className="enter-blur app-region-no-drag flex h-[4.25rem] w-fit cursor-pointer items-center rounded-full bg-black p-2 text-white transition-transform duration-300 ease-out hover:scale-110 active:scale-95"
-                    style={{ animationDelay: `${COPY_BLUR_DELAY_MS}ms` }}
+                    className={`app-region-no-drag flex h-[4.25rem] w-fit cursor-pointer items-center rounded-full bg-black p-2 text-white transition-transform duration-300 ease-out hover:scale-110 active:scale-95 ${playIntro ? 'enter-blur' : ''}`}
+                    style={playIntro ? { animationDelay: `${COPY_BLUR_DELAY_MS}ms` } : undefined}
                   >
                     <span className="flex aspect-square h-full shrink-0 items-center justify-center rounded-full bg-white">
                       <i className="bi bi-google text-2xl leading-none text-black" aria-hidden="true" />
@@ -306,7 +306,7 @@ function Auth({ playIntro }: AuthProps) {
       </div>
 
       {showScene && (
-        <p className="enter-fade-slow absolute inset-x-0 bottom-5 z-10 px-6 text-center text-sm tracking-tight text-zinc-400">
+        <p className={`absolute inset-x-0 bottom-5 z-10 px-6 text-center text-sm tracking-tight text-zinc-400 ${playIntro ? 'enter-fade-slow' : ''}`}>
           By continuing, you agree to the{' '}
           <span className="underline underline-offset-2">Terms of Service</span> and{' '}
           <span className="underline underline-offset-2">Privacy Policy</span>.
