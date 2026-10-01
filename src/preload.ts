@@ -21,6 +21,12 @@ const data: BrowsieDataAPI = {
     ipcRenderer.on('data:changed', listener);
     return () => ipcRenderer.removeListener('data:changed', listener);
   },
+  getSyncStatus: () => ipcRenderer.invoke('sync:get-status'),
+  onSyncStatusChanged: (callback) => {
+    const listener = (_event: IpcRendererEvent, status: SyncStatus) => callback(status);
+    ipcRenderer.on('sync:status-changed', listener);
+    return () => ipcRenderer.removeListener('sync:status-changed', listener);
+  },
 };
 
 contextBridge.exposeInMainWorld('browsie', {

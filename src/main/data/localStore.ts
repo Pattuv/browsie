@@ -3,18 +3,29 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-// The whole document on disk. updatedAt and deviceId are bookkeeping for Drive sync (slice 4);
-// the renderer only ever sees the AppData part. Not encrypted: preferences, not secrets.
-type StoredData = AppData & {
+// The copy that goes to Drive: the app data plus who changed it last, and when.
+export type SyncedDoc = AppData & {
   schemaVersion: 1;
   updatedAt: string;
   deviceId: string;
+};
+
+// The whole document on disk: the synced copy plus this device's own sync bookkeeping, which
+// never leaves the machine. The renderer only ever sees the AppData part. Not encrypted:
+// preferences, not secrets.
+type StoredData = SyncedDoc & {
+  // Changed since the last successful upload. On disk, so a pending upload survives a restart.
+  dirty: boolean;
+  // Null until this device has synced with the signed-in account at least once.
+  lastSyncedAt: string | null;
 };
 
 const dataPath = () => path.join(app.getPath('userData'), 'browsie-data.json');
 const legacyUserModePath = () => path.join(app.getPath('userData'), 'user-mode.json');
 
 let stored: StoredData;
+// Main-process listeners (the sync engine), told about every local edit.
+const localChangeListeners = new Set<() => void>();
 
 const isUserMode = (value: unknown): value is UserMode => value === 'caretaker' || value === 'independent';
 
@@ -38,7 +49,8 @@ export const loadLocalStore = () => {
   const existing = readJson(dataPath()) as StoredData | null;
 
   if (existing?.schemaVersion === 1) {
-    stored = existing;
+    // Files written before sync existed have no bookkeeping yet.
+    stored = { ...existing, dirty: existing.dirty ?? false, lastSyncedAt: existing.lastSyncedAt ?? null };
     return;
   }
 
@@ -49,6 +61,8 @@ export const loadLocalStore = () => {
     deviceId: randomUUID(),
     userMode: isUserMode(legacyMode) ? legacyMode : null,
     settings: {},
+    dirty: false,
+    lastSyncedAt: null,
   };
   writeToDisk();
   fs.rmSync(legacyUserModePath(), { force: true });
@@ -81,7 +95,21 @@ const validatePatch = (patch: unknown): AppDataPatch => {
   };
 };
 
-// Save a change and push the new data to every window (same "bell" pattern as auth:session-changed).
+// Push the current data to every window (same "bell" pattern as auth:session-changed).
+const broadcast = () => {
+  const data = getData();
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send('data:changed', data);
+  }
+  return data;
+};
+
+export const onLocalChange = (listener: () => void) => {
+  localChangeListeners.add(listener);
+  return () => localChangeListeners.delete(listener);
+};
+
+// A change made on this device: save it, mark it for upload, tell the windows and the sync engine.
 export const updateData = (patch: unknown) => {
   const changes = validatePatch(patch);
   stored = {
@@ -89,12 +117,64 @@ export const updateData = (patch: unknown) => {
     ...changes,
     settings: { ...stored.settings, ...changes.settings },
     updatedAt: new Date().toISOString(),
+    dirty: true,
   };
   writeToDisk();
+  localChangeListeners.forEach((listener) => listener());
+  return broadcast();
+};
 
-  const data = getData();
-  for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send('data:changed', data);
+// ---- Used by the sync engine only ----
+
+export const getSyncSnapshot = () => {
+  const { dirty, lastSyncedAt, ...doc } = stored;
+  return { doc: doc as SyncedDoc, dirty, lastSyncedAt };
+};
+
+// Drive had a newer copy: take its app data and timestamp (keep our own deviceId).
+// Returns false if the downloaded file isn't something we can trust, so the caller can overwrite it.
+export const applyRemote = (remote: unknown) => {
+  const doc = remote as Partial<SyncedDoc> | null;
+
+  if (doc?.schemaVersion !== 1 || typeof doc.updatedAt !== 'string') {
+    return false;
   }
-  return data;
+
+  let changes: AppDataPatch;
+  try {
+    changes = validatePatch({ userMode: doc.userMode ?? null, settings: doc.settings ?? {} });
+  } catch {
+    return false;
+  }
+
+  stored = {
+    ...stored,
+    userMode: changes.userMode ?? null,
+    settings: changes.settings ?? {},
+    updatedAt: doc.updatedAt,
+    dirty: false,
+    lastSyncedAt: new Date().toISOString(),
+  };
+  writeToDisk();
+  broadcast();
+  return true;
+};
+
+// An upload of the version stamped `uploadedUpdatedAt` succeeded. If the user changed something
+// while it was uploading, stay dirty so that newer change goes up next.
+export const markSynced = (uploadedUpdatedAt: string) => {
+  stored = {
+    ...stored,
+    dirty: stored.updatedAt === uploadedUpdatedAt ? false : stored.dirty,
+    lastSyncedAt: new Date().toISOString(),
+  };
+  writeToDisk();
+};
+
+// Sign-out: forget everything tied to that account so the next person's account never receives
+// it. The mode is a choice about this device, so it stays.
+export const resetForSignOut = () => {
+  stored = { ...stored, settings: {}, dirty: false, lastSyncedAt: null };
+  writeToDisk();
+  broadcast();
 };

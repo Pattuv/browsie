@@ -42,7 +42,12 @@ type AuthSession = {
   // Shown in the profile picker.
   email?: string;
   pictureDataUrl?: string;
+  // False when the user didn't grant Drive access on the consent screen.
   syncEnabled?: boolean;
+  // False when this computer has no keyring to save the sign-in (Linux): it ends when the app quits.
+  rememberedOnDevice?: boolean;
+  // Set when Google ended the session (revoked, expired), not the user. Auth can say "sign in again".
+  signedOutReason?: 'expired';
 };
 
 interface BrowsieAuthAPI {
@@ -63,11 +68,20 @@ type AppData = {
 // Only the fields you pass change; `settings` is merged key by key.
 type AppDataPatch = Partial<AppData>;
 
+// Drive backup state. idle = backed up; disabled = signed out or Drive access not granted.
+type SyncStatus = {
+  state: 'idle' | 'syncing' | 'offline' | 'error' | 'disabled';
+  lastSyncedAt: string | null;
+};
+
 interface BrowsieDataAPI {
   get: () => Promise<AppData>;
   update: (patch: AppDataPatch) => Promise<AppData>;
   // Returns an unsubscribe function.
   onChanged: (callback: (data: AppData) => void) => () => void;
+  getSyncStatus: () => Promise<SyncStatus>;
+  // Returns an unsubscribe function.
+  onSyncStatusChanged: (callback: (status: SyncStatus) => void) => () => void;
 }
 
 interface BrowsieAPI {

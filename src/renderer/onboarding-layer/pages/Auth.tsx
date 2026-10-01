@@ -77,8 +77,14 @@ function SkyBirds() {
   );
 }
 
-function Auth() {
-  const [phase, setPhase] = useState<Phase>('white');
+type AuthProps = {
+  // true: onboarding (white → hello → mascot → welcome, with the soundtrack).
+  // false: coming back after logout, so go straight to the welcome screen in silence.
+  playIntro: boolean;
+};
+
+function Auth({ playIntro }: AuthProps) {
+  const [phase, setPhase] = useState<Phase>(playIntro ? 'white' : 'lift');
   const [signInView, setSignInView] = useState<SignInView>('welcome');
   const [hasTriedSignIn, setHasTriedSignIn] = useState(false);
   const [signInFailed, setSignInFailed] = useState(false);
@@ -110,6 +116,10 @@ function Auth() {
   useEffect(() => () => window.clearTimeout(welcomeExitTimer.current), []);
 
   useEffect(() => {
+    if (!playIntro) {
+      return undefined;
+    }
+
     const audio = new Audio(setupSoundtrack);
     audio.loop = true;
     void audio.play();
@@ -120,6 +130,10 @@ function Auth() {
   }, []);
 
   useEffect(() => {
+    if (!playIntro) {
+      return undefined;
+    }
+
     const timers = [
       window.setTimeout(() => setPhase('hello'), HELLO_IN_AT),
       window.setTimeout(() => setPhase('hello-out'), HELLO_OUT_AT),

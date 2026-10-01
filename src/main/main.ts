@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron';
 import started from 'electron-squirrel-startup';
 import { loadSession } from './auth/session';
 import { loadLocalStore } from './data/localStore';
+import { startSync } from './data/syncEngine';
 import { registerIpc } from './ipc';
 import { createWindow, setAppMenu } from './windows';
 
@@ -18,6 +19,7 @@ app.whenReady().then(() => {
   registerIpc();
   setAppMenu();
   createWindow();
+  startSync();
 
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.

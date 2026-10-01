@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from
 import { SlidersHorizontal } from 'lucide-react';
 import Boiler from '../../components/Boiler';
 import ProfileMenu from '../../components/ProfileMenu';
+import { useAuthStore } from '../../stores/authStore';
 import { useDataStore } from '../../stores/dataStore';
 import mascot from '../../assets/mascot.svg';
 import wordmark from '../../assets/wordmark.svg';
@@ -96,6 +97,7 @@ function Dashboard() {
   const [showCard, setShowCard] = useState(false);
   const [showNotch, setShowNotch] = useState(false);
   const mode = useDataStore((state) => state.userMode);
+  const firstName = useAuthStore((state) => state.firstName);
 
   useEffect(() => {
     let timers: ReturnType<typeof setTimeout>[] = [];
@@ -232,7 +234,7 @@ function Dashboard() {
           >
             <ActionLines className="absolute right-full mr-10" />
             <button className="cursor-pointer bg-black ring-8 ring-black/70 text-white px-6 py-4 rounded-full tracking-tight transition-all duration-300 ease-out group-hover:py-6 group-hover:ring-0">
-              Open browser for Pratyush
+              Open browser for {firstName}
             </button>
             <ActionLines className="absolute left-full ml-10" mirrored />
           </div>
@@ -255,7 +257,7 @@ function Dashboard() {
               <h2 className="text-xl tracking-tight">For support:</h2>
               <p className="text-xs text-zinc-500 font-light leading-snug tracking-tight">
                 Learn how you can help{' '}
-                <span className="font-semibold text-zinc-800">Pratyush</span> use Browsie to the
+                <span className="font-semibold text-zinc-800">{firstName}</span> use Browsie to the
                 best of their ability.
               </p>
               <span className="mt-1 w-fit text-xs font-medium tracking-tight">Go to guide →</span>

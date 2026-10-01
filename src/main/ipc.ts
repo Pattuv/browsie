@@ -1,6 +1,7 @@
 import { ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
 import { cancelSignIn, getSession, signIn, signOut } from './auth/session';
 import { getData, updateData } from './data/localStore';
+import { getSyncStatus } from './data/syncEngine';
 import { isAppUrl, openModePicker } from './windows';
 
 let dashboardAnimatedThisSession = false;
@@ -56,6 +57,7 @@ export const registerIpc = () => {
 
     return updateData(patch);
   });
+  handle('sync:get-status', () => getSyncStatus());
 
   handle('auth:get-session', () => getSession());
   handle('auth:sign-in', () => signIn());

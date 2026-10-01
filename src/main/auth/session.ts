@@ -23,12 +23,20 @@ type LiveSession = {
   vault: VaultContents;
   accessToken?: string;
   accessTokenExpiresAt?: number;
+  // False when there's no real keyring (Linux basic_text): this sign-in won't survive a restart.
+  persisted: boolean;
 };
 
 let current: LiveSession | null = null;
 let inFlightSignIn: Promise<AuthSession> | null = null;
 let cancelPendingSignIn: (() => void) | null = null;
 let inFlightRefresh: Promise<string> | null = null;
+// Why the last session ended, when it wasn't the user's choice. Lets Auth say "please sign in again".
+let signedOutReason: AuthSession['signedOutReason'];
+// Main-process listeners (the sync engine). Windows hear about changes over IPC instead.
+const sessionListeners = new Set<() => void>();
+
+const hasDriveAccess = (live: LiveSession) => live.vault.scopes.includes(DRIVE_APPDATA_SCOPE);
 
 // The only shape that ever crosses into the renderer: no tokens, no sub, no raw ID token.
 const toAuthSession = (live: LiveSession | null): AuthSession =>
@@ -38,9 +46,10 @@ const toAuthSession = (live: LiveSession | null): AuthSession =>
         firstName: live.vault.firstName,
         email: live.vault.email,
         pictureDataUrl: live.vault.pictureDataUrl,
-        syncEnabled: live.vault.scopes.includes(DRIVE_APPDATA_SCOPE),
+        syncEnabled: hasDriveAccess(live),
+        rememberedOnDevice: live.persisted,
       }
-    : { status: 'SIGNED_OUT' };
+    : { status: 'SIGNED_OUT', ...(signedOutReason && { signedOutReason }) };
 
 // Main is the single source of truth: every change is pushed to every window.
 const setSession = (next: LiveSession | null) => {
@@ -48,7 +57,16 @@ const setSession = (next: LiveSession | null) => {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send('auth:session-changed', toAuthSession(current));
   }
+  sessionListeners.forEach((listener) => listener());
 };
+
+export const onSessionChange = (listener: () => void) => {
+  sessionListeners.add(listener);
+  return () => sessionListeners.delete(listener);
+};
+
+// Main-side check for the sync engine: signed in AND allowed to touch Drive.
+export const canSync = () => current !== null && hasDriveAccess(current);
 
 const rememberAccessToken = (live: LiveSession, tokens: TokenResponse) => {
   live.accessToken = tokens.access_token;
@@ -58,7 +76,7 @@ const rememberAccessToken = (live: LiveSession, tokens: TokenResponse) => {
 // Cold start: decrypt the vault and report SIGNED_IN with no network call, so the app boots offline.
 export const loadSession = () => {
   const vault = readVault();
-  current = vault ? { vault } : null;
+  current = vault ? { vault, persisted: true } : null;
 };
 
 export const getSession = () => toAuthSession(current);
@@ -99,13 +117,15 @@ const runSignIn = async (): Promise<AuthSession> => {
         // The user may have unticked Drive on the consent screen; this is what they actually granted.
         scopes: tokens.scope.split(' '),
       },
+      persisted: false,
     };
     rememberAccessToken(live, tokens);
 
     // 5. Lock the refresh token in the vault. If there's no real keyring (Linux basic_text) we skip
     //    writing, so the session lasts for this run only. Telling the user about that is slice 5.
-    writeVault(live.vault);
+    live.persisted = writeVault(live.vault);
 
+    signedOutReason = undefined;
     setSession(live);
     return getSession();
   } catch (error) {
@@ -119,8 +139,10 @@ const runSignIn = async (): Promise<AuthSession> => {
 };
 
 // A second click while the browser is open shares the first attempt instead of starting another.
+// Signed in but without Drive (unticked on the consent screen)? Signing in again is the retry:
+// Google re-asks for the missing permission and the new session replaces the old one.
 export const signIn = () => {
-  if (current) {
+  if (current && hasDriveAccess(current)) {
     return Promise.resolve(getSession());
   }
 
@@ -146,6 +168,7 @@ const refresh = async (live: LiveSession) => {
     // Only drop the session if it's still the one we were refreshing.
     if (error instanceof GoogleOAuthError && error.code === 'invalid_grant' && current === live) {
       clearVault();
+      signedOutReason = 'expired';
       setSession(null);
     }
     throw error;
@@ -171,11 +194,20 @@ export const getAccessToken = async () => {
   return inFlightRefresh;
 };
 
+// Drive said 401 (e.g. access was revoked): forget the cached token so the next call refreshes,
+// which either gets a fresh one or hits invalid_grant and signs out.
+export const invalidateAccessToken = () => {
+  if (current) {
+    current.accessToken = undefined;
+  }
+};
+
 // Local wipe first, so signing out works offline and the next person on a shared device sees nothing.
 // Then best-effort revoke, so the token is also dead on Google's side.
 export const signOut = async () => {
   const live = current;
   clearVault();
+  signedOutReason = undefined;
   setSession(null);
 
   if (live) {
