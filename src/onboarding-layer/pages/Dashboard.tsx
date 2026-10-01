@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
 import Boiler from '../../components/Boiler';
+import ProfileMenu from '../../components/ProfileMenu';
 import mascot from '../../assets/mascot.svg';
 import wordmark from '../../assets/wordmark.svg';
 import book from '../../assets/paint-icons/book.png';
@@ -78,20 +79,6 @@ function ModeNotch({ mode, animate }: ModeNotchProps) {
       </div>
       <span className="-ml-px" style={notchEarStyle('right')} aria-hidden="true" />
     </div>
-  );
-}
-
-// Placeholder until auth lands and we can show the signed-in Google profile photo.
-function ProfileAvatar() {
-  return (
-    <button
-      type="button"
-      aria-label="Profile"
-      title="Profile"
-      className="app-region-no-drag flex h-7 w-7 cursor-pointer items-end justify-center overflow-hidden rounded-full bg-zinc-300"
-    >
-      <i className="bi bi-person-fill -mb-1.5 text-2xl leading-none text-white" aria-hidden="true" />
-    </button>
   );
 }
 
@@ -222,7 +209,7 @@ function Dashboard() {
           >
             <SlidersHorizontal size={18} strokeWidth={2} aria-hidden="true" />
           </button>
-          <ProfileAvatar />
+          <ProfileMenu />
         </div>
       </div>
 

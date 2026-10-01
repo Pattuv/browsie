@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron';
+import { BrowserWindow, shell } from 'electron';
 import {
   buildAuthUrl,
   decodeIdToken,
@@ -63,17 +63,6 @@ export const loadSession = () => {
 
 export const getSession = () => toAuthSession(current);
 
-// After the browser tab says "You're signed in", pull Browsie back in front of it.
-const bringAppToFront = () => {
-  if (process.platform === 'darwin') {
-    app.focus({ steal: true });
-  }
-
-  const [window] = BrowserWindow.getAllWindows();
-  window?.show();
-  window?.focus();
-};
-
 const runSignIn = async (): Promise<AuthSession> => {
   const { verifier, challenge } = createPkcePair();
   const state = createState();
@@ -118,7 +107,6 @@ const runSignIn = async (): Promise<AuthSession> => {
     writeVault(live.vault);
 
     setSession(live);
-    bringAppToFront();
     return getSession();
   } catch (error) {
     if (error instanceof SignInAborted) {
