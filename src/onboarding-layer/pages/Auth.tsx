@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import mascot from '../../assets/mascot.svg';
 import cloudGraphic from '../../assets/cloudgraphic.png';
+import browserIllustration from '../../assets/paint-icons/browser.png';
 import setupSoundtrack from '../../assets/setupsoundtrack.mp3';
 
 const WHITE_HOLD_MS = 1000;
@@ -21,7 +22,12 @@ const LIFT_AT = MASCOT_IN_AT + MASCOT_FADE_MS + MASCOT_HOLD_MS;
 const HELLO_TEXT = 'hello there';
 const HELLO_LETTER_STAGGER_MS = 38;
 
+// Matches .exit-blur in index.css.
+const WELCOME_EXIT_MS = 550;
+
 type Phase = 'white' | 'hello' | 'hello-out' | 'mascot' | 'lift';
+// welcome → (click) welcome-out → browser; back to welcome if the attempt is cancelled or fails.
+type SignInView = 'welcome' | 'welcome-out' | 'browser';
 
 function BirdMark({ className }: { className: string }) {
   return (
@@ -73,8 +79,35 @@ function SkyBirds() {
 
 function Auth() {
   const [phase, setPhase] = useState<Phase>('white');
+  const [signInView, setSignInView] = useState<SignInView>('welcome');
+  const [hasTriedSignIn, setHasTriedSignIn] = useState(false);
+  const [signInFailed, setSignInFailed] = useState(false);
   const stackRef = useRef<HTMLDivElement>(null);
   const stackStartTop = useRef<number | null>(null);
+  const welcomeExitTimer = useRef<number | undefined>(undefined);
+
+  const handleSignInClick = async () => {
+    setSignInFailed(false);
+    setHasTriedSignIn(true);
+    setSignInView('welcome-out');
+    welcomeExitTimer.current = window.setTimeout(() => setSignInView('browser'), WELCOME_EXIT_MS);
+
+    let signedIn = false;
+    try {
+      const session = await window.browsie?.auth.signIn();
+      // On success main pushes SIGNED_IN to the auth store, and the gate swaps this page for Dashboard.
+      signedIn = session?.status === 'SIGNED_IN';
+    } catch {
+      setSignInFailed(true);
+    }
+
+    if (!signedIn) {
+      window.clearTimeout(welcomeExitTimer.current);
+      setSignInView('welcome');
+    }
+  };
+
+  useEffect(() => () => window.clearTimeout(welcomeExitTimer.current), []);
 
   useEffect(() => {
     const audio = new Audio(setupSoundtrack);
@@ -189,8 +222,35 @@ function Auth() {
           </p>
         )}
 
-        {showMascot && (
-          <div ref={stackRef} className="flex flex-col items-center">
+        {signInView === 'browser' && (
+          <div className="enter-blur flex flex-col items-center">
+            <img src={browserIllustration} alt="" className="h-28 w-auto" />
+            <h1 className="bric mt-6 text-center text-5xl font-normal tracking-tighter">
+              Finish signing in from your
+              <br />
+              existing browser.
+            </h1>
+            <p className="mt-5 text-center text-lg tracking-tight text-zinc-600">
+              This page will refresh when you’re done.
+            </p>
+            {/* Main resolves the pending signIn() as signed-out, and handleSignInClick fades the welcome view back in. */}
+            <button
+              type="button"
+              onClick={() => window.browsie?.auth.cancelSignIn()}
+              className="app-region-no-drag mt-6 h-10 w-44 cursor-pointer rounded-[10px] border-[1.5px] border-black bg-zinc-500 text-sm font-medium tracking-tight text-white transition-transform duration-300 ease-out hover:scale-105 active:scale-95"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {showMascot && signInView !== 'browser' && (
+          <div
+            ref={stackRef}
+            className={`flex flex-col items-center ${
+              signInView === 'welcome-out' ? 'exit-blur pointer-events-none' : hasTriedSignIn ? 'enter-blur' : ''
+            }`}
+          >
             <img
               src={mascot}
               alt=""
@@ -205,18 +265,26 @@ function Auth() {
                 >
                   Welcome to Browsie
                 </h1>
-                <button
-                  type="button"
-                  className="enter-blur app-region-no-drag flex h-[4.25rem] w-fit cursor-pointer items-center rounded-full bg-black p-2 text-white transition-transform duration-300 ease-out hover:scale-110 active:scale-95"
-                  style={{ animationDelay: `${COPY_BLUR_DELAY_MS}ms` }}
-                >
-                  <span className="flex aspect-square h-full shrink-0 items-center justify-center rounded-full bg-white">
-                    <i className="bi bi-google text-2xl leading-none text-black" aria-hidden="true" />
-                  </span>
-                  <span className="px-2.5 text-center text-lg font-medium tracking-tight">
-                    Continue with Google
-                  </span>
-                </button>
+                <div className="relative flex flex-col items-center">
+                  <button
+                    type="button"
+                    onClick={handleSignInClick}
+                    className="enter-blur app-region-no-drag flex h-[4.25rem] w-fit cursor-pointer items-center rounded-full bg-black p-2 text-white transition-transform duration-300 ease-out hover:scale-110 active:scale-95"
+                    style={{ animationDelay: `${COPY_BLUR_DELAY_MS}ms` }}
+                  >
+                    <span className="flex aspect-square h-full shrink-0 items-center justify-center rounded-full bg-white">
+                      <i className="bi bi-google text-2xl leading-none text-black" aria-hidden="true" />
+                    </span>
+                    <span className="px-2.5 text-center text-lg font-medium tracking-tight">
+                      Continue with Google
+                    </span>
+                  </button>
+                  {signInFailed && (
+                    <p className="absolute top-full mt-4 whitespace-nowrap text-base tracking-tight text-zinc-600">
+                      Something went wrong signing in. Please try again.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>

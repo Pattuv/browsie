@@ -3,7 +3,7 @@ import { SlidersHorizontal } from 'lucide-react';
 import Boiler from '../../components/Boiler';
 import mascot from '../../assets/mascot.svg';
 import wordmark from '../../assets/wordmark.svg';
-import book from '../../assets/paint icons/book.png';
+import book from '../../assets/paint-icons/book.png';
 
 const TITLE_DELAY_MS = 500;
 const BLUR_DURATION_MS = 550;

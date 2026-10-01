@@ -35,7 +35,27 @@ declare module '*.mp3' {
 
 type UserMode = 'caretaker' | 'independent';
 
+// Everything the UI is ever told about the signed-in user. Never tokens or Google IDs.
+type AuthSession = {
+  status: 'SIGNED_OUT' | 'SIGNED_IN';
+  firstName?: string;
+  // Shown in the profile picker.
+  email?: string;
+  pictureDataUrl?: string;
+  syncEnabled?: boolean;
+};
+
+interface BrowsieAuthAPI {
+  getSession: () => Promise<AuthSession>;
+  signIn: () => Promise<AuthSession>;
+  cancelSignIn: () => Promise<void>;
+  signOut: () => Promise<void>;
+  // Returns an unsubscribe function.
+  onSessionChanged: (callback: (session: AuthSession) => void) => () => void;
+}
+
 interface BrowsieAPI {
+  auth: BrowsieAuthAPI;
   openExternal: (url: string) => Promise<void>;
   shouldAnimateDashboard: () => Promise<boolean>;
   markDashboardPlayed: () => Promise<void>;

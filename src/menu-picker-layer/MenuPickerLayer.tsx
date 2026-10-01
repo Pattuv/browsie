@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import wordmark from '../assets/wordmark.svg';
-import caretakerIcon from '../assets/paint icons/caretaker.svg';
-import independentIcon from '../assets/paint icons/independent.svg';
+import caretakerIcon from '../assets/paint-icons/caretaker.svg';
+import independentIcon from '../assets/paint-icons/independent.svg';
 
 type UserMode = 'caretaker' | 'independent';
 
