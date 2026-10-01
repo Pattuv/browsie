@@ -1,7 +1,7 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import bricolageFont from '../../assets/fonts/Bricolage/BricolageGrotesque-VariableFont_opsz,wdth,wght.ttf?inline';
-import mascotSvg from '../../assets/mascot.svg?raw';
+import bricolageFont from '../../renderer/assets/fonts/Bricolage/BricolageGrotesque-VariableFont_opsz,wdth,wght.ttf?inline';
+import mascotSvg from '../../renderer/assets/mascot.svg?raw';
 
 // Thrown when the attempt ends without an error worth showing: the user cancelled,
 // denied consent, or never finished in time. Session treats it as "still signed out".
