@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { hasUserMode } from './userMode';
 
 const disableZoom = (webContents: Electron.WebContents) => {
@@ -52,6 +53,37 @@ export const setAppMenu = () => {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 };
 
+// __dirname is .vite/build at runtime (Vite bundles main there), so this path
+// does not depend on where this source file lives.
+const rendererIndexPath = () => path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`);
+
+// "Is this one of Browsie's own pages?" Dev: anything on the Vite dev server.
+// Packaged: exactly our index.html on disk (any ?window=... query is fine).
+export const isAppUrl = (rawUrl: string) => {
+  try {
+    const url = new URL(rawUrl);
+
+    if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+      return url.origin === new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL).origin;
+    }
+
+    return url.protocol === 'file:' && fileURLToPath(url) === rendererIndexPath();
+  } catch {
+    return false;
+  }
+};
+
+// Our windows carry the preload (window.browsie), so they must never wander off to another site
+// or pop open new windows. Real websites will live in separate tabs that get no preload.
+const lockNavigation = (webContents: Electron.WebContents) => {
+  webContents.on('will-navigate', (event, url) => {
+    if (!isAppUrl(url)) {
+      event.preventDefault();
+    }
+  });
+  webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+};
+
 const loadRenderer = (window: BrowserWindow, windowKind?: 'menu-picker') => {
   const search = windowKind ? `?window=${windowKind}` : '';
 
@@ -60,9 +92,7 @@ const loadRenderer = (window: BrowserWindow, windowKind?: 'menu-picker') => {
     return;
   }
 
-  // __dirname is .vite/build at runtime (Vite bundles main there), so this path
-  // does not depend on where this source file lives.
-  window.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), {
+  window.loadFile(rendererIndexPath(), {
     search: search.replace(/^\?/, ''),
   });
 };
@@ -85,6 +115,7 @@ export const createMainWindow = () => {
   });
 
   disableZoom(mainWindow.webContents);
+  lockNavigation(mainWindow.webContents);
   loadRenderer(mainWindow);
 
   return mainWindow;
@@ -107,6 +138,7 @@ const createMenuPickerWindow = () => {
   });
 
   disableZoom(menuPickerWindow.webContents);
+  lockNavigation(menuPickerWindow.webContents);
   loadRenderer(menuPickerWindow, 'menu-picker');
 
   // Create main before this window finishes closing so window-all-closed
