@@ -13,11 +13,21 @@ const auth: BrowsieAuthAPI = {
   },
 };
 
+const data: BrowsieDataAPI = {
+  get: () => ipcRenderer.invoke('data:get'),
+  update: (patch) => ipcRenderer.invoke('data:update', patch),
+  onChanged: (callback) => {
+    const listener = (_event: IpcRendererEvent, appData: AppData) => callback(appData);
+    ipcRenderer.on('data:changed', listener);
+    return () => ipcRenderer.removeListener('data:changed', listener);
+  },
+};
+
 contextBridge.exposeInMainWorld('browsie', {
   auth,
+  data,
+  openModePicker: () => ipcRenderer.invoke('open-mode-picker'),
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
   shouldAnimateDashboard: () => ipcRenderer.invoke('should-animate-dashboard'),
   markDashboardPlayed: () => ipcRenderer.invoke('mark-dashboard-played'),
-  getUserMode: () => ipcRenderer.invoke('get-user-mode'),
-  saveUserMode:(mode: 'caretaker' | 'independent') => ipcRenderer.invoke('save-user-mode', mode),
 });

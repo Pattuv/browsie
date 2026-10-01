@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { DollarSign, Users, type LucideIcon } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import PrimaryButton from './PrimaryButton';
 
 const OPENROUTER_BILLING_URL = 'https://openrouter.ai/settings/credits';
 
@@ -59,6 +60,11 @@ function ProfileMenu() {
     return () => document.removeEventListener('pointerdown', handlePointerDown);
   }, [open]);
 
+  const changeMode = () => {
+    setOpen(false);
+    window.browsie?.openModePicker();
+  };
+
   const openBilling = () => {
     setOpen(false);
     window.browsie?.openExternal(OPENROUTER_BILLING_URL);
@@ -86,19 +92,14 @@ function ProfileMenu() {
           </div>
 
           <div className="mt-4 flex flex-col">
-            {/* Not wired yet: the mode picker flow is a separate piece of work. */}
-            <MenuItem icon={Users} label="Change mode" />
+            <MenuItem icon={Users} label="Change mode" onClick={changeMode} />
             <MenuItem icon={DollarSign} label="Check Openrouter billing" onClick={openBilling} />
           </div>
 
           {/* Main wipes the vault and pushes SIGNED_OUT; the OnboardingLayer gate then swaps Dashboard for Auth. */}
-          <button
-            type="button"
-            onClick={() => window.browsie?.auth.signOut()}
-            className="mt-3 h-12 w-full cursor-pointer rounded-xl bg-black text-base tracking-tight text-white transition-transform duration-200 ease-out active:scale-[0.98]"
-          >
+          <PrimaryButton onClick={() => window.browsie?.auth.signOut()} className="mt-3 w-full">
             Log out
-          </button>
+          </PrimaryButton>
         </div>
       )}
     </div>

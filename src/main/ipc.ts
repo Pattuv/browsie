@@ -1,7 +1,7 @@
-import { BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
+import { ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
 import { cancelSignIn, getSession, signIn, signOut } from './auth/session';
-import { readUserMode, saveUserMode, type UserMode } from './userMode';
-import { isAppUrl } from './windows';
+import { getData, updateData } from './data/localStore';
+import { isAppUrl, openModePicker } from './windows';
 
 let dashboardAnimatedThisSession = false;
 
@@ -45,15 +45,16 @@ export const registerIpc = () => {
   handle('mark-dashboard-played', () => {
     dashboardAnimatedThisSession = true;
   });
-  handle('get-user-mode', () => readUserMode());
-  handle('save-user-mode', (event, mode: UserMode) => {
+  handle('open-mode-picker', () => openModePicker());
+
+  handle('data:get', () => getData());
+  handle('data:update', (_event, patch: unknown) => {
     // Independent mode is stubbed in the UI until that experience ships.
-    if (mode !== 'caretaker') {
+    if ((patch as AppDataPatch | null)?.userMode === 'independent') {
       throw new Error('Only caretaker mode is available right now.');
     }
 
-    saveUserMode(mode);
-    BrowserWindow.fromWebContents(event.sender)?.close();
+    return updateData(patch);
   });
 
   handle('auth:get-session', () => getSession());

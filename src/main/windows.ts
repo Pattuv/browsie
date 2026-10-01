@@ -1,7 +1,7 @@
 import { app, BrowserWindow, Menu, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hasUserMode } from './userMode';
+import { getData } from './data/localStore';
 
 const disableZoom = (webContents: Electron.WebContents) => {
   webContents.setVisualZoomLevelLimits(1, 1);
@@ -97,8 +97,14 @@ const loadRenderer = (window: BrowserWindow, windowKind?: 'menu-picker') => {
   });
 };
 
+// At most one of each. Kept so "Change mode" can reuse them instead of stacking duplicates.
+let mainWindow: BrowserWindow | null = null;
+let menuPickerWindow: BrowserWindow | null = null;
+
+const hasUserMode = () => getData().userMode !== null;
+
 export const createMainWindow = () => {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1250,
     height: 800,
     minWidth: 680,
@@ -117,12 +123,15 @@ export const createMainWindow = () => {
   disableZoom(mainWindow.webContents);
   lockNavigation(mainWindow.webContents);
   loadRenderer(mainWindow);
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
 
   return mainWindow;
 };
 
 const createMenuPickerWindow = () => {
-  const menuPickerWindow = new BrowserWindow({
+  menuPickerWindow = new BrowserWindow({
     width: 640,
     height: 600,
     minWidth: 640,
@@ -143,13 +152,27 @@ const createMenuPickerWindow = () => {
 
   // Create main before this window finishes closing so window-all-closed
   // does not quit the app on Windows/Linux during the handoff.
+  // Opened from "Change mode", main is already there, so don't make a second one.
   menuPickerWindow.on('close', () => {
-    if (hasUserMode()) {
+    if (hasUserMode() && !mainWindow) {
       createMainWindow();
     }
   });
+  menuPickerWindow.on('closed', () => {
+    menuPickerWindow = null;
+  });
 
   return menuPickerWindow;
+};
+
+// "Change mode" in the profile menu: bring up the picker (or the one already open).
+export const openModePicker = () => {
+  if (menuPickerWindow) {
+    menuPickerWindow.focus();
+    return;
+  }
+
+  createMenuPickerWindow();
 };
 
 export const createWindow = () => {

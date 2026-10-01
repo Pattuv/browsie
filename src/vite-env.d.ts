@@ -54,13 +54,29 @@ interface BrowsieAuthAPI {
   onSessionChanged: (callback: (session: AuthSession) => void) => () => void;
 }
 
+// Browsie's saved app data (browsie-data.json, later backed up to Drive). Preferences only, never secrets.
+type AppData = {
+  userMode: UserMode | null;
+  settings: Record<string, unknown>;
+};
+
+// Only the fields you pass change; `settings` is merged key by key.
+type AppDataPatch = Partial<AppData>;
+
+interface BrowsieDataAPI {
+  get: () => Promise<AppData>;
+  update: (patch: AppDataPatch) => Promise<AppData>;
+  // Returns an unsubscribe function.
+  onChanged: (callback: (data: AppData) => void) => () => void;
+}
+
 interface BrowsieAPI {
   auth: BrowsieAuthAPI;
+  data: BrowsieDataAPI;
+  openModePicker: () => Promise<void>;
   openExternal: (url: string) => Promise<void>;
   shouldAnimateDashboard: () => Promise<boolean>;
   markDashboardPlayed: () => Promise<void>;
-  getUserMode: () => Promise<UserMode | null>;
-  saveUserMode: (mode: UserMode) => Promise<void>;
 }
 
 interface Window {

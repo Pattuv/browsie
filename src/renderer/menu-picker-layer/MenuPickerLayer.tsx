@@ -1,9 +1,8 @@
 import { useState } from 'react';
+import PrimaryButton from '../components/PrimaryButton';
 import wordmark from '../assets/wordmark.svg';
 import caretakerIcon from '../assets/paint-icons/caretaker.svg';
 import independentIcon from '../assets/paint-icons/independent.svg';
-
-type UserMode = 'caretaker' | 'independent';
 
 function MenuPickerLayer() {
   const [mode, setMode] = useState<UserMode>('caretaker');
@@ -17,7 +16,9 @@ function MenuPickerLayer() {
     setSaving(true);
 
     try {
-      await window.browsie?.saveUserMode(mode);
+      await window.browsie?.data.update({ userMode: mode });
+      // Closing hands off to main, which opens the Dashboard window if it isn't already open.
+      window.close();
     } catch {
       setSaving(false);
     }
@@ -73,14 +74,9 @@ function MenuPickerLayer() {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={continueWithMode}
-          disabled={saving}
-          className="my-14 rounded-full bg-zinc-900 px-15 py-3 bric tracking-tight text-white transition-opacity disabled:opacity-60"
-        >
+        <PrimaryButton onClick={continueWithMode} disabled={saving} className="my-14 px-15">
           Continue
-        </button>
+        </PrimaryButton>
       </div>
     </div>
   );

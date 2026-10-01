@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from
 import { SlidersHorizontal } from 'lucide-react';
 import Boiler from '../../components/Boiler';
 import ProfileMenu from '../../components/ProfileMenu';
+import { useDataStore } from '../../stores/dataStore';
 import mascot from '../../assets/mascot.svg';
 import wordmark from '../../assets/wordmark.svg';
 import book from '../../assets/paint-icons/book.png';
@@ -94,21 +95,7 @@ function Dashboard() {
   const [showButton, setShowButton] = useState(false);
   const [showCard, setShowCard] = useState(false);
   const [showNotch, setShowNotch] = useState(false);
-  const [mode, setMode] = useState<UserMode | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    window.browsie?.getUserMode().then((savedMode) => {
-      if (!cancelled) {
-        setMode(savedMode);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const mode = useDataStore((state) => state.userMode);
 
   useEffect(() => {
     let timers: ReturnType<typeof setTimeout>[] = [];
