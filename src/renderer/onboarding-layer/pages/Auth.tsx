@@ -29,54 +29,6 @@ type Phase = 'white' | 'hello' | 'hello-out' | 'mascot' | 'lift';
 // welcome → (click) welcome-out → browser; back to welcome if the attempt is cancelled or fails.
 type SignInView = 'welcome' | 'welcome-out' | 'browser';
 
-function BirdMark({ className }: { className: string }) {
-  return (
-    <svg className={`${className} overflow-visible`} viewBox="0 0 48 28" fill="none">
-      <g
-        filter="url(#bird-grain)"
-        stroke="#2a2a2a"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <g className="bird-wing-left">
-          <path d="M24 14 Q18 12.5 13 14" />
-          <g className="bird-wing-left-outer">
-            <path d="M13 14 Q6 16 0 14" />
-          </g>
-        </g>
-        <g className="bird-wing-right">
-          <path d="M24 14 Q30 12.5 35 14" />
-          <g className="bird-wing-right-outer">
-            <path d="M35 14 Q42 16 48 14" />
-          </g>
-        </g>
-      </g>
-    </svg>
-  );
-}
-
-function SkyBirds() {
-  return (
-    <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden" aria-hidden="true">
-      <svg className="absolute h-0 w-0" aria-hidden="true">
-        <defs>
-          <filter id="bird-grain" x="-80" y="-80" width="200" height="200" filterUnits="userSpaceOnUse">
-            <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" result="n" />
-            <feDisplacementMap in="SourceGraphic" in2="n" scale="1.4" />
-          </filter>
-        </defs>
-      </svg>
-      <div className="bird-fly-a absolute top-[26%] left-0">
-        <BirdMark className="bird-flap-a h-5 w-12" />
-      </div>
-      <div className="bird-fly-b absolute top-[35%] left-0">
-        <BirdMark className="bird-flap-b h-3 w-8" />
-      </div>
-    </div>
-  );
-}
-
 type AuthProps = {
   // true: onboarding (white → hello → mascot → welcome, with the soundtrack).
   // false: coming back after logout, so go straight to the welcome screen in silence.
@@ -217,7 +169,6 @@ function Auth({ playIntro }: AuthProps) {
               filter="url(#auth-triangle-blur)"
             />
           </svg>
-          <SkyBirds />
         </>
       )}
 
