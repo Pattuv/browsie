@@ -2,7 +2,7 @@ import { BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from 'electron
 import { cancelSignIn, getSession, signIn, signOut } from './auth/session';
 import { getData, updateData } from './data/localStore';
 import { getSyncStatus } from './data/syncEngine';
-import { isAppUrl, openModePicker } from './windows';
+import { bringToFront, isAppUrl, openModePicker } from './windows';
 
 let dashboardAnimatedThisSession = false;
 
@@ -77,7 +77,10 @@ export const registerIpc = () => {
   handle('sync:get-status', () => getSyncStatus());
 
   handle('auth:get-session', () => getSession());
-  handle('auth:sign-in', () => signIn());
+  handle('auth:sign-in', (event) => {
+    const requester = BrowserWindow.fromWebContents(event.sender);
+    return signIn(() => requester && bringToFront(requester));
+  });
   handle('auth:cancel-sign-in', () => cancelSignIn());
   handle('auth:sign-out', () => signOut());
 };

@@ -54,7 +54,12 @@ const DENIED_PAGE = page('Sign-in cancelled', 'You can close this tab and return
 
 // Listens on 127.0.0.1 only (unreachable from other machines), on a port the OS picks,
 // for exactly one valid callback, then shuts down. Also shuts down on cancel or timeout.
-export const startLoopback = async (expectedState: string, timeoutMs: number): Promise<Loopback> => {
+// `onReturn` fires when that callback arrives (approved or denied), i.e. the user is done in the browser.
+export const startLoopback = async (
+  expectedState: string,
+  timeoutMs: number,
+  onReturn?: () => void,
+): Promise<Loopback> => {
   const server = http.createServer();
   let resolveCode!: (code: string) => void;
   let rejectCode!: (error: Error) => void;
@@ -91,6 +96,7 @@ export const startLoopback = async (expectedState: string, timeoutMs: number): P
     }
 
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    onReturn?.();
     const authCode = url.searchParams.get('code');
 
     if (authCode) {

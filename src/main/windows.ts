@@ -206,6 +206,28 @@ const createMenuPickerWindow = () => {
   return menuPickerWindow;
 };
 
+// Pull a window back in front of the browser after sign-in.
+export const bringToFront = (window: BrowserWindow) => {
+  if (window.isDestroyed()) {
+    return;
+  }
+
+  if (window.isMinimized()) {
+    window.restore();
+  }
+
+  // Windows blocks background apps from taking focus (it just flashes the taskbar), but it will
+  // raise an always-on-top window, so toggle that around focus().
+  window.setAlwaysOnTop(true);
+  window.show();
+  window.focus();
+  window.setAlwaysOnTop(false);
+
+  if (isMac) {
+    app.focus({ steal: true });
+  }
+};
+
 // "Change mode" in the profile menu: bring up the picker (or the one already open).
 export const openModePicker = () => {
   if (menuPickerWindow) {

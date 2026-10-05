@@ -88,6 +88,15 @@
     animation: blur-fade-out 0.55s ease-in both;
   }
 
+  /* Small popovers (profile menu) */
+  .enter-blur-fast {
+    animation: blur-fade-in 0.2s ease-out both;
+  }
+
+  .exit-blur-fast {
+    animation: blur-fade-out 0.15s ease-in both;
+  }
+
   @keyframes fade-in {
     from {
       opacity: 0;

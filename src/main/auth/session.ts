@@ -81,10 +81,10 @@ export const loadSession = () => {
 
 export const getSession = () => toAuthSession(current);
 
-const runSignIn = async (): Promise<AuthSession> => {
+const runSignIn = async (onBrowserReturned?: () => void): Promise<AuthSession> => {
   const { verifier, challenge } = createPkcePair();
   const state = createState();
-  const loopback = await startLoopback(state, SIGN_IN_TIMEOUT_MS);
+  const loopback = await startLoopback(state, SIGN_IN_TIMEOUT_MS, onBrowserReturned);
   cancelPendingSignIn = loopback.cancel;
 
   try {
@@ -141,12 +141,13 @@ const runSignIn = async (): Promise<AuthSession> => {
 // A second click while the browser is open shares the first attempt instead of starting another.
 // Signed in but without Drive (unticked on the consent screen)? Signing in again is the retry:
 // Google re-asks for the missing permission and the new session replaces the old one.
-export const signIn = () => {
+// `onBrowserReturned` runs once the user finishes on Google's page, so the app can come back to the front.
+export const signIn = (onBrowserReturned?: () => void) => {
   if (current && hasDriveAccess(current)) {
     return Promise.resolve(getSession());
   }
 
-  inFlightSignIn ??= runSignIn().finally(() => {
+  inFlightSignIn ??= runSignIn(onBrowserReturned).finally(() => {
     inFlightSignIn = null;
     cancelPendingSignIn = null;
   });
