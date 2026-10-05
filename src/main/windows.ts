@@ -1,36 +1,10 @@
-import { app, BrowserWindow, ipcMain, Menu, shell, type BrowserWindowConstructorOptions, type MenuItemConstructorOptions } from 'electron';
-import fs from 'node:fs';
+import { app, BrowserWindow, Menu, type BrowserWindowConstructorOptions, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
-import started from 'electron-squirrel-startup';
-
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (started) {
-  app.quit();
-}
-
-let dashboardAnimatedThisSession = false;
-
-type UserMode = 'caretaker' | 'independent';
+import { fileURLToPath } from 'node:url';
+import { getData } from './data/localStore';
 
 const isMac = process.platform === 'darwin';
 const isWindows = process.platform === 'win32';
-
-const userModePath = () => path.join(app.getPath('userData'), 'user-mode.json');
-
-const hasUserMode = () => fs.existsSync(userModePath());
-
-const saveUserMode = (mode: UserMode) => {
-  fs.writeFileSync(userModePath(), JSON.stringify({ mode }, null, 2));
-};
-
-const readUserMode = (): UserMode | null => {
-  try {
-    const { mode } = JSON.parse(fs.readFileSync(userModePath(), 'utf8'));
-    return mode === 'caretaker' || mode === 'independent' ? mode : null;
-  } catch {
-    return null;
-  }
-};
 
 const disableZoom = (webContents: Electron.WebContents) => {
   webContents.setVisualZoomLevelLimits(1, 1);
@@ -74,7 +48,7 @@ const windowChromeOptions = (): Partial<BrowserWindowConstructorOptions> => {
   };
 };
 
-const setAppMenu = () => {
+export const setAppMenu = () => {
   if (isWindows) {
     Menu.setApplicationMenu(null);
     return;
@@ -111,6 +85,41 @@ const setAppMenu = () => {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 };
 
+// __dirname is .vite/build at runtime (Vite bundles main there), so this path
+// does not depend on where this source file lives.
+const rendererIndexPath = () => path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`);
+
+// Windows paths are case-insensitive and the drive letter's case varies (C: vs c:), so compare normalized.
+const isSamePath = (a: string, b: string) =>
+  isWindows ? path.normalize(a).toLowerCase() === path.normalize(b).toLowerCase() : a === b;
+
+// "Is this one of Browsie's own pages?" Dev: anything on the Vite dev server.
+// Packaged: exactly our index.html on disk (any ?window=... query is fine).
+export const isAppUrl = (rawUrl: string) => {
+  try {
+    const url = new URL(rawUrl);
+
+    if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+      return url.origin === new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL).origin;
+    }
+
+    return url.protocol === 'file:' && isSamePath(fileURLToPath(url), rendererIndexPath());
+  } catch {
+    return false;
+  }
+};
+
+// Our windows carry the preload (window.browsie), so they must never wander off to another site
+// or pop open new windows. Real websites will live in separate tabs that get no preload.
+const lockNavigation = (webContents: Electron.WebContents) => {
+  webContents.on('will-navigate', (event, url) => {
+    if (!isAppUrl(url)) {
+      event.preventDefault();
+    }
+  });
+  webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+};
+
 const loadRenderer = (window: BrowserWindow, windowKind?: 'menu-picker') => {
   const search = windowKind ? `?window=${windowKind}` : '';
 
@@ -119,7 +128,7 @@ const loadRenderer = (window: BrowserWindow, windowKind?: 'menu-picker') => {
     return;
   }
 
-  window.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), {
+  window.loadFile(rendererIndexPath(), {
     search: search.replace(/^\?/, ''),
   });
 };
@@ -133,8 +142,14 @@ const wireWindowStateEvents = (window: BrowserWindow) => {
   window.on('unmaximize', notify);
 };
 
-const createMainWindow = () => {
-  const mainWindow = new BrowserWindow({
+// At most one of each. Kept so "Change mode" can reuse them instead of stacking duplicates.
+let mainWindow: BrowserWindow | null = null;
+let menuPickerWindow: BrowserWindow | null = null;
+
+const hasUserMode = () => getData().userMode !== null;
+
+export const createMainWindow = () => {
+  mainWindow = new BrowserWindow({
     width: 1250,
     height: 800,
     minWidth: 680,
@@ -149,14 +164,18 @@ const createMainWindow = () => {
   // BrowserWindow has no `maximized` constructor option; this is the equivalent.
   mainWindow.maximize();
   disableZoom(mainWindow.webContents);
+  lockNavigation(mainWindow.webContents);
   wireWindowStateEvents(mainWindow);
   loadRenderer(mainWindow);
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
 
   return mainWindow;
 };
 
 const createMenuPickerWindow = () => {
-  const menuPickerWindow = new BrowserWindow({
+  menuPickerWindow = new BrowserWindow({
     width: 640,
     height: 600,
     minWidth: 640,
@@ -168,21 +187,36 @@ const createMenuPickerWindow = () => {
   });
 
   disableZoom(menuPickerWindow.webContents);
+  lockNavigation(menuPickerWindow.webContents);
   wireWindowStateEvents(menuPickerWindow);
   loadRenderer(menuPickerWindow, 'menu-picker');
 
   // Create main before this window finishes closing so window-all-closed
   // does not quit the app on Windows/Linux during the handoff.
+  // Opened from "Change mode", main is already there, so don't make a second one.
   menuPickerWindow.on('close', () => {
-    if (hasUserMode()) {
+    if (hasUserMode() && !mainWindow) {
       createMainWindow();
     }
+  });
+  menuPickerWindow.on('closed', () => {
+    menuPickerWindow = null;
   });
 
   return menuPickerWindow;
 };
 
-const createWindow = () => {
+// "Change mode" in the profile menu: bring up the picker (or the one already open).
+export const openModePicker = () => {
+  if (menuPickerWindow) {
+    menuPickerWindow.focus();
+    return;
+  }
+
+  createMenuPickerWindow();
+};
+
+export const createWindow = () => {
   if (!hasUserMode()) {
     createMenuPickerWindow();
     return;
@@ -190,62 +224,3 @@ const createWindow = () => {
 
   createMainWindow();
 };
-
-// This method will be called when Electron has finished initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
-  ipcMain.handle('open-external', (_event, url: string) => shell.openExternal(url));
-  ipcMain.handle('should-animate-dashboard', () => !dashboardAnimatedThisSession);
-  ipcMain.handle('mark-dashboard-played', () => {
-    dashboardAnimatedThisSession = true;
-  });
-  ipcMain.handle('get-user-mode', () => readUserMode());
-  ipcMain.handle('save-user-mode', (event, mode: UserMode) => {
-    // Independent mode is stubbed in the UI until that experience ships.
-    if (mode !== 'caretaker') {
-      throw new Error('Only caretaker mode is available right now.');
-    }
-
-    saveUserMode(mode);
-    BrowserWindow.fromWebContents(event.sender)?.close();
-  });
-  ipcMain.handle('window-minimize', (event) => {
-    BrowserWindow.fromWebContents(event.sender)?.minimize();
-  });
-  ipcMain.handle('window-toggle-maximize', (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender);
-
-    if (win?.isMaximized()) {
-      win.unmaximize();
-    } else {
-      win?.maximize();
-    }
-  });
-  ipcMain.handle('window-close', (event) => {
-    BrowserWindow.fromWebContents(event.sender)?.close();
-  });
-  ipcMain.handle('window-is-maximized', (event) => BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false);
-
-  setAppMenu();
-  createWindow();
-
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
-});
-
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
-app.on('window-all-closed', () => {
-  if (!isMac) {
-    app.quit();
-  }
-});
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and import them here.

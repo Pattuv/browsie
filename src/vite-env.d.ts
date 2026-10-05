@@ -35,17 +35,68 @@ declare module '*.mp3' {
 
 type UserMode = 'caretaker' | 'independent';
 
+// Everything the UI is ever told about the signed-in user. Never tokens or Google IDs.
+type AuthSession = {
+  status: 'SIGNED_OUT' | 'SIGNED_IN';
+  firstName?: string;
+  // Shown in the profile picker.
+  email?: string;
+  pictureDataUrl?: string;
+  // False when the user didn't grant Drive access on the consent screen.
+  syncEnabled?: boolean;
+  // False when this computer has no keyring to save the sign-in (Linux): it ends when the app quits.
+  rememberedOnDevice?: boolean;
+  // Set when Google ended the session (revoked, expired), not the user. Auth can say "sign in again".
+  signedOutReason?: 'expired';
+};
+
+interface BrowsieAuthAPI {
+  getSession: () => Promise<AuthSession>;
+  signIn: () => Promise<AuthSession>;
+  cancelSignIn: () => Promise<void>;
+  signOut: () => Promise<void>;
+  // Returns an unsubscribe function.
+  onSessionChanged: (callback: (session: AuthSession) => void) => () => void;
+}
+
+// Browsie's saved app data (browsie-data.json, later backed up to Drive). Preferences only, never secrets.
+type AppData = {
+  userMode: UserMode | null;
+  settings: Record<string, unknown>;
+};
+
+// Only the fields you pass change; `settings` is merged key by key.
+type AppDataPatch = Partial<AppData>;
+
+// Drive backup state. idle = backed up; disabled = signed out or Drive access not granted.
+type SyncStatus = {
+  state: 'idle' | 'syncing' | 'offline' | 'error' | 'disabled';
+  lastSyncedAt: string | null;
+};
+
+interface BrowsieDataAPI {
+  get: () => Promise<AppData>;
+  update: (patch: AppDataPatch) => Promise<AppData>;
+  // Returns an unsubscribe function.
+  onChanged: (callback: (data: AppData) => void) => () => void;
+  getSyncStatus: () => Promise<SyncStatus>;
+  // Returns an unsubscribe function.
+  onSyncStatusChanged: (callback: (status: SyncStatus) => void) => () => void;
+}
+
 interface BrowsieAPI {
   platform: NodeJS.Platform;
+  auth: BrowsieAuthAPI;
+  data: BrowsieDataAPI;
+  openModePicker: () => Promise<void>;
   openExternal: (url: string) => Promise<void>;
   shouldAnimateDashboard: () => Promise<boolean>;
   markDashboardPlayed: () => Promise<void>;
-  getUserMode: () => Promise<UserMode | null>;
-  saveUserMode: (mode: UserMode) => Promise<void>;
   minimizeWindow: () => Promise<void>;
   toggleMaximizeWindow: () => Promise<void>;
   closeWindow: () => Promise<void>;
   isWindowMaximized: () => Promise<boolean>;
+  // Returns an unsubscribe function.
   onWindowMaximizedChange: (callback: (maximized: boolean) => void) => () => void;
 }
 

@@ -1,34 +1,30 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type KeyboardEvent,
-} from "react";
-import { SlidersHorizontal } from "lucide-react";
-import Boiler from "../../components/Boiler";
-import mascot from "../../assets/mascot.svg";
-import wordmark from "../../assets/wordmark.svg";
-import book from "../../assets/paint icons/book.png";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
+import Boiler from '../../components/Boiler';
+import ProfileMenu from '../../components/ProfileMenu';
+import { useAuthStore } from '../../stores/authStore';
+import { useDataStore } from '../../stores/dataStore';
+import mascot from '../../assets/mascot.svg';
+import wordmark from '../../assets/wordmark.svg';
+import book from '../../assets/paint-icons/book.png';
 
 const TITLE_DELAY_MS = 500;
 const BLUR_DURATION_MS = 550;
 const POST_TITLE_DELAY_MS = 400;
 const TITLE_MOVE_MS = 800;
-const TITLE_MOVE_EASING = "cubic-bezier(0.72, 0, 0.28, 1)";
+const TITLE_MOVE_EASING = 'cubic-bezier(0.72, 0, 0.28, 1)';
 const REST_STAGGER_MS = 160;
 const REST_LAYOUT_MS = TITLE_DELAY_MS + BLUR_DURATION_MS + POST_TITLE_DELAY_MS;
 const REST_FADE_START_MS = REST_LAYOUT_MS + TITLE_MOVE_MS + 50;
-const NOTCH_DROP_MS =
-  REST_FADE_START_MS + REST_STAGGER_MS * 3 + BLUR_DURATION_MS + 150;
-const GUIDE_URL = "https://browsiedocs.super.site/browsie-help-center";
+const NOTCH_DROP_MS = REST_FADE_START_MS + REST_STAGGER_MS * 3 + BLUR_DURATION_MS + 150;
+const GUIDE_URL = 'https://browsiedocs.super.site/browsie-help-center';
 
 function revealClass(shouldAnimate: boolean, visible: boolean): string {
   if (!shouldAnimate) {
-    return "";
+    return '';
   }
 
-  return visible ? "enter-blur" : "pointer-events-none opacity-0";
+  return visible ? 'enter-blur' : 'pointer-events-none opacity-0';
 }
 
 function openGuide() {
@@ -48,44 +44,20 @@ function ActionLines({ className, mirrored = false }: ActionLinesProps) {
       viewBox="0 0 28 44"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={`pointer-events-none shrink-0 ${mirrored ? "scale-x-[-1]" : ""} ${className ?? ""}`}
+      className={`pointer-events-none shrink-0 ${mirrored ? 'scale-x-[-1]' : ''} ${className ?? ''}`}
       aria-hidden="true"
     >
-      <line
-        x1="24"
-        y1="5"
-        x2="3"
-        y2="1"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <line
-        x1="24"
-        y1="22"
-        x2="1"
-        y2="22"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <line
-        x1="24"
-        y1="39"
-        x2="3"
-        y2="43"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
+      <line x1="24" y1="5" x2="3" y2="1" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="24" y1="22" x2="1" y2="22" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="24" y1="39" x2="3" y2="43" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
     </svg>
   );
 }
 
 const NOTCH_EAR_SIZE = 10;
 
-function notchEarStyle(side: "left" | "right") {
-  const corner = side === "left" ? "0 100%" : "100% 100%";
+function notchEarStyle(side: 'left' | 'right') {
+  const corner = side === 'left' ? '0 100%' : '100% 100%';
 
   return {
     width: NOTCH_EAR_SIZE,
@@ -101,44 +73,14 @@ type ModeNotchProps = {
 
 function ModeNotch({ mode, animate }: ModeNotchProps) {
   return (
-    <div
-      className={`pointer-events-none absolute inset-x-0 -top-px z-30 mx-auto flex w-fit ${animate ? "notch-drop" : ""}`}
-    >
-      <span
-        className="-mr-px"
-        style={notchEarStyle("left")}
-        aria-hidden="true"
-      />
+    <div className={`pointer-events-none absolute inset-x-0 -top-px z-30 mx-auto flex w-fit ${animate ? 'notch-drop' : ''}`}>
+      <span className="-mr-px" style={notchEarStyle('left')} aria-hidden="true" />
       <div className="bric flex h-9 items-center gap-1.5 rounded-b-2xl bg-black px-5 text-sm tracking-tight text-white">
-        <span
-          className="h-1.5 w-1.5 rounded-full bg-green-500"
-          aria-hidden="true"
-        />
+        <span className="h-1.5 w-1.5 rounded-full bg-green-500" aria-hidden="true" />
         {mode} mode
       </div>
-      <span
-        className="-ml-px"
-        style={notchEarStyle("right")}
-        aria-hidden="true"
-      />
+      <span className="-ml-px" style={notchEarStyle('right')} aria-hidden="true" />
     </div>
-  );
-}
-
-// Placeholder until auth lands and we can show the signed-in Google profile photo.
-function ProfileAvatar() {
-  return (
-    <button
-      type="button"
-      aria-label="Profile"
-      title="Profile"
-      className="app-region-no-drag flex h-7 w-7 cursor-pointer items-end justify-center overflow-hidden rounded-full bg-zinc-300"
-    >
-      <i
-        className="bi bi-person-fill -mb-1.5 text-2xl leading-none text-white"
-        aria-hidden="true"
-      />
-    </button>
   );
 }
 
@@ -154,21 +96,8 @@ function Dashboard() {
   const [showButton, setShowButton] = useState(false);
   const [showCard, setShowCard] = useState(false);
   const [showNotch, setShowNotch] = useState(false);
-  const [mode, setMode] = useState<UserMode | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    window.browsie?.getUserMode().then((savedMode) => {
-      if (!cancelled) {
-        setMode(savedMode);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const mode = useDataStore((state) => state.userMode);
+  const firstName = useAuthStore((state) => state.firstName);
 
   useEffect(() => {
     let timers: ReturnType<typeof setTimeout>[] = [];
@@ -197,18 +126,9 @@ function Dashboard() {
           setShowRestLayout(true);
         }, REST_LAYOUT_MS),
         setTimeout(() => setShowMascot(true), REST_FADE_START_MS),
-        setTimeout(
-          () => setShowSubtitle(true),
-          REST_FADE_START_MS + REST_STAGGER_MS,
-        ),
-        setTimeout(
-          () => setShowButton(true),
-          REST_FADE_START_MS + REST_STAGGER_MS * 2,
-        ),
-        setTimeout(
-          () => setShowCard(true),
-          REST_FADE_START_MS + REST_STAGGER_MS * 3,
-        ),
+        setTimeout(() => setShowSubtitle(true), REST_FADE_START_MS + REST_STAGGER_MS),
+        setTimeout(() => setShowButton(true), REST_FADE_START_MS + REST_STAGGER_MS * 2),
+        setTimeout(() => setShowCard(true), REST_FADE_START_MS + REST_STAGGER_MS * 3),
         setTimeout(() => setShowNotch(true), NOTCH_DROP_MS),
       ];
     };
@@ -234,13 +154,7 @@ function Dashboard() {
   }, []);
 
   useLayoutEffect(() => {
-    if (
-      !shouldAnimate.current ||
-      !showRestLayout ||
-      !titleRef.current ||
-      !titleStartRect.current ||
-      titleFlipPlayed.current
-    ) {
+    if (!shouldAnimate.current || !showRestLayout || !titleRef.current || !titleStartRect.current || titleFlipPlayed.current) {
       return undefined;
     }
 
@@ -258,33 +172,29 @@ function Dashboard() {
     }
 
     el.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-    el.style.transition = "none";
+    el.style.transition = 'none';
     void el.offsetHeight;
 
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         el.style.transition = `transform ${TITLE_MOVE_MS}ms ${TITLE_MOVE_EASING}`;
-        el.style.transform = "translate(0, 0)";
+        el.style.transform = 'translate(0, 0)';
       });
     });
 
     return undefined;
   }, [showRestLayout]);
 
-  const isMac = window.browsie?.platform === "darwin";
+  const isMac = window.browsie?.platform === 'darwin';
 
   return (
     <Boiler>
       <div
         className={`absolute inset-x-0 z-20 flex h-8 items-center justify-between ${
-          isMac ? "top-6 pl-[4.5rem] pr-10" : "top-4 pl-5 pr-40"
+          isMac ? 'top-6 pl-[4.5rem] pr-10' : 'top-4 pl-5 pr-40'
         }`}
       >
-        <img
-          src={wordmark}
-          alt="Browsie"
-          className="pointer-events-none h-5 -translate-y-1"
-        />
+        <img src={wordmark} alt="Browsie" className="pointer-events-none h-5 -translate-y-1" />
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -294,13 +204,11 @@ function Dashboard() {
           >
             <SlidersHorizontal size={18} strokeWidth={2} aria-hidden="true" />
           </button>
-          <ProfileAvatar />
+          <ProfileMenu />
         </div>
       </div>
 
-      {mode && showNotch && (
-        <ModeNotch mode={mode} animate={shouldAnimate.current} />
-      )}
+      {mode && showNotch && <ModeNotch mode={mode} animate={shouldAnimate.current} />}
 
       <div className="flex flex-1 flex-col items-center justify-center p-5 gap-2">
         {showRestLayout && (
@@ -314,16 +222,14 @@ function Dashboard() {
         {showTitle && (
           <h1
             ref={titleRef}
-            className={`shrink-0 text-4xl text-center bric tracking-tighter ${shouldAnimate.current ? "enter-blur" : ""}`}
+            className={`shrink-0 text-4xl text-center bric tracking-tighter ${shouldAnimate.current ? 'enter-blur' : ''}`}
           >
             Welcome, Caretaker
           </h1>
         )}
 
         {showRestLayout && (
-          <p
-            className={`text-zinc-500 tracking-tight font-light ${revealClass(shouldAnimate.current, showSubtitle)}`}
-          >
+          <p className={`text-zinc-500 tracking-tight font-light ${revealClass(shouldAnimate.current, showSubtitle)}`}>
             Your AI navigation assistant is here.
           </p>
         )}
@@ -334,7 +240,7 @@ function Dashboard() {
           >
             <ActionLines className="absolute right-full mr-10" />
             <button className="cursor-pointer bg-black ring-8 ring-black/70 text-white px-6 py-4 rounded-full tracking-tight transition-all duration-300 ease-out group-hover:py-6 group-hover:ring-0">
-              Open browser for Pratyush
+              Open browser for {firstName}
             </button>
             <ActionLines className="absolute left-full ml-10" mirrored />
           </div>
@@ -346,7 +252,7 @@ function Dashboard() {
             tabIndex={0}
             onClick={openGuide}
             onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
-              if (e.key === "Enter" || e.key === " ") {
+              if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 openGuide();
               }
@@ -356,13 +262,11 @@ function Dashboard() {
             <div className="relative z-10 max-w-[55%] flex flex-col gap-1.5">
               <h2 className="text-xl tracking-tight">For support:</h2>
               <p className="text-xs text-zinc-500 font-light leading-snug tracking-tight">
-                Learn how you can help{" "}
-                <span className="font-semibold text-zinc-800">Pratyush</span>{" "}
-                use Browsie to the best of their ability.
+                Learn how you can help{' '}
+                <span className="font-semibold text-zinc-800">{firstName}</span> use Browsie to the
+                best of their ability.
               </p>
-              <span className="mt-1 w-fit text-xs font-medium tracking-tight">
-                Go to guide →
-              </span>
+              <span className="mt-1 w-fit text-xs font-medium tracking-tight">Go to guide →</span>
             </div>
             <img
               src={book}
@@ -373,7 +277,7 @@ function Dashboard() {
         )}
       </div>
       <footer className="shrink-0 text-[0.65rem] text-center text-zinc-400 pb-2">
-        v.1.3.4 | Implementing Google OAuth
+        v.1.3.4   |   Implementing Google OAuth
       </footer>
     </Boiler>
   );
