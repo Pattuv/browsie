@@ -25,6 +25,11 @@
   font-display: swap;
 }
 
+/* Bundled Inter everywhere, so Windows doesn't fall back to Segoe UI. Also drives Tailwind's `font-sans`. */
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
 @layer base {
   * {
     user-select: none;
@@ -38,7 +43,7 @@
   }
 
   body {
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: var(--font-sans);
     background-color: #ffffff;
   }
 }
@@ -86,6 +91,39 @@
 
   .exit-blur {
     animation: blur-fade-out 0.55s ease-in both;
+  }
+
+  /* Dashboard tip: the old one rises out, the next rises in from below. */
+  @keyframes tip-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes tip-out {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    to {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+  }
+
+  .tip-in {
+    animation: tip-in 0.4s ease-out both;
+  }
+
+  .tip-out {
+    animation: tip-out 0.3s ease-in both;
   }
 
   /* Small popovers (profile menu) */

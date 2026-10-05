@@ -24,6 +24,19 @@ const disableZoom = (webContents: Electron.WebContents) => {
   });
 };
 
+// Packaged builds get the icon baked in by forge.config.js. `npm start` runs stock Electron, so set it by hand.
+const DEV_ICONS_DIR = 'src/renderer/assets/icons';
+
+const devIconPath = (file: string) => (app.isPackaged ? undefined : path.join(app.getAppPath(), DEV_ICONS_DIR, file));
+
+export const setDevDockIcon = () => {
+  const iconPath = devIconPath('macos/1024x1024.png');
+
+  if (isMac && iconPath) {
+    app.dock?.setIcon(iconPath);
+  }
+};
+
 /** Shared chrome: mac keeps traffic lights; Windows/Linux render custom caption buttons in the renderer. */
 const windowChromeOptions = (): Partial<BrowserWindowConstructorOptions> => {
   if (isMac) {
@@ -40,6 +53,7 @@ const windowChromeOptions = (): Partial<BrowserWindowConstructorOptions> => {
   return {
     titleBarStyle: 'hidden',
     backgroundColor: '#ffffff',
+    icon: devIconPath(isWindows ? 'windows/icon.ico' : 'icon.png'),
     autoHideMenuBar: true,
     minimizable: true,
     maximizable: true,

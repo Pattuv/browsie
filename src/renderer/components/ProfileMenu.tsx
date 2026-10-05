@@ -1,19 +1,36 @@
-import { useEffect, useRef, useState } from 'react';
-import { DollarSign, Users, type LucideIcon } from 'lucide-react';
-import { useAuthStore } from '../stores/authStore';
-import PrimaryButton from './PrimaryButton';
+import { useEffect, useRef, useState } from "react";
+import { DollarSign, Users, type LucideIcon } from "lucide-react";
+import { useAuthStore } from "../stores/authStore";
+import PrimaryButton from "./PrimaryButton";
 
-const OPENROUTER_BILLING_URL = 'https://openrouter.ai/settings/credits';
+const OPENROUTER_BILLING_URL = "https://openrouter.ai/settings/credits";
 
 // The Google profile photo main downloaded at sign-in (a data: URL), or a grey placeholder.
-function Avatar({ pictureDataUrl, className }: { pictureDataUrl?: string; className: string }) {
+function Avatar({
+  pictureDataUrl,
+  className,
+}: {
+  pictureDataUrl?: string;
+  className: string;
+}) {
   if (pictureDataUrl) {
-    return <img src={pictureDataUrl} alt="" className={`${className} rounded-full object-cover`} />;
+    return (
+      <img
+        src={pictureDataUrl}
+        alt=""
+        className={`${className} rounded-full object-cover`}
+      />
+    );
   }
 
   return (
-    <span className={`${className} flex items-end justify-center overflow-hidden rounded-full bg-zinc-300`}>
-      <i className="bi bi-person-fill -mb-1.5 text-2xl leading-none text-white" aria-hidden="true" />
+    <span
+      className={`${className} flex items-end justify-center overflow-hidden rounded-full bg-zinc-300`}
+    >
+      <i
+        className="bi bi-person-fill -mb-1.5 text-2xl leading-none text-white"
+        aria-hidden="true"
+      />
     </span>
   );
 }
@@ -70,8 +87,8 @@ function ProfileMenu() {
       }
     };
 
-    document.addEventListener('pointerdown', handlePointerDown);
-    return () => document.removeEventListener('pointerdown', handlePointerDown);
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [open, closing]);
 
   const changeMode = () => {
@@ -103,23 +120,37 @@ function ProfileMenu() {
               setClosing(false);
             }
           }}
-          className={`${closing ? 'exit-blur-fast pointer-events-none' : 'enter-blur-fast'} app-region-no-drag absolute -right-3 top-full mt-3 w-80 rounded-[1.75rem] border border-zinc-500 bg-white p-4`}
+          className={`${closing ? "exit-blur-fast pointer-events-none" : "enter-blur-fast"} app-region-no-drag absolute -right-3 top-full mt-3 w-80 rounded-[1.75rem] border border-zinc-500 bg-white p-4 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.25)]`}
         >
           <div className="flex items-center gap-3 px-1">
-            <Avatar pictureDataUrl={pictureDataUrl} className="h-11 w-11 shrink-0" />
+            <Avatar
+              pictureDataUrl={pictureDataUrl}
+              className="h-11 w-11 shrink-0"
+            />
             <div className="min-w-0">
-              <p className="bric truncate text-xl leading-tight tracking-tight">{firstName}</p>
-              <p className="truncate text-sm tracking-tight text-zinc-500">{email}</p>
+              <p className="bric truncate text-xl leading-tight tracking-tight">
+                {firstName}
+              </p>
+              <p className="truncate text-sm tracking-tight text-zinc-500">
+                {email}
+              </p>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col">
+          <div className="mt-4 flex flex-col ">
             <MenuItem icon={Users} label="Change mode" onClick={changeMode} />
-            <MenuItem icon={DollarSign} label="Check Openrouter billing" onClick={openBilling} />
+            <MenuItem
+              icon={DollarSign}
+              label="Check Openrouter billing"
+              onClick={openBilling}
+            />
           </div>
 
           {/* Main wipes the vault and pushes SIGNED_OUT; the OnboardingLayer gate then swaps Dashboard for Auth. */}
-          <PrimaryButton onClick={() => window.browsie?.auth.signOut()} className="mt-3 w-full">
+          <PrimaryButton
+            onClick={() => window.browsie?.auth.signOut()}
+            className="mt-3 w-full"
+          >
             Log out
           </PrimaryButton>
         </div>

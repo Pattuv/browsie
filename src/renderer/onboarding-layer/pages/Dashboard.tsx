@@ -7,6 +7,7 @@ import {
 } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import Boiler from "../../components/Boiler";
+import DashboardTip from "../../components/DashboardTip";
 import ProfileMenu from "../../components/ProfileMenu";
 import { useAuthStore } from "../../stores/authStore";
 import { useDataStore } from "../../stores/dataStore";
@@ -275,19 +276,20 @@ function Dashboard() {
         <ModeNotch mode={mode} animate={shouldAnimate.current} />
       )}
 
-      <div className="flex flex-1 flex-col items-center justify-center p-5 gap-2">
+      {/* min-h-0: the button's hover growth re-centers this column instead of pushing the tips down. */}
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center p-5 gap-2">
         {showRestLayout && (
           <img
             src={mascot}
             alt="Browsie"
-            className={`h-30 ${revealClass(shouldAnimate.current, showMascot)}`}
+            className={`h-32 ${revealClass(shouldAnimate.current, showMascot)}`}
           />
         )}
 
         {showTitle && (
           <h1
             ref={titleRef}
-            className={`shrink-0 text-4xl text-center bric tracking-tighter ${shouldAnimate.current ? "enter-blur" : ""}`}
+            className={`shrink-0 text-[2.6rem] text-center bric tracking-tighter ${shouldAnimate.current ? "enter-blur" : ""}`}
           >
             Welcome, Caretaker
           </h1>
@@ -295,7 +297,7 @@ function Dashboard() {
 
         {showRestLayout && (
           <p
-            className={`text-zinc-600 tracking-tight ${revealClass(shouldAnimate.current, showSubtitle)}`}
+            className={`text-[1.0625rem] text-zinc-600 tracking-tight ${revealClass(shouldAnimate.current, showSubtitle)}`}
           >
             Your AI navigation assistant is here.
           </p>
@@ -303,10 +305,10 @@ function Dashboard() {
 
         {showRestLayout && (
           <div
-            className={`group relative inline-flex items-center my-15 text-black transition-all duration-300 ease-out hover:scale-110 has-active:scale-100 ${revealClass(shouldAnimate.current, showButton)}`}
+            className={`group relative inline-flex items-center my-10 text-black transition-all duration-300 ease-out hover:scale-110 has-active:scale-100 ${revealClass(shouldAnimate.current, showButton)}`}
           >
             <ActionLines className="absolute right-full mr-10" />
-            <button className="cursor-pointer bg-black ring-8 ring-black/70 text-white px-6 py-4 rounded-full tracking-tight transition-all duration-300 ease-out group-hover:py-6 group-hover:ring-0">
+            <button className="cursor-pointer bg-black ring-8 ring-black/70 text-white text-[1.0625rem] px-7 py-4.5 rounded-full tracking-tight transition-all duration-300 ease-out group-hover:py-6.5 group-hover:ring-0">
               Open browser for {firstName}
             </button>
             <ActionLines className="absolute left-full ml-10" mirrored />
@@ -324,31 +326,31 @@ function Dashboard() {
                 openGuide();
               }
             }}
-            className={`relative flex w-full max-w-md min-h-40 items-center overflow-hidden rounded-[2rem] border border-zinc-300 bg-[#F7F7F7] px-8 py-8 mt-4 cursor-pointer ${revealClass(shouldAnimate.current, showCard)}`}
+            className={`relative flex w-full max-w-[30rem] min-h-42 items-center overflow-hidden rounded-[2rem] border border-zinc-300 bg-[#F7F7F7] px-8 py-8 mb-12 cursor-pointer ${revealClass(shouldAnimate.current, showCard)}`}
           >
             <div className="relative z-10 max-w-[55%] flex flex-col gap-1.5">
-              <h2 className="text-xl tracking-tight font-medium">
+              <h2 className="text-[1.375rem] tracking-tight font-medium">
                 For support:
               </h2>
-              <p className="text-xs text-zinc-500 font-medium leading-snug tracking-tight">
+              <p className="text-[0.8125rem] text-zinc-500 font-medium leading-snug tracking-tight">
                 Learn how you can help{" "}
                 <span className="font-semibold text-zinc-800">{firstName}</span>{" "}
                 use Browsie to the best of their ability.
               </p>
-              <span className="mt-1 w-fit text-xs font-medium tracking-tight">
+              <span className="mt-1 w-fit text-[0.8125rem] font-medium tracking-tight">
                 Go to guide →
               </span>
             </div>
             <img
               src={book}
               alt="Caretaker Guide"
-              className="pointer-events-none absolute right-6 top-1/2 w-40 -translate-y-1/2"
+              className="pointer-events-none absolute right-6 top-1/2 w-42 -translate-y-1/2"
             />
           </div>
         )}
       </div>
-      <footer className="shrink-0 text-[0.65rem] text-center text-zinc-400 pb-2">
-        v.1.3.4 | Implementing Google OAuth
+      <footer className={`shrink-0 px-5 pb-4 ${revealClass(shouldAnimate.current, showCard)}`}>
+        <DashboardTip />
       </footer>
     </Boiler>
   );

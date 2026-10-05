@@ -4,7 +4,7 @@ import { loadSession } from './auth/session';
 import { loadLocalStore } from './data/localStore';
 import { startSync } from './data/syncEngine';
 import { registerIpc } from './ipc';
-import { createWindow, setAppMenu } from './windows';
+import { createWindow, setAppMenu, setDevDockIcon } from './windows';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -18,6 +18,7 @@ app.whenReady().then(() => {
   loadSession();
   registerIpc();
   setAppMenu();
+  setDevDockIcon();
   createWindow();
   startSync();
 
