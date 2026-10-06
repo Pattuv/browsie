@@ -276,8 +276,9 @@ function Dashboard() {
         <ModeNotch mode={mode} animate={shouldAnimate.current} />
       )}
 
-      {/* min-h-0: the button's hover growth re-centers this column instead of pushing the tips down. */}
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center p-5 gap-2">
+      {/* min-h-0: the button's hover growth re-centers this column instead of pushing the tips down.
+          Vertical gaps are clamp(current size, vh, cap): unchanged at ~800px tall, roomier on taller windows. */}
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center p-5 gap-[clamp(0.5rem,1vh,1rem)]">
         {showRestLayout && (
           <img
             src={mascot}
@@ -305,7 +306,7 @@ function Dashboard() {
 
         {showRestLayout && (
           <div
-            className={`group relative inline-flex items-center my-10 text-black transition-all duration-300 ease-out hover:scale-110 has-active:scale-100 ${revealClass(shouldAnimate.current, showButton)}`}
+            className={`group relative inline-flex items-center my-[clamp(2.5rem,5vh,5rem)] text-black transition-all duration-300 ease-out hover:scale-110 has-active:scale-100 ${revealClass(shouldAnimate.current, showButton)}`}
           >
             <ActionLines className="absolute right-full mr-10" />
             <button className="cursor-pointer bg-black ring-8 ring-black/70 text-white text-[1.0625rem] px-7 py-4.5 rounded-full tracking-tight transition-all duration-300 ease-out group-hover:py-6.5 group-hover:ring-0">
@@ -326,7 +327,7 @@ function Dashboard() {
                 openGuide();
               }
             }}
-            className={`relative flex w-full max-w-[30rem] min-h-42 items-center overflow-hidden rounded-[2rem] border border-zinc-300 bg-[#F7F7F7] px-8 py-8 mb-12 cursor-pointer ${revealClass(shouldAnimate.current, showCard)}`}
+            className={`relative flex w-full max-w-[30rem] min-h-42 items-center overflow-hidden rounded-[2rem] border border-zinc-300 bg-[#F7F7F7] px-8 py-8 mb-[clamp(3rem,6vh,6rem)] cursor-pointer ${revealClass(shouldAnimate.current, showCard)}`}
           >
             <div className="relative z-10 max-w-[55%] flex flex-col gap-1.5">
               <h2 className="text-[1.375rem] tracking-tight font-medium">
