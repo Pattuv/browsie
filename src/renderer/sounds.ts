@@ -1,30 +1,63 @@
-import clickHeavy from './assets/sounds/clickheavy.wav';
-import clickLight from './assets/sounds/clicklight.wav';
+import clickHeavy from './assets/sounds/clickheavy.wav?inline';
+import clickLight from './assets/sounds/clicklight.wav?inline';
 
-const preload = (src: string) => {
-  const audio = new Audio(src);
-  audio.preload = 'auto';
-  return audio;
+// One long-lived context with pre-decoded buffers. <audio> elements let the output device go idle,
+// so the first click after a pause lagged while it woke back up. A running context keeps it open.
+const context = new AudioContext({ latencyHint: 'interactive' });
+
+// Builds inline them as data: URLs (fetch can't load file://, and the CSP blocks fetching data:).
+// The dev server ignores ?inline and hands back a normal same-origin URL, so fetch that.
+const loadBytes = async (src: string) => {
+  if (src.startsWith('data:')) {
+    return Uint8Array.from(atob(src.split(',')[1]), (char) => char.charCodeAt(0)).buffer;
+  }
+
+  return (await fetch(src)).arrayBuffer();
 };
 
+// A sound that fails to load just stays silent; it must never take the page down with it.
+const decode = (src: string) =>
+  loadBytes(src)
+    .then((bytes) => context.decodeAudioData(bytes))
+    .catch(() => null);
+
 const CLICK_SOUNDS = {
-  light: preload(clickLight),
-  heavy: preload(clickHeavy),
+  light: decode(clickLight),
+  heavy: decode(clickHeavy),
 };
 
 export type ClickSound = keyof typeof CLICK_SOUNDS;
 
-// Clone per play so rapid clicks overlap instead of cutting each other off.
+// The context starts suspended in windows without autoplay permission; any user gesture can resume it.
+const wake = () => {
+  if (context.state !== 'running') {
+    void context.resume();
+  }
+};
+
+// Full volume (no gain node), so it's always as loud as the system volume allows.
 export const playClick = (kind: ClickSound = 'light') => {
-  const audio = CLICK_SOUNDS[kind].cloneNode() as HTMLAudioElement;
-  audio.volume = 1;
-  void audio.play().catch(() => undefined);
+  wake();
+  void CLICK_SOUNDS[kind].then((buffer) => {
+    if (!buffer) {
+      return;
+    }
+
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.connect(context.destination);
+    source.start();
+  });
 };
 
 const CLICKABLE = 'button, a[href], [role="button"], [role="link"]';
 
 // Every button/link clicks: light by default, heavy when marked with data-click-sound="heavy".
 export const installClickSounds = () => {
+  // Resume on press, a beat before the click lands.
+  document.addEventListener('pointerdown', wake, true);
+  document.addEventListener('keydown', wake, true);
+
   document.addEventListener(
     'click',
     (event) => {
