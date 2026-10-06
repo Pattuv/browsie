@@ -37,4 +37,8 @@ const contentSecurityPolicy = () => ({
 // https://vitejs.dev/config
 export default defineConfig({
     plugins: [contentSecurityPolicy(), react(), tailwindcss()],
+    build: {
+        // Small files are inlined as data: URLs by default, which media-src 'self' blocks. Keep sounds as files.
+        assetsInlineLimit: (filePath) => (filePath.endsWith('.wav') ? false : undefined),
+    },
 });

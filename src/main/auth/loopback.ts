@@ -25,7 +25,7 @@ const PAGE_STYLES = `
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #fff; color: #000;
          font-family: Inter, -apple-system, system-ui, sans-serif; text-align: center; }
   main { display: flex; flex-direction: column; align-items: center; padding: 2rem; }
-  svg { height: 128px; width: auto; }
+  svg { height: 102px; width: auto; margin: 10px 0 16px; }
   h1 { margin: 0.25rem 0 0; font-family: "Bricolage Grotesque", system-ui, sans-serif;
        font-size: 2.2rem; font-weight: 400; letter-spacing: -0.05em; }
   p { margin: 1rem 0 0; font-size: 1.125rem; letter-spacing: -0.025em; color: #52525b; }

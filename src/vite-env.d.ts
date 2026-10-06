@@ -33,6 +33,11 @@ declare module '*.mp3' {
   export default src;
 }
 
+declare module '*.wav' {
+  const src: string;
+  export default src;
+}
+
 type UserMode = 'caretaker' | 'independent';
 
 // Everything the UI is ever told about the signed-in user. Never tokens or Google IDs.

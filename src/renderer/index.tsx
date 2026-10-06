@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import MenuPickerLayer from './menu-picker-layer/MenuPickerLayer';
 import OnboardingLayer from './onboarding-layer/OnboardingLayer';
+import { installClickSounds } from './sounds';
 
 const container = document.getElementById('root');
 
@@ -10,6 +11,7 @@ if (!container) {
 
 const platform = window.browsie?.platform ?? 'darwin';
 document.documentElement.dataset.platform = platform;
+installClickSounds();
 
 const windowKind = new URLSearchParams(window.location.search).get('window');
 

@@ -11,6 +11,7 @@ import DashboardTip from "../../components/DashboardTip";
 import ProfileMenu from "../../components/ProfileMenu";
 import { useAuthStore } from "../../stores/authStore";
 import { useDataStore } from "../../stores/dataStore";
+import { playClick } from "../../sounds";
 import mascot from "../../assets/mascot.svg";
 import wordmark from "../../assets/wordmark.svg";
 import book from "../../assets/paint-icons/book.png";
@@ -283,7 +284,7 @@ function Dashboard() {
           <img
             src={mascot}
             alt="Browsie"
-            className={`h-32 ${revealClass(shouldAnimate.current, showMascot)}`}
+            className={`h-25.5 mt-2.5 mb-1 ${revealClass(shouldAnimate.current, showMascot)}`}
           />
         )}
 
@@ -309,7 +310,7 @@ function Dashboard() {
             className={`group relative inline-flex items-center my-[clamp(2.5rem,5vh,5rem)] text-black transition-all duration-300 ease-out hover:scale-110 has-active:scale-100 ${revealClass(shouldAnimate.current, showButton)}`}
           >
             <ActionLines className="absolute right-full mr-10" />
-            <button className="cursor-pointer bg-black ring-8 ring-black/70 text-white text-[1.0625rem] px-7 py-4.5 rounded-full tracking-tight transition-all duration-300 ease-out group-hover:py-6.5 group-hover:ring-0">
+            <button data-click-sound="heavy" className="cursor-pointer bg-black ring-8 ring-black/70 text-white text-[1.0625rem] px-7 py-4.5 rounded-full tracking-tight transition-all duration-300 ease-out group-hover:py-6.5 group-hover:ring-0">
               Open browser for {firstName}
             </button>
             <ActionLines className="absolute left-full ml-10" mirrored />
@@ -324,6 +325,7 @@ function Dashboard() {
             onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
+                playClick();
                 openGuide();
               }
             }}

@@ -234,7 +234,7 @@ function Auth({ playIntro }: AuthProps) {
             <img
               src={mascot}
               alt=""
-              className={`h-48 w-auto ${phase === "mascot" ? "enter-slide-fade" : ""}`}
+              className={`h-38.5 mt-[15px] mb-[23px] w-auto ${phase === "mascot" ? "enter-slide-fade" : ""}`}
             />
 
             {showScene && (
@@ -252,6 +252,7 @@ function Auth({ playIntro }: AuthProps) {
                 <div className="relative flex flex-col items-center">
                   <button
                     type="button"
+                    data-click-sound="heavy"
                     onClick={handleSignInClick}
                     className={`app-region-no-drag flex h-[4.25rem] w-fit cursor-pointer items-center rounded-full bg-black p-2 text-white transition-transform duration-300 ease-out hover:scale-110 active:scale-95 ${playIntro ? "enter-blur" : ""}`}
                     style={
