@@ -47,10 +47,9 @@ let activeTabId = 0;
 let nextTabId = 1;
 // Where the page area sits inside the window. Null until the chrome has measured it.
 let contentBounds: ContentBounds | null = null;
-// A chrome popover is open. Views always paint above the chrome, so the page is inset from the
-// right (menu width) instead of hidden — hiding it left the white card showing through.
+// A chrome popover is open. Views always paint above the chrome, so the page hides while it's up;
+// the chrome shows a freeze-frame of it (captureActivePage) in its place, under the popover.
 let overlayOpen = false;
-const OVERLAY_RIGHT_INSET = 336;
 // The tab playing a video (or anything else) in HTML fullscreen, if any.
 let fullscreenTabId: number | null = null;
 
@@ -110,7 +109,8 @@ const layout = () => {
     }
 
     const isFullscreen = tab.id === fullscreenTabId;
-    const visible = tab.id === activeTabId && !tab.showingNewTab && (isFullscreen || contentBounds !== null);
+    const visible =
+      tab.id === activeTabId && !tab.showingNewTab && (isFullscreen || (contentBounds !== null && !overlayOpen));
     tab.view.setVisible(visible);
 
     if (!visible) {
@@ -122,11 +122,7 @@ const layout = () => {
       continue;
     }
 
-    tab.view.setBounds(
-      overlayOpen
-        ? { ...contentBounds, width: Math.max(0, contentBounds.width - OVERLAY_RIGHT_INSET) }
-        : contentBounds,
-    );
+    tab.view.setBounds(contentBounds);
   }
 };
 
@@ -349,21 +345,24 @@ const load = (tab: Tab, url: string) => {
   view.webContents.focus();
 };
 
+const blankTab = (overrides: Partial<Tab> = {}): Tab => ({
+  id: nextTabId++,
+  view: null,
+  showingNewTab: false,
+  startedFromNewTab: false,
+  pendingUrl: null,
+  favicon: null,
+  faviconRequest: 0,
+  faviconOrigin: null,
+  ...overrides,
+});
+
 export const newTab = (url?: string) => {
   if (!host || tabs.length >= MAX_TABS) {
     return;
   }
 
-  const tab: Tab = {
-    id: nextTabId++,
-    view: null,
-    showingNewTab: !url,
-    startedFromNewTab: false,
-    pendingUrl: null,
-    favicon: null,
-    faviconRequest: 0,
-    faviconOrigin: null,
-  };
+  const tab = blankTab({ showingNewTab: !url });
   tabs.push(tab);
   activeTabId = tab.id;
 
@@ -498,6 +497,19 @@ export const setContentBounds = (raw: unknown) => {
   layout();
 };
 
+// A still image of the page the user is looking at, for the chrome to show while a popover hides the
+// real page. Null when there's no website on screen (New Tab, or nothing measured yet).
+export const captureActivePage = async () => {
+  const tab = activeTab();
+
+  if (!tab?.view || tab.showingNewTab || !contentBounds || overlayOpen) {
+    return null;
+  }
+
+  const image = await tab.view.webContents.capturePage();
+  return image.isEmpty() ? null : `data:image/jpeg;base64,${image.toJPEG(90).toString('base64')}`;
+};
+
 export const setOverlayOpen = (open: boolean) => {
   overlayOpen = open;
   layout();
@@ -537,15 +549,25 @@ export const handleShortcut = (input: Input, source: 'chrome' | 'tab') => {
     return true;
   };
 
+  // Opening and closing tabs fire once per press. Holding the keys would otherwise repeat them
+  // (the OS sends repeated keyDowns), spawning or closing a whole row of tabs. Repeats are still
+  // swallowed, so they don't leak through to the page either.
+  const once = (action: () => void) => (input.isAutoRepeat ? true : run(action));
+
   if (ctrl && !input.shift && key === 't') {
-    return run(() => {
+    return once(() => {
       newTab();
       focusAddressBar();
     });
   }
 
+  // Ctrl+1 to Ctrl+8 jump to that tab; Ctrl+9 always jumps to the last one.
+  if (ctrl && !input.shift && !input.alt && /^[1-9]$/.test(key)) {
+    return run(() => activateTab((key === '9' ? tabs.at(-1) : tabs[Number(key) - 1])?.id));
+  }
+
   if (ctrl && key === 'w') {
-    return run(() => closeTab(activeTabId));
+    return once(() => closeTab(activeTabId));
   }
 
   if ((ctrl && key === 'l') || key === 'f6' || (input.alt && key === 'd')) {

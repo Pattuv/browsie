@@ -4,6 +4,7 @@ import { getData, updateData } from './data/localStore';
 import { getSyncStatus } from './data/syncEngine';
 import {
   activateTab,
+  captureActivePage,
   closeTab,
   getBrowserState,
   goBack,
@@ -116,6 +117,7 @@ export const registerIpc = () => {
   handleFromBrowser('browser:reload', () => reload());
   handleFromBrowser('browser:stop', () => stop());
   handleFromBrowser('browser:set-content-bounds', (_event, bounds: unknown) => setContentBounds(bounds));
+  handleFromBrowser('browser:capture-page', () => captureActivePage());
   handleFromBrowser('browser:set-overlay-open', (_event, open: unknown) => setOverlayOpen(open === true));
 
   handle('auth:get-session', () => getSession());

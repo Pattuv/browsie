@@ -48,6 +48,7 @@ const browser: BrowsieBrowserAPI = {
   reload: () => ipcRenderer.invoke('browser:reload'),
   stop: () => ipcRenderer.invoke('browser:stop'),
   setContentBounds: (bounds) => ipcRenderer.invoke('browser:set-content-bounds', bounds),
+  capturePage: () => ipcRenderer.invoke('browser:capture-page'),
   setOverlayOpen: (open) => ipcRenderer.invoke('browser:set-overlay-open', open),
   onFocusAddress: (callback) => {
     const listener = () => callback();

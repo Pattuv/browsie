@@ -1,11 +1,25 @@
 import { useState, type CSSProperties } from "react";
 import { Grip, HeartHandshake } from "lucide-react";
+import DashboardTip, { type Tip } from "../../components/DashboardTip";
 import mascot from "../../assets/mascot.svg";
 
 const GUIDE_URL = "https://browsiedocs.super.site/browsie-help-center";
 const GOOGLE_APPS_URL = "https://about.google/products/";
-// The one-line "what's new" next to the version in the footer.
-const RELEASE_NOTE = "added agentic security";
+
+// Shortcuts use Ctrl on Windows/Linux and ⌘ on Mac (main accepts either).
+const MOD = window.browsie?.platform === "darwin" ? "⌘" : "Ctrl";
+
+// Same rotating tips as the dashboard, but about getting around the browser itself.
+const BROWSER_TIPS: Tip[] = [
+  { before: "Open a fresh tab anytime with", highlight: `${MOD} + T`, after: "" },
+  { before: "Jump straight to the address bar with", highlight: `${MOD} + L`, after: "and start typing" },
+  { before: "Text too small? Zoom any page in with", highlight: `${MOD} + +`, after: `and back with ${MOD} + 0` },
+  { before: "Go back a page with", highlight: "Alt + ←", after: "or the arrow next to the address bar" },
+  { before: "Close the tab you're on with", highlight: `${MOD} + W`, after: "or by middle-clicking it" },
+  { before: "Hop between your tabs with", highlight: "Ctrl + Tab", after: "" },
+  { before: "Right-click any link and choose", highlight: "Open link in new tab", after: "to keep your place" },
+  { before: "Head back to the dashboard with", highlight: "Quit", after: "in the profile menu" },
+];
 
 type NewTabProps = {
   /** Base delay for the staggered entrance, in ms. Null shows the page instantly (switching back to a tab). */
@@ -88,14 +102,10 @@ function NewTab({ entranceDelay: initialDelay }: NewTabProps) {
         </div>
       </div>
 
-      <p
-        className="chrome-item absolute bottom-6 left-1/2 -translate-x-1/2 text-[0.6875rem] tracking-tight text-zinc-500"
-        style={delay(400)}
-      >
-        v.{__APP_VERSION__}
-        <span className="mx-2 text-zinc-300">|</span>
-        {RELEASE_NOTE}
-      </p>
+      <div className="chrome-item absolute inset-x-0 bottom-6 flex justify-center px-48" style={delay(360)}>
+        <DashboardTip tips={BROWSER_TIPS} muted />
+      </div>
+
 
       {/* The tutorial lands later; the button is here so the layout is final. */}
       <button

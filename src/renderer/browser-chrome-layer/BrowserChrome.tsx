@@ -4,7 +4,7 @@ import TabStrip from './TabStrip';
 import Toolbar from './Toolbar';
 import NewTab from './pages/NewTab';
 import { playStartupSound, startupSoundLoaded } from '../sounds';
-import { browserStateLoaded, useActiveTab } from '../stores/browserStore';
+import { browserStateLoaded, useActiveTab, usePageSnapshot } from '../stores/browserStore';
 import mascot from '../assets/mascot.svg';
 
 // The splash stays up at least this long, even if everything loads instantly.
@@ -111,6 +111,7 @@ function useReportContentBounds(ref: RefObject<HTMLDivElement | null>, enabled: 
 function BrowserChrome() {
   const phase = useLaunchSequence();
   const activeTab = useActiveTab();
+  const pageSnapshot = usePageSnapshot((state) => state.src);
   const viewportRef = useRef<HTMLDivElement>(null);
   const showChrome = phase !== 'splash';
 
@@ -134,7 +135,7 @@ function BrowserChrome() {
   };
 
   return (
-    // Plain white behind the glass at first, then Browsie purple with the empty page card once loaded.
+    // Plain white behind the glass at first, then the purple tab strip and white page once loaded.
     // chrome-waiting freezes every entrance until the glass starts clearing.
     <div
       className={`browser-chrome relative h-screen overflow-hidden transition-colors duration-500 ${
@@ -146,7 +147,7 @@ function BrowserChrome() {
           <TabStrip style={{ animationDelay: `${STRIP_DELAY}ms` }} />
           <main
             id="browser-chrome-card"
-            className="absolute inset-x-2 bottom-2 top-11 flex flex-col overflow-hidden rounded-t-2xl border border-[#D6CCF8] bg-white"
+            className="absolute inset-x-0 bottom-0 top-12 flex flex-col overflow-hidden bg-white"
           >
             <Toolbar tab={activeTab} entranceDelay={TOOLBAR_DELAY} />
             {/* The page area: the New Tab page lives here, or a website is laid exactly over it. */}
@@ -154,6 +155,15 @@ function BrowserChrome() {
               {activeTab?.url === null && (
                 // Keyed by tab, so each tab gets its own page.
                 <NewTab key={activeTab.id} entranceDelay={newTabEntranceDelay(activeTab.id)} />
+              )}
+              {/* Freeze-frame of the website while a popover has the real page hidden (see setChromeOverlay). */}
+              {pageSnapshot && activeTab?.url !== null && (
+                <img
+                  src={pageSnapshot}
+                  alt=""
+                  draggable={false}
+                  className="pointer-events-none absolute inset-0 h-full w-full"
+                />
               )}
             </div>
           </main>

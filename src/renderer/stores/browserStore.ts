@@ -20,3 +20,53 @@ export const browserStateLoaded: Promise<void> = browser
 
 export const useActiveTab = () =>
   useBrowserStore((state) => state.tabs.find((tab) => tab.id === state.activeTabId) ?? null);
+
+// Websites paint above the chrome, so a popover (like the profile menu) can't float over one.
+// Instead: grab a still of the page, show it in the page's place, hide the real page, and put the
+// popover over the still. To the user the page just sits there, under the menu.
+export const usePageSnapshot = create<{ src: string | null }>()(() => ({ src: null }));
+
+// Bumped on every open/close, so a slow capture can't reopen an overlay that was already closed.
+let overlayRequest = 0;
+
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+export const setChromeOverlay = async (open: boolean) => {
+  const request = ++overlayRequest;
+
+  if (!browser) {
+    return;
+  }
+
+  if (!open) {
+    await browser.setOverlayOpen(false);
+    // Drop the still a frame after the real page is back, so there's never a gap between them.
+    await nextFrame();
+
+    if (request === overlayRequest) {
+      usePageSnapshot.setState({ src: null });
+    }
+
+    return;
+  }
+
+  const src = await browser.capturePage().catch(() => null);
+
+  if (request !== overlayRequest) {
+    return;
+  }
+
+  if (src) {
+    usePageSnapshot.setState({ src });
+    // Wait until the still is decoded and painted before hiding the real page underneath it.
+    const image = new Image();
+    image.src = src;
+    await image.decode().catch(() => undefined);
+    await nextFrame();
+    await nextFrame();
+  }
+
+  if (request === overlayRequest) {
+    await browser.setOverlayOpen(true);
+  }
+};

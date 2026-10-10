@@ -2,8 +2,6 @@
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
-// package.json's version, baked into the renderer by vite.renderer.config.mjs.
-declare const __APP_VERSION__: string;
 
 declare module '*.png' {
   const src: string;
@@ -136,6 +134,8 @@ interface BrowsieBrowserAPI {
   stop: () => Promise<void>;
   setContentBounds: (bounds: ContentBounds) => Promise<void>;
   // True while a chrome popover is open, so the website is inset and does not cover the menu.
+  // A still image (data: URL) of the website on screen, or null if there isn't one.
+  capturePage: () => Promise<string | null>;
   setOverlayOpen: (open: boolean) => Promise<void>;
   // Ctrl+L / F6 / Alt+D. Returns an unsubscribe function.
   onFocusAddress: (callback: () => void) => () => void;

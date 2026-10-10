@@ -1,8 +1,8 @@
-import { useState, type CSSProperties } from 'react';
+import { Fragment, useState, type CSSProperties } from 'react';
 import { Globe, Plus, SlidersHorizontal, X } from 'lucide-react';
 import IconButton from './IconButton';
 import ProfileMenu from '../components/ProfileMenu';
-import { useBrowserStore } from '../stores/browserStore';
+import { setChromeOverlay, useBrowserStore } from '../stores/browserStore';
 import mascot from '../assets/mascot.svg';
 
 // The site's icon, or the globe until one arrives (or if it won't decode).
@@ -21,6 +21,25 @@ function TabIcon({ favicon }: { favicon: string | null }) {
       onError={() => setBroken(true)}
       className="h-3.5 w-3.5 shrink-0 object-contain"
     />
+  );
+}
+
+// The little outward curves at the bottom of the active tab, where it flows into the strip's
+// bottom line (the same trick Chrome uses). White fill hides the line; the stroke continues the border.
+function TabEar({ side }: { side: 'left' | 'right' }) {
+  return (
+    <svg
+      width="9"
+      height="8"
+      viewBox="0 0 9 8"
+      aria-hidden="true"
+      // -9px, not -8px: offsets are measured from inside the tab's 1px border, and the curve has to
+      // start exactly on that border line or the two meet with a kink.
+      className={`pointer-events-none absolute bottom-0 ${side === 'left' ? '-left-[9px]' : '-right-[9px] scale-x-[-1]'}`}
+    >
+      <path d="M8.5 0 A8.5 7.5 0 0 1 0 7.5 L0 8 L9 8 L9 0 Z" fill="#ffffff" />
+      <path d="M8.5 0 A8.5 7.5 0 0 1 0 7.5" fill="none" stroke="#D6CCF8" strokeWidth="1" />
+    </svg>
   );
 }
 
@@ -51,12 +70,21 @@ function TabPill({ tab, active }: TabPillProps) {
           browser?.activateTab(tab.id);
         }
       }}
-      className={`tab-in group flex h-7 min-w-0 max-w-44 flex-1 basis-44 items-center gap-2 rounded-lg border pl-2.5 pr-1 text-[0.8125rem] tracking-tight transition-[background-color,border-color,box-shadow,color] duration-200 ease-out ${
+      className={`tab-in group relative flex min-w-0 max-w-56 flex-1 basis-56 items-center gap-2 pl-3 pr-1.5 text-[0.8125rem] tracking-tight transition-[background-color,color] duration-200 ease-out ${
         active
-          ? 'border-[#D6CCF8] bg-white text-zinc-900 shadow-[0_1px_2px_rgba(80,50,160,0.08)]'
-          : 'border-transparent text-zinc-600 hover:bg-[#E2D9FF] hover:text-zinc-900'
+          ? // Grows down into the toolbar: same white, no bottom border, covers the strip's bottom line.
+            'z-10 self-stretch rounded-t-[10px] border border-b-0 border-[#D6CCF8] bg-white text-zinc-900'
+          : // A 28px pill centered on the strip itself (mb-1.5 offsets the header's pt-1.5),
+            // with its title centered in it.
+            'mb-1.5 h-7 rounded-lg text-zinc-600 hover:bg-[#E2D9FF] hover:text-zinc-900'
       }`}
     >
+      {active && (
+        <>
+          <TabEar side="left" />
+          <TabEar side="right" />
+        </>
+      )}
       {tab.loading ? (
         <span className="tab-spinner" aria-hidden="true" />
       ) : (
@@ -78,6 +106,23 @@ function TabPill({ tab, active }: TabPillProps) {
   );
 }
 
+// Module-level so it's the same function every render: ProfileMenu re-runs onOpenChange whenever it
+// changes, and a fresh arrow each render would re-capture the page on every tab update.
+const handleProfileOpenChange = (open: boolean) => void setChromeOverlay(open);
+
+// The thin line between two tabs. Hidden next to the active tab, and fades out while the tab on
+// either side is hovered so it never cuts through a hover highlight.
+function TabDivider({ hidden }: { hidden: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`mb-1.5 h-4 w-px shrink-0 bg-[#C9BCF5] transition-opacity duration-150 [[role=tab]:hover+&]:opacity-0 [&:has(+[role=tab]:hover)]:opacity-0 ${
+        hidden ? 'opacity-0' : 'opacity-100'
+      }`}
+    />
+  );
+}
+
 type TabStripProps = {
   style?: CSSProperties;
 };
@@ -88,32 +133,48 @@ function TabStrip({ style }: TabStripProps) {
   const activeTabId = useBrowserStore((state) => state.activeTabId);
 
   return (
-    <header className="chrome-drop absolute inset-x-0 top-0 flex h-11 items-center gap-2 pl-3 pr-2" style={style}>
-      <img src={mascot} alt="" className="h-6 w-6 shrink-0 object-contain" />
+    // The active tab runs from pt-1.5 down to the strip's bottom edge, its title centered in its own body.
+    // Everything else (inactive tabs, dividers, logo, buttons) centers on the strip itself: mb-1.5 on
+    // each cancels the header's pt-1.5.
+    <header className="chrome-drop absolute inset-x-0 top-0 flex h-12 items-center gap-2 pl-3 pr-2 pt-1.5" style={style}>
+      {/* The strip's bottom edge. The active tab sits over it, so the tab reads as part of the page. */}
+      <div className="absolute inset-x-0 bottom-0 h-px bg-[#D6CCF8]" aria-hidden="true" />
+      <img src={mascot} alt="" className="mb-1.5 h-6 w-6 shrink-0 object-contain" />
 
-      <div role="tablist" aria-label="Tabs" className="flex min-w-0 flex-1 items-center gap-1">
-        {tabs.map((tab) => (
-          <TabPill key={tab.id} tab={tab} active={tab.id === activeTabId} />
-        ))}
+      <div role="tablist" aria-label="Tabs" className="flex min-w-0 flex-1 items-center gap-1 self-stretch pl-1">
+        {tabs.map((tab, index) => {
+          const active = tab.id === activeTabId;
+          // A divider after each tab (the last one separates it from +), except where it would touch the active tab.
+          const nextActive = tabs[index + 1]?.id === activeTabId;
+
+          return (
+            <Fragment key={tab.id}>
+              <TabPill tab={tab} active={active} />
+              <TabDivider hidden={active || nextActive} />
+            </Fragment>
+          );
+        })}
         <IconButton
           label="New tab"
           onClick={() => window.browsie?.browser.newTab()}
-          className="h-7 w-7 hover:bg-[#E2D9FF]! hover:[&_svg]:rotate-90"
+          className="mb-1.5 h-7 w-7 hover:bg-[#E2D9FF]! hover:[&_svg]:rotate-90"
         >
           <Plus size={16} aria-hidden="true" />
         </IconButton>
       </div>
 
-      {/* Settings panel lands later; the button is here so the layout is final. */}
-      <IconButton label="Settings" className="hover:bg-[#E2D9FF]!">
-        <SlidersHorizontal size={16} aria-hidden="true" />
-      </IconButton>
-      <ProfileMenu
-        triggerClassName="h-7 w-7 hover:bg-[#E2D9FF]"
-        panelTarget="#browser-chrome-card"
-        onOpenChange={(open) => void window.browsie?.browser.setOverlayOpen(open)}
-        quit={{ onClick: () => void window.browsie?.browser.exit() }}
-      />
+      <div className="mb-1.5 mr-2 flex items-center gap-1">
+        {/* Settings panel lands later; the button is here so the layout is final. */}
+        <IconButton label="Settings" className="hover:bg-[#E2D9FF]!">
+          <SlidersHorizontal size={16} aria-hidden="true" />
+        </IconButton>
+        <ProfileMenu
+          triggerClassName="h-6 w-6 hover:bg-[#E2D9FF]"
+          panelTarget="#browser-chrome-card"
+          onOpenChange={handleProfileOpenChange}
+          quit={{ onClick: () => void window.browsie?.browser.exit() }}
+        />
+      </div>
     </header>
   );
 }
