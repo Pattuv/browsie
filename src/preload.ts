@@ -29,10 +29,38 @@ const data: BrowsieDataAPI = {
   },
 };
 
+// Only the browser window's chrome may use the tab controls; main refuses them from anywhere else.
+const browser: BrowsieBrowserAPI = {
+  launch: () => ipcRenderer.invoke('browser:launch'),
+  exit: () => ipcRenderer.invoke('browser:exit'),
+  getState: () => ipcRenderer.invoke('browser:get-state'),
+  onStateChanged: (callback) => {
+    const listener = (_event: IpcRendererEvent, state: BrowserState) => callback(state);
+    ipcRenderer.on('browser:state-changed', listener);
+    return () => ipcRenderer.removeListener('browser:state-changed', listener);
+  },
+  newTab: () => ipcRenderer.invoke('browser:new-tab'),
+  closeTab: (id) => ipcRenderer.invoke('browser:close-tab', id),
+  activateTab: (id) => ipcRenderer.invoke('browser:activate-tab', id),
+  navigate: (input) => ipcRenderer.invoke('browser:navigate', input),
+  back: () => ipcRenderer.invoke('browser:back'),
+  forward: () => ipcRenderer.invoke('browser:forward'),
+  reload: () => ipcRenderer.invoke('browser:reload'),
+  stop: () => ipcRenderer.invoke('browser:stop'),
+  setContentBounds: (bounds) => ipcRenderer.invoke('browser:set-content-bounds', bounds),
+  setOverlayOpen: (open) => ipcRenderer.invoke('browser:set-overlay-open', open),
+  onFocusAddress: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('browser:focus-address', listener);
+    return () => ipcRenderer.removeListener('browser:focus-address', listener);
+  },
+};
+
 contextBridge.exposeInMainWorld('browsie', {
   platform: process.platform,
   auth,
   data,
+  browser,
   openModePicker: () => ipcRenderer.invoke('open-mode-picker'),
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
   shouldAnimateDashboard: () => ipcRenderer.invoke('should-animate-dashboard'),

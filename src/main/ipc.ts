@@ -2,7 +2,20 @@ import { BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from 'electron
 import { cancelSignIn, getSession, signIn, signOut } from './auth/session';
 import { getData, updateData } from './data/localStore';
 import { getSyncStatus } from './data/syncEngine';
-import { bringToFront, isAppUrl, openModePicker } from './windows';
+import {
+  activateTab,
+  closeTab,
+  getBrowserState,
+  goBack,
+  goForward,
+  navigate,
+  newTab,
+  reload,
+  setContentBounds,
+  setOverlayOpen,
+  stop,
+} from './browser/tabs';
+import { bringToFront, getBrowserWindow, isAppUrl, openBrowser, openModePicker } from './windows';
 
 let dashboardAnimatedThisSession = false;
 
@@ -24,6 +37,21 @@ const handle = <Args extends unknown[]>(
   ipcMain.handle(channel, (event, ...args) => {
     assertTrustedSender(event);
     return listener(event, ...(args as Args));
+  });
+};
+
+// Tab controls get a second check: only the browser window's own chrome may drive tabs,
+// not the Dashboard or the mode picker (which are trusted pages, just not this one).
+const handleFromBrowser = <Args extends unknown[]>(
+  channel: string,
+  listener: (event: IpcMainInvokeEvent, ...args: Args) => unknown,
+) => {
+  handle<Args>(channel, (event, ...args) => {
+    if (event.sender !== getBrowserWindow()?.webContents) {
+      throw new Error(`Blocked ${channel}: only the browser window can control tabs.`);
+    }
+
+    return listener(event, ...args);
   });
 };
 
@@ -75,6 +103,20 @@ export const registerIpc = () => {
     return updateData(patch);
   });
   handle('sync:get-status', () => getSyncStatus());
+
+  handle('browser:launch', () => openBrowser());
+  handleFromBrowser('browser:exit', () => getBrowserWindow()?.close());
+  handleFromBrowser('browser:get-state', () => getBrowserState());
+  handleFromBrowser('browser:new-tab', () => newTab());
+  handleFromBrowser('browser:close-tab', (_event, id: unknown) => closeTab(id));
+  handleFromBrowser('browser:activate-tab', (_event, id: unknown) => activateTab(id));
+  handleFromBrowser('browser:navigate', (_event, input: unknown) => navigate(input));
+  handleFromBrowser('browser:back', () => goBack());
+  handleFromBrowser('browser:forward', () => goForward());
+  handleFromBrowser('browser:reload', () => reload());
+  handleFromBrowser('browser:stop', () => stop());
+  handleFromBrowser('browser:set-content-bounds', (_event, bounds: unknown) => setContentBounds(bounds));
+  handleFromBrowser('browser:set-overlay-open', (_event, open: unknown) => setOverlayOpen(open === true));
 
   handle('auth:get-session', () => getSession());
   handle('auth:sign-in', (event) => {

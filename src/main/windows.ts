@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, type BrowserWindowConstructorOptions, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { attachTabs, handleShortcut } from './browser/tabs';
 import { getData } from './data/localStore';
 
 const isMac = process.platform === 'darwin';
@@ -134,7 +135,7 @@ const lockNavigation = (webContents: Electron.WebContents) => {
   webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 };
 
-const loadRenderer = (window: BrowserWindow, windowKind?: 'menu-picker') => {
+const loadRenderer = (window: BrowserWindow, windowKind?: 'menu-picker' | 'browser') => {
   const search = windowKind ? `?window=${windowKind}` : '';
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
@@ -159,6 +160,15 @@ const wireWindowStateEvents = (window: BrowserWindow) => {
 // At most one of each. Kept so "Change mode" can reuse them instead of stacking duplicates.
 let mainWindow: BrowserWindow | null = null;
 let menuPickerWindow: BrowserWindow | null = null;
+let browserWindow: BrowserWindow | null = null;
+// Set once the whole app is quitting, so closing the browser doesn't reopen the Dashboard on the way out.
+let quitting = false;
+
+app.on('before-quit', () => {
+  quitting = true;
+});
+
+export const getBrowserWindow = () => browserWindow;
 
 const hasUserMode = () => getData().userMode !== null;
 
@@ -252,6 +262,81 @@ export const openModePicker = () => {
   }
 
   createMenuPickerWindow();
+};
+
+// The browser: one frameless, always-fullscreen window. Its own page is the chrome (tabs, address
+// bar), which is trusted and gets the preload. Websites are separate views on top (see browser/tabs.ts).
+const createBrowserWindow = () => {
+  const window = new BrowserWindow({
+    // Hidden until the first frame is painted, so it never flashes a half-drawn window.
+    show: false,
+    frame: false,
+    fullscreen: true,
+    fullscreenable: true,
+    autoHideMenuBar: true,
+    // The splash fades its gradient in over plain white.
+    backgroundColor: '#ffffff',
+    icon: devIconPath(isWindows ? 'windows/icon.ico' : isMac ? 'macos/1024x1024.png' : 'icon.png'),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      webviewTag: false,
+      // The startup sound plays without anyone clicking first.
+      autoplayPolicy: 'no-user-gesture-required',
+    },
+  });
+  browserWindow = window;
+
+  disableZoom(window.webContents);
+  lockNavigation(window.webContents);
+  window.webContents.on('before-input-event', (event, input) => {
+    if (handleShortcut(input, 'chrome')) {
+      event.preventDefault();
+    }
+  });
+
+  // Fullscreen is the whole point, so if anything knocks us out of it (a video leaving its own
+  // fullscreen, the OS), step right back in.
+  window.on('leave-full-screen', () => {
+    if (!window.isDestroyed()) {
+      window.setFullScreen(true);
+    }
+  });
+
+  attachTabs(window);
+
+  window.once('ready-to-show', () => {
+    window.setFullScreen(true);
+    bringToFront(window);
+    // The Dashboard goes only after the browser is up, so there's never a moment with zero
+    // windows (Windows/Linux would quit the app right there).
+    mainWindow?.close();
+  });
+
+  // Leaving the browser lands back on the Dashboard. Opened in 'close' (before the window is gone)
+  // for the same zero-windows reason.
+  window.on('close', () => {
+    if (!quitting && !mainWindow) {
+      createMainWindow();
+    }
+  });
+  window.on('closed', () => {
+    browserWindow = null;
+  });
+
+  loadRenderer(window, 'browser');
+};
+
+// "Open browser" on the Dashboard. Takes no URL or options on purpose: the renderer can only say "go".
+export const openBrowser = () => {
+  if (browserWindow) {
+    bringToFront(browserWindow);
+    return;
+  }
+
+  createBrowserWindow();
 };
 
 export const createWindow = () => {

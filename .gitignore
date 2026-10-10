@@ -93,3 +93,6 @@ out/
 
 # Local planning (Nimbalyst)
 /nimbalyst-local/
+
+# Local reference material
+/reference/

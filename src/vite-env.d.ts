@@ -2,6 +2,8 @@
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
+// package.json's version, baked into the renderer by vite.renderer.config.mjs.
+declare const __APP_VERSION__: string;
 
 declare module '*.png' {
   const src: string;
@@ -89,10 +91,59 @@ interface BrowsieDataAPI {
   onSyncStatusChanged: (callback: (status: SyncStatus) => void) => () => void;
 }
 
+// One tab as the chrome sees it. url is null while the tab shows Browsie's own New Tab page.
+type BrowserTab = {
+  id: number;
+  title: string;
+  url: string | null;
+  loading: boolean;
+  canGoBack: boolean;
+  canGoForward: boolean;
+};
+
+// Main owns the tabs; this snapshot is everything the chrome is told about them.
+type BrowserState = {
+  tabs: BrowserTab[];
+  activeTabId: number;
+};
+
+// Where the page area sits in the window, in CSS pixels (the chrome measures it, main places the website there).
+type ContentBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+interface BrowsieBrowserAPI {
+  // From the Dashboard: open (or focus) the browser window.
+  launch: () => Promise<void>;
+  // Everything below only works from the browser window itself.
+  exit: () => Promise<void>;
+  getState: () => Promise<BrowserState>;
+  // Returns an unsubscribe function.
+  onStateChanged: (callback: (state: BrowserState) => void) => () => void;
+  newTab: () => Promise<void>;
+  closeTab: (id: number) => Promise<void>;
+  activateTab: (id: number) => Promise<void>;
+  // Anything typed in the address bar; main turns it into a safe URL or a search.
+  navigate: (input: string) => Promise<void>;
+  back: () => Promise<void>;
+  forward: () => Promise<void>;
+  reload: () => Promise<void>;
+  stop: () => Promise<void>;
+  setContentBounds: (bounds: ContentBounds) => Promise<void>;
+  // True while a chrome popover is open, so the website steps aside for it.
+  setOverlayOpen: (open: boolean) => Promise<void>;
+  // Ctrl+L / F6 / Alt+D. Returns an unsubscribe function.
+  onFocusAddress: (callback: () => void) => () => void;
+}
+
 interface BrowsieAPI {
   platform: NodeJS.Platform;
   auth: BrowsieAuthAPI;
   data: BrowsieDataAPI;
+  browser: BrowsieBrowserAPI;
   openModePicker: () => Promise<void>;
   openExternal: (url: string) => Promise<void>;
   shouldAnimateDashboard: () => Promise<boolean>;

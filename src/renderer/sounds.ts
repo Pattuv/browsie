@@ -1,5 +1,6 @@
 import clickHeavy from './assets/sounds/clickheavy.wav?inline';
 import clickLight from './assets/sounds/clicklight.wav?inline';
+import startupSound from './assets/sounds/browsiestartupsound.wav?inline';
 
 // One long-lived context with pre-decoded buffers. <audio> elements let the output device go idle,
 // so the first click after a pause lagged while it woke back up. A running context keeps it open.
@@ -27,6 +28,12 @@ const CLICK_SOUNDS = {
 };
 
 export type ClickSound = keyof typeof CLICK_SOUNDS;
+
+// Played as the browser's splash lifts.
+const STARTUP_SOUND = decode(startupSound);
+
+// Resolves once the startup sound is decoded (or known to be missing), so the splash can wait for it.
+export const startupSoundLoaded = STARTUP_SOUND.then(() => undefined);
 
 // The context starts suspended in windows without autoplay permission; any user gesture can resume it.
 const wake = () => {
@@ -60,9 +67,9 @@ const stopKeepAlive = () => {
 };
 
 // Full volume (no gain node), so it's always as loud as the system volume allows.
-export const playClick = (kind: ClickSound = 'light') => {
+const play = (sound: Promise<AudioBuffer | null>) => {
   wake();
-  void CLICK_SOUNDS[kind].then((buffer) => {
+  void sound.then((buffer) => {
     if (!buffer) {
       return;
     }
@@ -73,6 +80,10 @@ export const playClick = (kind: ClickSound = 'light') => {
     source.start();
   });
 };
+
+export const playClick = (kind: ClickSound = 'light') => play(CLICK_SOUNDS[kind]);
+
+export const playStartupSound = () => play(STARTUP_SOUND);
 
 const CLICKABLE = 'button, a[href], [role="button"], [role="link"]';
 
