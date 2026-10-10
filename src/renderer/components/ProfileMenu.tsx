@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { DollarSign, Users, type LucideIcon } from "lucide-react";
-import { useAuthStore } from "../stores/authStore";
-import PrimaryButton from "./PrimaryButton";
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { DollarSign, LogOut, Users, type LucideIcon } from 'lucide-react';
+import { useAuthStore } from '../stores/authStore';
+import PrimaryButton from './PrimaryButton';
 
-const OPENROUTER_BILLING_URL = "https://openrouter.ai/settings/credits";
+const OPENROUTER_BILLING_URL = 'https://openrouter.ai/settings/credits';
 
 // The Google profile photo main downloaded at sign-in (a data: URL), or a grey placeholder.
 function Avatar({
@@ -38,15 +39,19 @@ function Avatar({
 type MenuItemProps = {
   icon: LucideIcon;
   label: string;
+  danger?: boolean;
   onClick?: () => void;
 };
 
-function MenuItem({ icon: Icon, label, onClick }: MenuItemProps) {
+function MenuItem({ icon: Icon, label, danger = false, onClick }: MenuItemProps) {
   return (
     <button
       type="button"
+      role="menuitem"
       onClick={onClick}
-      className="flex h-12 w-full cursor-pointer items-center gap-3 rounded-xl px-2.5 text-left text-base tracking-tight transition-colors duration-200 ease-out hover:bg-zinc-100"
+      className={`flex h-12 w-full cursor-pointer items-center gap-3 rounded-xl px-2.5 text-left text-base tracking-tight transition-colors duration-200 ease-out ${
+        danger ? 'hover:bg-[#E81123] hover:text-white' : 'hover:bg-zinc-100'
+      }`}
     >
       <Icon size={22} strokeWidth={1.5} aria-hidden="true" />
       {label}
@@ -54,7 +59,18 @@ function MenuItem({ icon: Icon, label, onClick }: MenuItemProps) {
   );
 }
 
-function ProfileMenu() {
+type ProfileMenuProps = {
+  /** Sizing/hover for the avatar button in the chrome (dashboard keeps the default). */
+  triggerClassName?: string;
+  /** Called while the menu is mounted, including the blur-out, so a browser overlay can stay up. */
+  onOpenChange?: (open: boolean) => void;
+  /** Replaces Log out: e.g. Quit in the browser chrome, which leaves the browser for the dashboard. */
+  quit?: { label?: string; onClick: () => void };
+  /** CSS selector for a chrome card. The panel is portaled there, inset evenly from its top-right corner. */
+  panelTarget?: string;
+};
+
+function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTarget }: ProfileMenuProps) {
   const firstName = useAuthStore((state) => state.firstName);
   const email = useAuthStore((state) => state.email);
   const pictureDataUrl = useAuthStore((state) => state.pictureDataUrl);
@@ -62,6 +78,7 @@ function ProfileMenu() {
   // Still mounted while the blur-out plays; unmounted when that animation ends.
   const [closing, setClosing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const close = () => setClosing(true);
 
@@ -75,20 +92,37 @@ function ProfileMenu() {
     setClosing(false);
   };
 
-  // While open, any click outside the avatar + menu closes it.
+  useEffect(() => {
+    onOpenChange?.(open);
+  }, [open, onOpenChange]);
+
+  // While open, any click outside the avatar + menu, or Escape, closes it.
   useEffect(() => {
     if (!open || closing) {
       return undefined;
     }
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+
+      if (containerRef.current?.contains(target) || panelRef.current?.contains(target)) {
+        return;
+      }
+
+      close();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
         close();
       }
     };
 
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [open, closing]);
 
   const changeMode = () => {
@@ -101,27 +135,50 @@ function ProfileMenu() {
     window.browsie?.openExternal(OPENROUTER_BILLING_URL);
   };
 
+  const quitApp = () => {
+    close();
+    quit?.onClick();
+  };
+
+  const mountPanel = (panel: ReactNode) => {
+    if (!panelTarget) {
+      return panel;
+    }
+
+    const host = document.querySelector(panelTarget);
+
+    return host ? createPortal(panel, host) : panel;
+  };
+
   return (
     <div ref={containerRef} className="relative">
       <button
         type="button"
         title="Profile"
+        aria-label="Account"
+        aria-haspopup="menu"
+        aria-expanded={open && !closing}
         onClick={toggle}
-        className="app-region-no-drag flex h-7 w-7 cursor-pointer rounded-full transition-transform duration-150 ease-out active:scale-85"
+        className={`app-region-no-drag flex cursor-pointer items-center justify-center rounded-full transition-[background-color,transform] duration-150 ease-out active:scale-85 ${triggerClassName}`}
       >
-        <Avatar pictureDataUrl={pictureDataUrl} className="h-7 w-7" />
+        <Avatar pictureDataUrl={pictureDataUrl} className="h-full w-full" />
       </button>
 
-      {open && (
-        <div
-          onAnimationEnd={(event) => {
-            if (closing && event.target === event.currentTarget) {
-              setOpen(false);
-              setClosing(false);
-            }
-          }}
-          className={`${closing ? "exit-blur-fast pointer-events-none" : "enter-blur-fast"} app-region-no-drag absolute -right-3 top-full mt-3 w-80 rounded-[1.75rem] border border-zinc-200 bg-white p-4 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.25)]`}
-        >
+      {open &&
+        mountPanel(
+          <div
+            ref={panelRef}
+            role="menu"
+            onAnimationEnd={(event) => {
+              if (closing && event.target === event.currentTarget) {
+                setOpen(false);
+                setClosing(false);
+              }
+            }}
+            className={`${closing ? 'exit-blur-fast pointer-events-none' : 'enter-blur-fast'} app-region-no-drag absolute z-40 w-80 rounded-[1.75rem] border border-zinc-200 bg-white p-4 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.25)] ${
+              panelTarget ? 'top-3 right-3' : '-right-3 top-full mt-3'
+            }`}
+          >
           <div className="flex items-center gap-3 px-1">
             <Avatar
               pictureDataUrl={pictureDataUrl}
@@ -137,7 +194,7 @@ function ProfileMenu() {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col ">
+          <div className="mt-4 flex flex-col">
             <MenuItem icon={Users} label="Change mode" onClick={changeMode} />
             <MenuItem
               icon={DollarSign}
@@ -146,15 +203,22 @@ function ProfileMenu() {
             />
           </div>
 
-          {/* Main wipes the vault and pushes SIGNED_OUT; the OnboardingLayer gate then swaps Dashboard for Auth. */}
-          <PrimaryButton
-            onClick={() => window.browsie?.auth.signOut()}
-            className="mt-3 w-full"
-          >
-            Log out
-          </PrimaryButton>
-        </div>
-      )}
+          {quit ? (
+            <>
+              <div className="mx-1 my-2 h-px bg-zinc-200" />
+              <MenuItem icon={LogOut} label={quit.label ?? 'Quit'} danger onClick={quitApp} />
+            </>
+          ) : (
+            // Main wipes the vault and pushes SIGNED_OUT; the OnboardingLayer gate then swaps Dashboard for Auth.
+            <PrimaryButton
+              onClick={() => window.browsie?.auth.signOut()}
+              className="mt-3 w-full"
+            >
+              Log out
+            </PrimaryButton>
+          )}
+          </div>,
+        )}
     </div>
   );
 }

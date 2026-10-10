@@ -8,15 +8,27 @@ import {
   type MenuItemConstructorOptions,
   type WebContents,
 } from 'electron';
+import { resolveFavicon } from './favicons';
 import { WEB_PARTITION, isWebUrl } from './webSession';
 
-// One tab. `view` stays null while the tab shows Browsie's own New Tab page, which the chrome
-// draws itself. A website only gets a view (its own sandboxed process) once one is opened.
+// One tab. The chrome draws Browsie's own New Tab page itself; a website only gets a view
+// (its own sandboxed process) once one is opened.
 type Tab = {
   id: number;
   view: WebContentsView | null;
+  // Showing the New Tab page. The view can still exist behind it (Back from a site's first page),
+  // so Forward can bring that site straight back.
+  showingNewTab: boolean;
+  // The view's history began on the New Tab page, so Back from its first entry returns there.
+  startedFromNewTab: boolean;
   // What we asked the view to load, shown until the page reports its real URL.
   pendingUrl: string | null;
+  // The current page's icon as a data: URL, null until one has downloaded.
+  favicon: string | null;
+  // Bumped per lookup, so a slow download for a site we've since left can't overwrite a newer icon.
+  faviconRequest: number;
+  // The site (origin) the current icon or lookup belongs to.
+  faviconOrigin: string | null;
 };
 
 const SEARCH_URL = 'https://www.google.com/search?q=';
@@ -35,19 +47,30 @@ let activeTabId = 0;
 let nextTabId = 1;
 // Where the page area sits inside the window. Null until the chrome has measured it.
 let contentBounds: ContentBounds | null = null;
-// A chrome popover is open. Views always paint above the chrome, so they step aside for it.
+// A chrome popover is open. Views always paint above the chrome, so the page is inset from the
+// right (menu width) instead of hidden — hiding it left the white card showing through.
 let overlayOpen = false;
+const OVERLAY_RIGHT_INSET = 336;
 // The tab playing a video (or anything else) in HTML fullscreen, if any.
 let fullscreenTabId: number | null = null;
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 const activeTab = () => tabs.find((tab) => tab.id === activeTabId);
-const activeContents = () => activeTab()?.view?.webContents;
+// The website the user is looking at, if any. A view hidden behind the New Tab page doesn't count.
+const activeContents = () => {
+  const tab = activeTab();
+  return tab?.showingNewTab ? undefined : tab?.view?.webContents;
+};
 
-const describeTab = ({ id, view, pendingUrl }: Tab): BrowserTab => {
-  if (!view) {
-    return { id, title: 'New Tab', url: null, loading: false, canGoBack: false, canGoForward: false };
+const canGoBackFrom = (tab: Tab, contents: WebContents) =>
+  contents.navigationHistory.canGoBack() || tab.startedFromNewTab;
+
+const describeTab = (tab: Tab): BrowserTab => {
+  const { id, view, pendingUrl, favicon } = tab;
+
+  if (!view || tab.showingNewTab) {
+    return { id, title: 'New Tab', url: null, favicon: null, loading: false, canGoBack: false, canGoForward: view !== null };
   }
 
   const contents = view.webContents;
@@ -57,8 +80,9 @@ const describeTab = ({ id, view, pendingUrl }: Tab): BrowserTab => {
     id,
     title: contents.getTitle() || url,
     url,
+    favicon,
     loading: contents.isLoading(),
-    canGoBack: contents.navigationHistory.canGoBack(),
+    canGoBack: canGoBackFrom(tab, contents),
     canGoForward: contents.navigationHistory.canGoForward(),
   };
 };
@@ -86,14 +110,23 @@ const layout = () => {
     }
 
     const isFullscreen = tab.id === fullscreenTabId;
-    const visible = tab.id === activeTabId && (isFullscreen || (contentBounds !== null && !overlayOpen));
+    const visible = tab.id === activeTabId && !tab.showingNewTab && (isFullscreen || contentBounds !== null);
     tab.view.setVisible(visible);
 
     if (!visible) {
       continue;
     }
 
-    tab.view.setBounds(isFullscreen || !contentBounds ? { x: 0, y: 0, width, height } : contentBounds);
+    if (isFullscreen || !contentBounds) {
+      tab.view.setBounds({ x: 0, y: 0, width, height });
+      continue;
+    }
+
+    tab.view.setBounds(
+      overlayOpen
+        ? { ...contentBounds, width: Math.max(0, contentBounds.width - OVERLAY_RIGHT_INSET) }
+        : contentBounds,
+    );
   }
 };
 
@@ -125,7 +158,51 @@ const toUrl = (input: unknown) => {
   return SEARCH_URL + encodeURIComponent(text);
 };
 
-const showContextMenu = (contents: WebContents, params: ContextMenuParams) => {
+const originOf = (url: string) => {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+};
+
+const updateFavicon = async (tab: Tab, contents: WebContents, candidates: string[]) => {
+  const request = ++tab.faviconRequest;
+  tab.faviconOrigin = originOf(contents.getURL());
+  const favicon = await resolveFavicon(candidates);
+
+  if (request !== tab.faviconRequest || !tabs.includes(tab)) {
+    return;
+  }
+
+  tab.favicon = favicon;
+  emit();
+};
+
+// Only a different site drops the icon. Sites often navigate again right after reporting their
+// icons (YouTube adds ?themeRefresh=1) without reporting them a second time.
+const onNavigatedForFavicon = (tab: Tab, url: string) => {
+  if (originOf(url) === tab.faviconOrigin) {
+    return;
+  }
+
+  tab.favicon = null;
+  tab.faviconRequest++;
+  tab.faviconOrigin = null;
+};
+
+// Pages that never declare an icon usually still serve one at /favicon.ico.
+const faviconFallback = (tab: Tab, contents: WebContents) => {
+  const url = contents.getURL();
+
+  if (!isWebUrl(url) || originOf(url) === tab.faviconOrigin) {
+    return;
+  }
+
+  void updateFavicon(tab, contents, [new URL('/favicon.ico', url).href]);
+};
+
+const showContextMenu = (tab: Tab, contents: WebContents, params: ContextMenuParams) => {
   const items: MenuItemConstructorOptions[] = [];
 
   if (params.linkURL && isWebUrl(params.linkURL)) {
@@ -152,7 +229,7 @@ const showContextMenu = (contents: WebContents, params: ContextMenuParams) => {
   }
 
   items.push(
-    { label: 'Back', enabled: contents.navigationHistory.canGoBack(), click: () => contents.navigationHistory.goBack() },
+    { label: 'Back', enabled: canGoBackFrom(tab, contents), click: () => goBackIn(tab) },
     {
       label: 'Forward',
       enabled: contents.navigationHistory.canGoForward(),
@@ -184,8 +261,17 @@ const wireContents = (tab: Tab, contents: WebContents) => {
   contents.on('will-redirect', blockNonWeb);
 
   contents.on('did-start-loading', emit);
-  contents.on('did-stop-loading', emit);
-  contents.on('did-navigate', emit);
+  contents.on('did-stop-loading', () => {
+    faviconFallback(tab, contents);
+    emit();
+  });
+  contents.on('did-navigate', (_event, url) => {
+    onNavigatedForFavicon(tab, url);
+    emit();
+  });
+  contents.on('page-favicon-updated', (_event, favicons) => {
+    void updateFavicon(tab, contents, favicons);
+  });
   contents.on('did-navigate-in-page', emit);
   contents.on('page-title-updated', emit);
   contents.on('render-process-gone', emit);
@@ -204,7 +290,7 @@ const wireContents = (tab: Tab, contents: WebContents) => {
       event.preventDefault();
     }
   });
-  contents.on('context-menu', (_event, params) => showContextMenu(contents, params));
+  contents.on('context-menu', (_event, params) => showContextMenu(tab, contents, params));
 };
 
 const createView = (tab: Tab) => {
@@ -245,6 +331,17 @@ const destroyView = (tab: Tab) => {
 };
 
 const load = (tab: Tab, url: string) => {
+  // Leaving the New Tab page starts a fresh history (like Chrome, this drops anything Forward
+  // could have returned to), whose Back leads to the New Tab page.
+  if (tab.showingNewTab) {
+    destroyView(tab);
+    tab.showingNewTab = false;
+    tab.startedFromNewTab = true;
+    tab.favicon = null;
+    tab.faviconRequest++;
+    tab.faviconOrigin = null;
+  }
+
   const view = tab.view ?? createView(tab);
   tab.pendingUrl = url;
   // Redirects and quick re-navigations reject with ERR_ABORTED; that's normal browsing, not an error.
@@ -257,7 +354,16 @@ export const newTab = (url?: string) => {
     return;
   }
 
-  const tab: Tab = { id: nextTabId++, view: null, pendingUrl: null };
+  const tab: Tab = {
+    id: nextTabId++,
+    view: null,
+    showingNewTab: !url,
+    startedFromNewTab: false,
+    pendingUrl: null,
+    favicon: null,
+    faviconRequest: 0,
+    faviconOrigin: null,
+  };
   tabs.push(tab);
   activeTabId = tab.id;
 
@@ -324,8 +430,49 @@ export const navigate = (input: unknown) => {
   emit();
 };
 
-export const goBack = () => activeContents()?.navigationHistory.goBack();
-export const goForward = () => activeContents()?.navigationHistory.goForward();
+// Back from a site's first page (when it was opened from New Tab) returns to the New Tab page;
+// the site stays loaded behind it for Forward.
+const goBackIn = (tab: Tab) => {
+  const contents = tab.view?.webContents;
+
+  if (tab.showingNewTab || !contents) {
+    return;
+  }
+
+  if (contents.navigationHistory.canGoBack()) {
+    contents.navigationHistory.goBack();
+    return;
+  }
+
+  if (tab.startedFromNewTab) {
+    tab.showingNewTab = true;
+    host?.webContents.focus();
+    layout();
+    emit();
+  }
+};
+
+export const goBack = () => {
+  const tab = activeTab();
+
+  if (tab) {
+    goBackIn(tab);
+  }
+};
+
+export const goForward = () => {
+  const tab = activeTab();
+
+  if (tab?.showingNewTab && tab.view) {
+    tab.showingNewTab = false;
+    tab.view.webContents.focus();
+    layout();
+    emit();
+    return;
+  }
+
+  activeContents()?.navigationHistory.goForward();
+};
 export const reload = () => activeContents()?.reload();
 export const stop = () => activeContents()?.stop();
 

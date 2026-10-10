@@ -1,11 +1,11 @@
-import { useState, type CSSProperties } from 'react';
-import { Grip, HeartHandshake } from 'lucide-react';
-import mascot from '../../assets/mascot.svg';
+import { useState, type CSSProperties } from "react";
+import { Grip, HeartHandshake } from "lucide-react";
+import mascot from "../../assets/mascot.svg";
 
-const GUIDE_URL = 'https://browsiedocs.super.site/browsie-help-center';
-const GOOGLE_APPS_URL = 'https://about.google/products/';
+const GUIDE_URL = "https://browsiedocs.super.site/browsie-help-center";
+const GOOGLE_APPS_URL = "https://about.google/products/";
 // The one-line "what's new" next to the version in the footer.
-const RELEASE_NOTE = 'added agentic security';
+const RELEASE_NOTE = "added agentic security";
 
 type NewTabProps = {
   /** Base delay for the staggered entrance, in ms. Null shows the page instantly (switching back to a tab). */
@@ -17,12 +17,14 @@ function NewTab({ entranceDelay: initialDelay }: NewTabProps) {
   // Decided once, on mount: a re-render must never cut off (or restart) an entrance mid-play.
   const [entranceDelay] = useState(initialDelay);
   const browser = window.browsie?.browser;
-  const delay = (ms: number): CSSProperties => ({ animationDelay: `${(entranceDelay ?? 0) + ms}ms` });
+  const delay = (ms: number): CSSProperties => ({
+    animationDelay: `${(entranceDelay ?? 0) + ms}ms`,
+  });
 
   return (
     <div
       className={`absolute inset-0 flex flex-col items-center overflow-y-auto px-6 ${
-        entranceDelay === null ? 'no-entrance' : ''
+        entranceDelay === null ? "no-entrance" : ""
       }`}
     >
       <button
@@ -35,12 +37,15 @@ function NewTab({ entranceDelay: initialDelay }: NewTabProps) {
         Need help?
       </button>
 
-      <div className="chrome-item absolute right-4 top-3 flex items-center gap-1" style={delay(40)}>
+      <div
+        className="chrome-item absolute right-4 top-3 flex items-center gap-1"
+        style={delay(40)}
+      >
         <button
           type="button"
           aria-label="Go to Google"
           title="Google"
-          onClick={() => browser?.navigate('google.com')}
+          onClick={() => browser?.navigate("google.com")}
           className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-900 transition-[background-color,transform] duration-150 hover:bg-zinc-100 active:scale-90"
         >
           <i className="bi bi-google text-[1.05rem]" aria-hidden="true" />
@@ -63,11 +68,17 @@ function NewTab({ entranceDelay: initialDelay }: NewTabProps) {
           className="chrome-item mb-3 h-28 transition-transform duration-500 ease-out hover:-rotate-3 hover:scale-105"
           style={delay(80)}
         />
-        <h1 className="chrome-item bric text-center text-[2.6rem] tracking-tighter text-black" style={delay(160)}>
+        <h1
+          className="chrome-item bric text-center text-[2.6rem] tracking-tighter text-black"
+          style={delay(160)}
+        >
           Where to today?
         </h1>
-        <p className="chrome-item text-[1.0625rem] tracking-tight text-zinc-600" style={delay(240)}>
-          Hold spacebar to talk to Browsie
+        <p
+          className="chrome-item text-[1.0625rem] tracking-tight text-zinc-600"
+          style={delay(240)}
+        >
+          Hold the spacebar to talk to Browsie
         </p>
         <div
           className="chrome-item mt-[clamp(1.5rem,3vh,2.5rem)] flex h-[7.5rem] w-full max-w-[22.5rem] items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50/60 text-sm tracking-tight text-zinc-400"

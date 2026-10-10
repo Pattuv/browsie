@@ -96,6 +96,8 @@ type BrowserTab = {
   id: number;
   title: string;
   url: string | null;
+  // The site's icon as a data: URL (main downloads it; the chrome never loads remote images). Null until known.
+  favicon: string | null;
   loading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
@@ -133,7 +135,7 @@ interface BrowsieBrowserAPI {
   reload: () => Promise<void>;
   stop: () => Promise<void>;
   setContentBounds: (bounds: ContentBounds) => Promise<void>;
-  // True while a chrome popover is open, so the website steps aside for it.
+  // True while a chrome popover is open, so the website is inset and does not cover the menu.
   setOverlayOpen: (open: boolean) => Promise<void>;
   // Ctrl+L / F6 / Alt+D. Returns an unsubscribe function.
   onFocusAddress: (callback: () => void) => () => void;
