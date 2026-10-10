@@ -195,6 +195,8 @@ const createMenuPickerWindow = () => {
     minWidth: 640,
     minHeight: 600,
     ...windowChromeOptions(),
+    // A small picker, not a workspace. Also stops double-clicking the drag region from maximizing it.
+    maximizable: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },

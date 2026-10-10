@@ -30,7 +30,7 @@ function CaptionButton({ label, icon: Icon, iconSize, danger = false, onClick }:
   );
 }
 
-function WindowControls({ className = 'h-10' }: { className?: string }) {
+function WindowControls({ className = 'h-10', maximizable }: { className?: string; maximizable: boolean }) {
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -53,12 +53,14 @@ function WindowControls({ className = 'h-10' }: { className?: string }) {
   return (
     <div className={`app-region-no-drag absolute top-0 right-0 z-50 flex ${className}`}>
       <CaptionButton label="Minimize" icon={Minus} iconSize={16} onClick={() => window.browsie?.minimizeWindow()} />
-      <CaptionButton
-        label={maximized ? 'Restore' : 'Maximize'}
-        icon={maximized ? Copy : Square}
-        iconSize={13}
-        onClick={() => window.browsie?.toggleMaximizeWindow()}
-      />
+      {maximizable && (
+        <CaptionButton
+          label={maximized ? 'Restore' : 'Maximize'}
+          icon={maximized ? Copy : Square}
+          iconSize={13}
+          onClick={() => window.browsie?.toggleMaximizeWindow()}
+        />
+      )}
       <CaptionButton label="Close" icon={X} iconSize={16} danger onClick={() => window.browsie?.closeWindow()} />
     </div>
   );
@@ -69,26 +71,30 @@ type TitleBarProps = {
   children?: ReactNode;
   /** Sizing for the caption button strip (default `h-10`), so it can match a page's own top bar. */
   controlsClassName?: string;
+  /** False hides the maximize button; must match the window's `maximizable` option in main. */
+  maximizable?: boolean;
 };
 
 /**
  * Drag region for the hidden title bar. On macOS it leaves room for the traffic lights;
  * elsewhere it stops short of the custom caption buttons.
  */
-function TitleBar({ children, controlsClassName }: TitleBarProps) {
+function TitleBar({ children, controlsClassName, maximizable = true }: TitleBarProps) {
   const isMac = window.browsie?.platform === 'darwin';
+  // Each caption button is w-12 (3rem).
+  const controlsInset = maximizable ? 'right-36' : 'right-24';
 
   return (
     <>
       {/* Drag region must not overlap the caption buttons, or Windows swallows their clicks. */}
       <header
         className={`app-region-drag absolute top-0 left-0 z-10 flex h-10 items-center ${
-          isMac ? 'right-0 pl-16 pr-4' : 'right-36 pl-4'
+          isMac ? 'right-0 pl-16 pr-4' : `${controlsInset} pl-4`
         }`}
       >
         {children}
       </header>
-      {isMac ? null : <WindowControls className={controlsClassName} />}
+      {isMac ? null : <WindowControls className={controlsClassName} maximizable={maximizable} />}
     </>
   );
 }

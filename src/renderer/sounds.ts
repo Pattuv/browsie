@@ -35,6 +35,30 @@ const wake = () => {
   }
 };
 
+// Chromium parks the real audio output after a stretch of pure silence (and some devices, like
+// Bluetooth headphones, sleep on their own), so the next click lagged while it woke back up.
+// A constant -80 dB signal is inaudible but never counts as silence. Only while focused, so
+// Browsie doesn't hold the audio device awake in the background.
+const KEEP_ALIVE_LEVEL = 1e-4;
+let keepAlive: ConstantSourceNode | null = null;
+
+const startKeepAlive = () => {
+  if (keepAlive) {
+    return;
+  }
+
+  keepAlive = context.createConstantSource();
+  keepAlive.offset.value = KEEP_ALIVE_LEVEL;
+  keepAlive.connect(context.destination);
+  keepAlive.start();
+};
+
+const stopKeepAlive = () => {
+  keepAlive?.stop();
+  keepAlive?.disconnect();
+  keepAlive = null;
+};
+
 // Full volume (no gain node), so it's always as loud as the system volume allows.
 export const playClick = (kind: ClickSound = 'light') => {
   wake();
@@ -57,6 +81,12 @@ export const installClickSounds = () => {
   // Resume on press, a beat before the click lands.
   document.addEventListener('pointerdown', wake, true);
   document.addEventListener('keydown', wake, true);
+
+  window.addEventListener('focus', startKeepAlive);
+  window.addEventListener('blur', stopKeepAlive);
+  if (document.hasFocus()) {
+    startKeepAlive();
+  }
 
   document.addEventListener(
     'click',

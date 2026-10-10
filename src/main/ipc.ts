@@ -56,8 +56,8 @@ export const registerIpc = () => {
 
     if (win?.isMaximized()) {
       win.unmaximize();
-    } else {
-      win?.maximize();
+    } else if (win?.isMaximizable()) {
+      win.maximize();
     }
   });
   handle('window-close', (event) => {
