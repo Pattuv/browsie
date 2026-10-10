@@ -11,14 +11,42 @@ const MOD = window.browsie?.platform === "darwin" ? "⌘" : "Ctrl";
 
 // Same rotating tips as the dashboard, but about getting around the browser itself.
 const BROWSER_TIPS: Tip[] = [
-  { before: "Open a fresh tab anytime with", highlight: `${MOD} + T`, after: "" },
-  { before: "Jump straight to the address bar with", highlight: `${MOD} + L`, after: "and start typing" },
-  { before: "Text too small? Zoom any page in with", highlight: `${MOD} + +`, after: `and back with ${MOD} + 0` },
-  { before: "Go back a page with", highlight: "Alt + ←", after: "or the arrow next to the address bar" },
-  { before: "Close the tab you're on with", highlight: `${MOD} + W`, after: "or by middle-clicking it" },
+  {
+    before: "Open a fresh tab anytime with",
+    highlight: `${MOD} + T`,
+    after: "",
+  },
+  {
+    before: "Jump straight to the address bar with",
+    highlight: `${MOD} + L`,
+    after: "and start typing",
+  },
+  {
+    before: "Text too small? Zoom any page in with",
+    highlight: `${MOD} + +`,
+    after: `and back with ${MOD} + 0`,
+  },
+  {
+    before: "Go back a page with",
+    highlight: "Alt + ←",
+    after: "or the arrow next to the address bar",
+  },
+  {
+    before: "Close the tab you're on with",
+    highlight: `${MOD} + W`,
+    after: "or by middle-clicking it",
+  },
   { before: "Hop between your tabs with", highlight: "Ctrl + Tab", after: "" },
-  { before: "Right-click any link and choose", highlight: "Open link in new tab", after: "to keep your place" },
-  { before: "Head back to the dashboard with", highlight: "Quit", after: "in the profile menu" },
+  {
+    before: "Right-click any link and choose",
+    highlight: "Open link in new tab",
+    after: "to keep your place",
+  },
+  {
+    before: "Head back to the dashboard with",
+    highlight: "Quit",
+    after: "in the profile menu",
+  },
 ];
 
 type NewTabProps = {
@@ -95,17 +123,19 @@ function NewTab({ entranceDelay: initialDelay }: NewTabProps) {
           Hold the spacebar to talk to Browsie
         </p>
         <div
-          className="chrome-item mt-[clamp(1.5rem,3vh,2.5rem)] flex h-[7.5rem] w-full max-w-[22.5rem] items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50/60 text-sm tracking-tight text-zinc-400"
+          className="chrome-item mt-[clamp(1.5rem,3vh,2.5rem)] flex h-30 w-full max-w-90 items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50/60 text-sm tracking-tight text-zinc-400"
           style={delay(320)}
         >
           No recent activity
         </div>
       </div>
 
-      <div className="chrome-item absolute inset-x-0 bottom-6 flex justify-center px-48" style={delay(360)}>
+      <div
+        className="chrome-item absolute inset-x-0 bottom-6 flex justify-center px-48"
+        style={delay(360)}
+      >
         <DashboardTip tips={BROWSER_TIPS} muted />
       </div>
-
 
       {/* The tutorial lands later; the button is here so the layout is final. */}
       <button
