@@ -144,7 +144,7 @@ function BrowserChrome() {
       {showChrome && (
         <>
           <TabStrip style={{ animationDelay: `${STRIP_DELAY}ms` }} />
-          <main className="absolute inset-x-2 bottom-2 top-11 flex flex-col overflow-hidden rounded-b-xl rounded-t-2xl border border-[#D6CCF8] bg-white">
+          <main className="absolute inset-x-2 bottom-2 top-11 flex flex-col overflow-hidden rounded-t-2xl border border-[#D6CCF8] bg-white">
             <Toolbar tab={activeTab} entranceDelay={TOOLBAR_DELAY} />
             {/* The page area: the New Tab page lives here, or a website is laid exactly over it. */}
             <div ref={viewportRef} className="relative min-h-0 flex-1">

@@ -17,7 +17,6 @@ function NewTab({ entranceDelay: initialDelay }: NewTabProps) {
   // Decided once, on mount: a re-render must never cut off (or restart) an entrance mid-play.
   const [entranceDelay] = useState(initialDelay);
   const browser = window.browsie?.browser;
-  const isMac = window.browsie?.platform === 'darwin';
   const delay = (ms: number): CSSProperties => ({ animationDelay: `${(entranceDelay ?? 0) + ms}ms` });
 
   return (
@@ -68,7 +67,7 @@ function NewTab({ entranceDelay: initialDelay }: NewTabProps) {
           Where to today?
         </h1>
         <p className="chrome-item text-[1.0625rem] tracking-tight text-zinc-600" style={delay(240)}>
-          {isMac ? 'Hold control + ⌥ to speak to Browsie' : 'Hold Ctrl + Alt to speak to Browsie'}
+          Hold spacebar to talk to Browsie
         </p>
         <div
           className="chrome-item mt-[clamp(1.5rem,3vh,2.5rem)] flex h-[7.5rem] w-full max-w-[22.5rem] items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50/60 text-sm tracking-tight text-zinc-400"

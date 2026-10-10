@@ -22,8 +22,6 @@ type Tab = {
 const SEARCH_URL = 'https://www.google.com/search?q=';
 const MAX_INPUT_LENGTH = 2048;
 const MAX_TABS = 50;
-// The page card's rounded-xl corners, minus its 1px border.
-const VIEW_CORNER_RADIUS = 11;
 const ZOOM_STEP = 0.5;
 const MIN_ZOOM = -3;
 const MAX_ZOOM = 5;
@@ -96,7 +94,6 @@ const layout = () => {
     }
 
     tab.view.setBounds(isFullscreen || !contentBounds ? { x: 0, y: 0, width, height } : contentBounds);
-    tab.view.setBorderRadius(isFullscreen ? 0 : VIEW_CORNER_RADIUS);
   }
 };
 
@@ -224,6 +221,8 @@ const createView = (tab: Tab) => {
   });
 
   view.setBackgroundColor('#ffffff');
+  // Square corners: the page sits flush under the toolbar and in the card's square bottom.
+  view.setBorderRadius(0);
   view.setVisible(false);
   host?.contentView.addChildView(view);
   tab.view = view;
