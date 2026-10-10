@@ -175,8 +175,8 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
                 setClosing(false);
               }
             }}
-            className={`${closing ? 'exit-blur-fast pointer-events-none' : 'enter-blur-fast'} app-region-no-drag absolute z-40 w-80 rounded-[1.75rem] border border-zinc-200 bg-white p-4 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.25)] ${
-              panelTarget ? 'top-3 right-3' : '-right-3 top-full mt-3'
+            className={`${closing ? 'exit-blur-fast pointer-events-none' : 'enter-blur-fast'} app-region-no-drag absolute z-40 w-80 border border-zinc-200 bg-white p-4 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.25)] ${
+              panelTarget ? 'top-3 right-3 rounded-2xl' : '-right-3 top-full mt-3 rounded-[1.75rem]'
             }`}
           >
           <div className="flex items-center gap-3 px-1">
