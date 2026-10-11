@@ -23,7 +23,7 @@ function SplashScreen({ leaving }: SplashScreenProps) {
       <div className="splash-backdrop absolute inset-0" aria-hidden="true" />
       <div className="splash-gradient absolute inset-0" aria-hidden="true" />
       <div className="splash-grain absolute inset-0" aria-hidden="true" />
-      {/* The wrapper animates; the image keeps its own filter that turns the wordmark white. */}
+      {/* The wrapper animates; the wordmark stays black. */}
       <div className="splash-wordmark-wrap enter-blur-slow relative" style={{ animationDelay: '350ms' }}>
         <img src={wordmark} alt="" className="splash-wordmark h-11" />
       </div>

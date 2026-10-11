@@ -292,9 +292,9 @@
     animation: splash-layer-in 0.9s ease-out backwards;
   }
 
-  /* The wordmark file is dark; this turns it white with a soft lift off the gradient. */
+  /* The wordmark file is already black; keep it that way on the splash. */
   .splash-wordmark {
-    filter: brightness(0) invert(1) drop-shadow(0 6px 24px rgba(76, 48, 170, 0.28));
+    filter: none;
   }
 
   /* Leaving: the glass clears into focus while the gradient and grain blow away. */

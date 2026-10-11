@@ -16,8 +16,9 @@ import mascot from "../../assets/mascot.svg";
 import wordmark from "../../assets/wordmark.svg";
 import book from "../../assets/paint-icons/book.png";
 
-const TITLE_DELAY_MS = 500;
 const BLUR_DURATION_MS = 550;
+const TOP_BAR_DELAY_MS = 80;
+const TITLE_DELAY_MS = TOP_BAR_DELAY_MS + BLUR_DURATION_MS + 120;
 const POST_TITLE_DELAY_MS = 400;
 const TITLE_MOVE_MS = 800;
 const TITLE_MOVE_EASING = "cubic-bezier(0.72, 0, 0.28, 1)";
@@ -135,6 +136,7 @@ function Dashboard() {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const titleStartRect = useRef<DOMRect | null>(null);
   const titleFlipPlayed = useRef(false);
+  const [showTopBar, setShowTopBar] = useState(false);
   const [showTitle, setShowTitle] = useState(false);
   const [showRestLayout, setShowRestLayout] = useState(false);
   const [showMascot, setShowMascot] = useState(false);
@@ -151,6 +153,7 @@ function Dashboard() {
 
     const showAll = () => {
       titleFlipPlayed.current = true;
+      setShowTopBar(true);
       setShowTitle(true);
       setShowRestLayout(true);
       setShowMascot(true);
@@ -164,6 +167,7 @@ function Dashboard() {
       window.browsie?.markDashboardPlayed();
 
       timers = [
+        setTimeout(() => setShowTopBar(true), TOP_BAR_DELAY_MS),
         setTimeout(() => setShowTitle(true), TITLE_DELAY_MS),
         setTimeout(() => {
           if (titleRef.current) {
@@ -253,7 +257,7 @@ function Dashboard() {
       <div
         className={`absolute inset-x-0 z-20 flex h-8 items-center justify-between ${
           isMac ? "top-6 pl-[4.5rem] pr-10" : "top-4 pl-5 pr-40"
-        }`}
+        } ${revealClass(shouldAnimate.current, showTopBar)}`}
       >
         <img
           src={wordmark}

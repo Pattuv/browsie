@@ -1,16 +1,18 @@
-import { Fragment, useState, type CSSProperties } from 'react';
-import { Globe, Plus, SlidersHorizontal, X } from 'lucide-react';
-import IconButton from './IconButton';
-import ProfileMenu from '../components/ProfileMenu';
-import { setChromeOverlay, useBrowserStore } from '../stores/browserStore';
-import mascot from '../assets/mascot.svg';
+import { Fragment, useState, type CSSProperties } from "react";
+import { Globe, Plus, SlidersHorizontal, X } from "lucide-react";
+import IconButton from "./IconButton";
+import ProfileMenu from "../components/ProfileMenu";
+import { setChromeOverlay, useBrowserStore } from "../stores/browserStore";
+import mascot from "../assets/mascot.svg";
 
 // The site's icon, or the globe until one arrives (or if it won't decode).
 function TabIcon({ favicon }: { favicon: string | null }) {
   const [broken, setBroken] = useState(false);
 
   if (!favicon || broken) {
-    return <Globe size={13} className="shrink-0 text-zinc-500" aria-hidden="true" />;
+    return (
+      <Globe size={13} className="shrink-0 text-zinc-500" aria-hidden="true" />
+    );
   }
 
   return (
@@ -26,7 +28,7 @@ function TabIcon({ favicon }: { favicon: string | null }) {
 
 // The little outward curves at the bottom of the active tab, where it flows into the strip's
 // bottom line (the same trick Chrome uses). White fill hides the line; the stroke continues the border.
-function TabEar({ side }: { side: 'left' | 'right' }) {
+function TabEar({ side }: { side: "left" | "right" }) {
   return (
     <svg
       width="9"
@@ -35,10 +37,15 @@ function TabEar({ side }: { side: 'left' | 'right' }) {
       aria-hidden="true"
       // -9px, not -8px: offsets are measured from inside the tab's 1px border, and the curve has to
       // start exactly on that border line or the two meet with a kink.
-      className={`pointer-events-none absolute bottom-0 ${side === 'left' ? '-left-[9px]' : '-right-[9px] scale-x-[-1]'}`}
+      className={`pointer-events-none absolute bottom-0 ${side === "left" ? "-left-[9px]" : "-right-[9px] scale-x-[-1]"}`}
     >
       <path d="M8.5 0 A8.5 7.5 0 0 1 0 7.5 L0 8 L9 8 L9 0 Z" fill="#ffffff" />
-      <path d="M8.5 0 A8.5 7.5 0 0 1 0 7.5" fill="none" stroke="#D6CCF8" strokeWidth="1" />
+      <path
+        d="M8.5 0 A8.5 7.5 0 0 1 0 7.5"
+        fill="none"
+        stroke="#D6CCF8"
+        strokeWidth="1"
+      />
     </svg>
   );
 }
@@ -65,7 +72,7 @@ function TabPill({ tab, active }: TabPillProps) {
         }
       }}
       onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
+        if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           browser?.activateTab(tab.id);
         }
@@ -73,10 +80,10 @@ function TabPill({ tab, active }: TabPillProps) {
       className={`tab-in group relative flex min-w-0 max-w-56 flex-1 basis-56 items-center gap-2 pl-3 pr-1.5 text-[0.8125rem] tracking-tight transition-[background-color,color] duration-200 ease-out ${
         active
           ? // Grows down into the toolbar: same white, no bottom border, covers the strip's bottom line.
-            'z-10 self-stretch rounded-t-[10px] border border-b-0 border-[#D6CCF8] bg-white text-zinc-900'
+            "z-10 self-stretch rounded-t-[10px] border border-b-0 border-[#D6CCF8] bg-white text-zinc-900"
           : // A 28px pill centered on the strip itself (mb-1.5 offsets the header's pt-1.5),
             // with its title centered in it.
-            'mb-1.5 h-7 rounded-lg text-zinc-600 hover:bg-[#E2D9FF] hover:text-zinc-900'
+            "mb-1.5 h-7 rounded-lg text-zinc-600 hover:bg-[#E2D9FF] hover:text-zinc-900"
       }`}
     >
       {active && (
@@ -88,7 +95,7 @@ function TabPill({ tab, active }: TabPillProps) {
       {tab.loading ? (
         <span className="tab-spinner" aria-hidden="true" />
       ) : (
-        <TabIcon key={tab.favicon ?? 'none'} favicon={tab.favicon} />
+        <TabIcon key={tab.favicon ?? "none"} favicon={tab.favicon} />
       )}
       <span className="min-w-0 flex-1 truncate">{tab.title}</span>
       <button
@@ -117,7 +124,7 @@ function TabDivider({ hidden }: { hidden: boolean }) {
     <span
       aria-hidden="true"
       className={`mb-1.5 h-4 w-px shrink-0 bg-[#C9BCF5] transition-opacity duration-150 [[role=tab]:hover+&]:opacity-0 [&:has(+[role=tab]:hover)]:opacity-0 ${
-        hidden ? 'opacity-0' : 'opacity-100'
+        hidden ? "opacity-0" : "opacity-100"
       }`}
     />
   );
@@ -136,12 +143,26 @@ function TabStrip({ style }: TabStripProps) {
     // The active tab runs from pt-1.5 down to the strip's bottom edge, its title centered in its own body.
     // Everything else (inactive tabs, dividers, logo, buttons) centers on the strip itself: mb-1.5 on
     // each cancels the header's pt-1.5.
-    <header className="chrome-drop absolute inset-x-0 top-0 flex h-12 items-center gap-2 pl-3 pr-2 pt-1.5" style={style}>
+    <header
+      className="chrome-drop absolute inset-x-0 top-0 flex h-12 items-center gap-2 pl-3 pr-2 pt-1.5"
+      style={style}
+    >
       {/* The strip's bottom edge. The active tab sits over it, so the tab reads as part of the page. */}
-      <div className="absolute inset-x-0 bottom-0 h-px bg-[#D6CCF8]" aria-hidden="true" />
-      <img src={mascot} alt="" className="mb-1.5 h-6 w-6 shrink-0 object-contain" />
+      <div
+        className="absolute inset-x-0 bottom-0 h-px bg-[#D6CCF8]"
+        aria-hidden="true"
+      />
+      <img
+        src={mascot}
+        alt=""
+        className="mb-1.5 h-6 w-6 shrink-0 object-contain"
+      />
 
-      <div role="tablist" aria-label="Tabs" className="flex min-w-0 flex-1 items-center gap-1 self-stretch pl-1">
+      <div
+        role="tablist"
+        aria-label="Tabs"
+        className="flex min-w-0 flex-1 items-center gap-1 self-stretch pl-1"
+      >
         {tabs.map((tab, index) => {
           const active = tab.id === activeTabId;
           // A divider after each tab (the last one separates it from +), except where it would touch the active tab.
