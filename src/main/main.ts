@@ -5,7 +5,7 @@ import { configureWebSession } from './browser/webSession';
 import { loadLocalStore } from './data/localStore';
 import { startSync } from './data/syncEngine';
 import { registerIpc } from './ipc';
-import { createWindow, setAppMenu, setDevDockIcon } from './windows';
+import { createWindow, setAppMenu, setDevDockIcon, shouldQuitOnLastWindow } from './windows';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -44,7 +44,8 @@ app.whenReady().then(() => {
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  // Held false for the beat between the Dashboard closing and the browser opening.
+  if (process.platform !== 'darwin' && shouldQuitOnLastWindow()) {
     app.quit();
   }
 });

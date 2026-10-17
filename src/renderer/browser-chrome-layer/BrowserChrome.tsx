@@ -9,8 +9,8 @@ import mascot from '../assets/mascot.svg';
 
 // The splash stays up at least this long, even if everything loads instantly.
 const MIN_SPLASH_MS = 5000;
-// The gradient's own fade-in. The chrome waits for it, so it only ever appears behind the glass.
-const GLASS_IN_MS = 900;
+// The chrome's frame scaling and blurring in (matches .chrome-materialize).
+const CHROME_IN_MS = 1000;
 // The sound starts a beat before the glass begins to clear, so they land together.
 const SOUND_LEAD_MS = 120;
 // The glass clearing (matches the .splash-leaving animations).
@@ -20,8 +20,9 @@ const STRIP_DELAY = 120;
 const TOOLBAR_DELAY = 420;
 const LAUNCH_PAGE_DELAY = 520;
 
-// splash (glass over white) → loaded (the chrome's empty frame, blurred behind the glass)
-// → reveal (sound, glass clearing, contents fading in) → ready (safe to measure the page area for websites).
+// splash (glass over the blurred wallpaper, no chrome) → loaded (the chrome's empty frame scales and
+// blurs in behind the glass) → reveal (sound, glass clearing, contents fading in)
+// → ready (safe to measure the page area for websites).
 type Phase = 'splash' | 'loaded' | 'reveal' | 'ready';
 
 const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
@@ -50,15 +51,15 @@ function useLaunchSequence() {
     let cancelled = false;
     const timers: number[] = [];
 
-    const minimumSplash = wait(MIN_SPLASH_MS);
-
-    void Promise.all([wait(GLASS_IN_MS), loadChrome()])
+    // The chrome starts coming in late enough that it lands right as the minimum splash ends,
+    // so the glass and spinner hold first and the sound follows the chrome without a gap.
+    void Promise.all([wait(MIN_SPLASH_MS - CHROME_IN_MS), loadChrome()])
       .then(() => {
         if (!cancelled) {
           setPhase('loaded');
         }
 
-        return minimumSplash;
+        return wait(CHROME_IN_MS);
       })
       .then(() => {
         if (cancelled) {
@@ -135,15 +136,11 @@ function BrowserChrome() {
   };
 
   return (
-    // Plain white behind the glass at first, then the purple tab strip and white page once loaded.
-    // chrome-waiting freezes every entrance until the glass starts clearing.
-    <div
-      className={`browser-chrome relative h-screen overflow-hidden transition-colors duration-500 ${
-        showChrome ? 'bg-[#EDE7FF]' : 'bg-white'
-      } ${phase === 'loaded' ? 'chrome-waiting' : ''}`}
-    >
+    // Nothing behind the glass at first but the (OS-blurred) wallpaper; once loaded, the chrome's frame
+    // scales and blurs in. chrome-waiting freezes every entrance inside it until the glass starts clearing.
+    <div className={`browser-chrome relative h-screen overflow-hidden ${phase === 'loaded' ? 'chrome-waiting' : ''}`}>
       {showChrome && (
-        <>
+        <div className="chrome-materialize absolute inset-0 bg-[#EDE7FF]">
           <TabStrip style={{ animationDelay: `${STRIP_DELAY}ms` }} />
           <main
             id="browser-chrome-card"
@@ -167,7 +164,7 @@ function BrowserChrome() {
               )}
             </div>
           </main>
-        </>
+        </div>
       )}
 
       {phase !== 'ready' && <SplashScreen leaving={phase === 'reveal'} />}

@@ -46,6 +46,12 @@
     font-family: var(--font-sans);
     background-color: #ffffff;
   }
+
+  /* The browser window is transparent: the splash shows the blurred wallpaper until the chrome is in. */
+  html[data-window="browser"],
+  html[data-window="browser"] body {
+    background-color: transparent;
+  }
 }
 
 @layer components {
@@ -71,10 +77,6 @@
 
   .enter-blur {
     animation: blur-fade-in 0.55s ease-out both;
-  }
-
-  .enter-blur-slow {
-    animation: blur-fade-in 1.05s ease-out both;
   }
 
   @keyframes blur-fade-out {
@@ -225,97 +227,53 @@
 
   /* ---------- Browser: launch splash ---------- */
 
-  /* No `to` frame: each layer fades up to its own resting opacity below. */
-  @keyframes splash-layer-in {
-    from {
-      opacity: 0;
-    }
-  }
-
   @keyframes splash-layer-out {
     to {
       opacity: 0;
     }
   }
 
-  @keyframes splash-gradient-out {
-    to {
-      opacity: 0;
-      filter: blur(56px);
-      transform: scale(1.2);
-    }
+  /* Translucent black over the OS-blurred wallpaper. The window's own acrylic/vibrancy
+     is the only blur; a second backdrop-filter on top of it piled another one on. */
+  .splash-tint {
+    background-color: rgba(0, 0, 0, 0.3);
   }
 
-  /* Frosted glass: the chrome loads behind this, visible only as soft shapes. */
-  @keyframes splash-glass-clear {
-    from {
-      backdrop-filter: blur(80px) saturate(1.3);
-    }
-
-    to {
-      backdrop-filter: blur(0) saturate(1);
-    }
+  /* A calm, steady turn. */
+  .splash-spinner {
+    animation: chrome-spin 2.4s linear infinite;
   }
 
-  .splash-backdrop {
-    backdrop-filter: blur(80px) saturate(1.3);
+  /* Leaving: the tint and the spinner fade away. The chrome underneath is already in. */
+  .splash-leaving .splash-tint {
+    animation: splash-layer-out 0.9s cubic-bezier(0.4, 0, 0.2, 1) both;
   }
 
-  /* White to #9572FF, with soft purple pools in the lower corners. Only the white end is
-     see-through (the blurred chrome shows faintly up top); the purple end is solid.
-     Blurred and oversized so its edges never show. */
-  .splash-gradient {
-    background:
-      radial-gradient(55% 40% at 88% 100%, #9572ff, transparent 70%),
-      radial-gradient(50% 35% at 8% 96%, rgba(149, 114, 255, 0.7), transparent 70%),
-      linear-gradient(
-        180deg,
-        rgba(255, 255, 255, 0.45) 0%,
-        rgba(240, 235, 255, 0.6) 30%,
-        rgba(214, 200, 255, 0.85) 60%,
-        #9572ff 100%
-      );
-    filter: blur(28px);
-    transform: scale(1.12);
-    animation: splash-layer-in 0.9s ease-out backwards;
-  }
-
-  /* Texture, drawn by inline SVG noise filters (data: is allowed by the CSP's img-src):
-     a fine grain on top of a coarser, softer mottling, so the glass reads as a material. */
-  .splash-grain {
-    background-image:
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23m)' opacity='0.55'/%3E%3C/svg%3E");
-    background-size: 160px, 420px;
-    opacity: 0.5;
-    mix-blend-mode: overlay;
-    animation: splash-layer-in 0.9s ease-out backwards;
-  }
-
-  /* The wordmark file is already black; keep it that way on the splash. */
-  .splash-wordmark {
-    filter: none;
-  }
-
-  /* Leaving: the glass clears into focus while the gradient and grain blow away. */
-  .splash-leaving .splash-backdrop {
-    animation: splash-glass-clear 0.9s cubic-bezier(0.4, 0, 0.2, 1) both;
-  }
-
-  .splash-leaving .splash-gradient {
-    animation: splash-gradient-out 0.9s cubic-bezier(0.4, 0, 0.2, 1) both;
-  }
-
-  .splash-leaving .splash-grain {
-    animation: splash-layer-out 0.6s ease-in both;
-  }
-
-  .splash-leaving .splash-wordmark-wrap {
-    animation: blur-fade-out 0.55s ease-in both;
+  .splash-leaving .splash-spinner-wrap {
+    animation: splash-layer-out 0.55s ease-in both;
   }
 
   /* ---------- Browser: chrome entrance ---------- */
   /* `backwards` fill: the start frame holds during the delay, and nothing lingers after the end. */
+
+  /* The chrome's empty frame materializes behind the splash glass, over the wallpaper. */
+  @keyframes chrome-materialize {
+    from {
+      opacity: 0;
+      transform: scale(0.94);
+      filter: blur(24px);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1);
+      filter: blur(0);
+    }
+  }
+
+  .chrome-materialize {
+    animation: chrome-materialize 1s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  }
 
   @keyframes chrome-drop {
     from {
@@ -420,10 +378,9 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .splash-backdrop,
-    .splash-gradient,
-    .splash-grain,
-    .splash-wordmark-wrap,
+    .splash-tint,
+    .splash-spinner-wrap,
+    .chrome-materialize,
     .chrome-drop,
     .chrome-item,
     .tab-in,

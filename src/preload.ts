@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
+// The preload runs before the page. The browser window's page is transparent only once this
+// is set, so the first painted frame isn't the white body behind the splash.
+const windowKind = new URLSearchParams(window.location.search).get('window');
+if (windowKind && document.documentElement) {
+  document.documentElement.dataset.window = windowKind;
+}
+
 const auth: BrowsieAuthAPI = {
   getSession: () => ipcRenderer.invoke('auth:get-session'),
   signIn: () => ipcRenderer.invoke('auth:sign-in'),

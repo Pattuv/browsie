@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, type BrowserWindowConstructorOptions, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, Menu, screen, type BrowserWindowConstructorOptions, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { attachTabs, handleShortcut } from './browser/tabs';
@@ -163,6 +163,10 @@ let menuPickerWindow: BrowserWindow | null = null;
 let browserWindow: BrowserWindow | null = null;
 // Set once the whole app is quitting, so closing the browser doesn't reopen the Dashboard on the way out.
 let quitting = false;
+// True while the Dashboard is gone and the browser window does not exist yet.
+let holdingLastWindow = false;
+
+export const shouldQuitOnLastWindow = () => !holdingLastWindow;
 
 app.on('before-quit', () => {
   quitting = true;
@@ -264,18 +268,35 @@ export const openModePicker = () => {
   createMenuPickerWindow();
 };
 
+// How long the desktop stays up after the Dashboard has closed, before the browser is created.
+const BROWSER_HANDOFF_MS = 400;
+
 // The browser: one frameless, always-fullscreen window. Its own page is the chrome (tabs, address
 // bar), which is trusted and gets the preload. Websites are separate views on top (see browser/tabs.ts).
-const createBrowserWindow = () => {
+// Created only after the Dashboard has closed and the handoff has elapsed. Nothing is constructed before that.
+const createBrowserWindow = (display: Electron.Display) => {
   const window = new BrowserWindow({
-    // Hidden until the first frame is painted, so it never flashes a half-drawn window.
+    ...display.bounds,
+    // Hidden until the splash has painted, so the first thing on screen is the spinner.
+    // Not created fullscreen: on Windows that ignores `show: false` and plays the fullscreen animation immediately.
     show: false,
     frame: false,
-    fullscreen: true,
     fullscreenable: true,
     autoHideMenuBar: true,
-    // The splash fades its gradient in over plain white.
-    backgroundColor: '#ffffff',
+    // Transparent windows on Windows flash a white frame unless the thick resize border is off.
+    thickFrame: false,
+    hasShadow: false,
+    roundedCorners: false,
+    paintWhenInitiallyHidden: true,
+    // The splash is see-through: the OS blurs the desktop wallpaper behind the window (acrylic on
+    // Windows 11, vibrancy on mac) with a translucent black over that. The chrome is opaque once it's in.
+    // `transparent` is what makes it actually see-through; acrylic alone paints an opaque grey.
+    transparent: true,
+    backgroundColor: '#00000000',
+    ...(isWindows ? { backgroundMaterial: 'acrylic' as const } : {}),
+    // macOS honors `show: false` with `fullscreen: true`. Windows does not, so it enters fullscreen
+    // below, while still hidden.
+    ...(isMac ? { fullscreen: true, vibrancy: 'fullscreen-ui' as const, visualEffectState: 'active' as const } : {}),
     icon: devIconPath(isWindows ? 'windows/icon.ico' : isMac ? 'macos/1024x1024.png' : 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -288,6 +309,7 @@ const createBrowserWindow = () => {
     },
   });
   browserWindow = window;
+  holdingLastWindow = false;
 
   disableZoom(window.webContents);
   lockNavigation(window.webContents);
@@ -297,10 +319,11 @@ const createBrowserWindow = () => {
     }
   });
 
-  // Fullscreen is the whole point, so if anything knocks us out of it (a video leaving its own
-  // fullscreen, the OS), step right back in.
+  // Armed once the open transition has finished. Forcing fullscreen back during show() makes
+  // Windows leave and re-enter it, which flashes the whole display.
+  let enforceFullscreen = false;
   window.on('leave-full-screen', () => {
-    if (!window.isDestroyed()) {
+    if (enforceFullscreen && !window.isDestroyed() && !window.isFullScreen()) {
       window.setFullScreen(true);
     }
   });
@@ -308,11 +331,23 @@ const createBrowserWindow = () => {
   attachTabs(window);
 
   window.once('ready-to-show', () => {
-    window.setFullScreen(true);
-    bringToFront(window);
-    // The Dashboard goes only after the browser is up, so there's never a moment with zero
-    // windows (Windows/Linux would quit the app right there).
-    mainWindow?.close();
+    // First frame is the translucent splash and the spinner. Show that, then the page plays the rest.
+    if (window.isDestroyed()) {
+      return;
+    }
+
+    if (!window.isFullScreen()) {
+      window.setFullScreen(true);
+    }
+
+    window.show();
+    window.focus();
+
+    setTimeout(() => {
+      if (!window.isDestroyed()) {
+        enforceFullscreen = true;
+      }
+    }, 700);
   });
 
   // Leaving the browser lands back on the Dashboard. Opened in 'close' (before the window is gone)
@@ -330,13 +365,39 @@ const createBrowserWindow = () => {
 };
 
 // "Open browser" on the Dashboard. Takes no URL or options on purpose: the renderer can only say "go".
+// Closes the Dashboard first. The browser window is created only after that close, plus the handoff.
 export const openBrowser = () => {
   if (browserWindow) {
     bringToFront(browserWindow);
     return;
   }
 
-  createBrowserWindow();
+  if (holdingLastWindow) {
+    return;
+  }
+
+  const display = mainWindow ? screen.getDisplayMatching(mainWindow.getBounds()) : screen.getPrimaryDisplay();
+
+  const launch = () => {
+    setTimeout(() => {
+      if (quitting) {
+        holdingLastWindow = false;
+        return;
+      }
+
+      createBrowserWindow(display);
+    }, BROWSER_HANDOFF_MS);
+  };
+
+  holdingLastWindow = true;
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.once('closed', launch);
+    mainWindow.close();
+    return;
+  }
+
+  launch();
 };
 
 export const createWindow = () => {
