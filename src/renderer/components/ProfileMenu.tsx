@@ -57,7 +57,7 @@ function MenuItem({ icon: Icon, label, disabled = false, danger = false, trailin
       disabled={disabled}
       onClick={onClick}
       className={`smooth flex h-9 w-full cursor-pointer items-center gap-2 rounded-[16px] px-3.5 text-left text-[15px] font-[460] tracking-tight transition-colors duration-200 ease-out disabled:cursor-default disabled:text-zinc-400 ${
-        danger ? 'enabled:hover:bg-[#E81123] enabled:hover:text-white' : 'enabled:hover:bg-zinc-900/5'
+        danger ? 'enabled:hover:bg-[#E81123] enabled:hover:text-white' : 'enabled:hover:bg-zinc-100'
       }`}
     >
       <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
@@ -108,7 +108,7 @@ const Divider = () => <div className="mx-2 h-px shrink-0 bg-zinc-200" />;
 
 function UsageCard() {
   return (
-    <div className="smooth rounded-[22px] bg-zinc-900/5 px-3.5 pb-3 pt-3">
+    <div className="smooth rounded-[22px] bg-zinc-100 px-3.5 pb-3 pt-3">
       <div className="flex items-center justify-between">
         <p className="text-sm tracking-tight text-zinc-600">AI usage</p>
         <span className="smooth flex items-center gap-1 rounded-lg bg-[#DDF0E2] px-2 py-0.5 text-[10px] font-medium text-[#1F8A3B]">
@@ -317,7 +317,7 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
                 setClosing(false);
               }
             }}
-            className={`${closing ? 'exit-blur-fast pointer-events-none' : 'enter-blur-fast'} smooth app-region-no-drag absolute z-40 flex w-80 flex-col gap-1.5 rounded-[34px] border border-zinc-200/70 bg-white/75 p-3 backdrop-blur-2xl backdrop-saturate-150 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.25)] ${
+            className={`${closing ? 'exit-blur-fast pointer-events-none' : 'enter-blur-fast'} smooth app-region-no-drag absolute z-40 flex w-80 flex-col gap-1.5 rounded-[34px] border border-zinc-200 bg-white p-3 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.25)] ${
               panelTarget ? 'top-3 right-3' : '-right-3 top-full mt-3'
             }`}
           >

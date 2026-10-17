@@ -106,10 +106,8 @@
     }
   }
 
-  /* `backwards`, not `both`: a held `filter: blur(0)` would make this element a backdrop root, and
-     backdrop-filter on anything inside it (the profile menu's glass) would see nothing behind it. */
   .enter-blur {
-    animation: blur-fade-in 0.55s ease-out backwards;
+    animation: blur-fade-in 0.55s ease-out both;
   }
 
   @keyframes blur-fade-out {
@@ -163,7 +161,7 @@
 
   /* Small popovers (profile menu) */
   .enter-blur-fast {
-    animation: blur-fade-in 0.2s ease-out backwards;
+    animation: blur-fade-in 0.2s ease-out both;
   }
 
   .exit-blur-fast {
