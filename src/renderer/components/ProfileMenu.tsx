@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { DollarSign, LogOut, Users, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, Check, Gauge, Info, Lock, LogOut, Users, type LucideIcon } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import { useLockdownStore } from '../stores/browserStore';
 import PrimaryButton from './PrimaryButton';
 
 const OPENROUTER_BILLING_URL = 'https://openrouter.ai/settings/credits';
+
+// Placeholder usage figures until billing is wired up.
+const USAGE = { available: '6.20', used: '$3.80', cap: '$10.00', balance: '$14.50', percentUsed: 38 };
 
 // The Google profile photo main downloaded at sign-in (a data: URL), or a grey placeholder.
 function Avatar({
@@ -39,23 +43,159 @@ function Avatar({
 type MenuItemProps = {
   icon: LucideIcon;
   label: string;
+  disabled?: boolean;
   danger?: boolean;
+  trailing?: ReactNode;
   onClick?: () => void;
 };
 
-function MenuItem({ icon: Icon, label, danger = false, onClick }: MenuItemProps) {
+function MenuItem({ icon: Icon, label, disabled = false, danger = false, trailing, onClick }: MenuItemProps) {
   return (
     <button
       type="button"
       role="menuitem"
+      disabled={disabled}
       onClick={onClick}
-      className={`flex h-12 w-full cursor-pointer items-center gap-3 rounded-xl px-2.5 text-left text-base tracking-tight transition-colors duration-200 ease-out ${
-        danger ? 'hover:bg-[#E81123] hover:text-white' : 'hover:bg-zinc-100'
+      className={`smooth flex h-9 w-full cursor-pointer items-center gap-2 rounded-[16px] px-3.5 text-left text-[15px] font-[460] tracking-tight transition-colors duration-200 ease-out disabled:cursor-default disabled:text-zinc-400 ${
+        danger ? 'enabled:hover:bg-[#E81123] enabled:hover:text-white' : 'enabled:hover:bg-zinc-900/5'
       }`}
     >
-      <Icon size={22} strokeWidth={1.5} aria-hidden="true" />
-      {label}
+      <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
+      <span className="flex-1">{label}</span>
+      {trailing}
     </button>
+  );
+}
+
+type InfoTipProps = {
+  /** left: opens beside the icon, out past the panel's edge. top: opens above it. */
+  side: 'left' | 'top';
+  iconSize: number;
+  children: ReactNode;
+  action: { label: string; onClick?: () => void };
+};
+
+// An (i) that opens a small black card on hover or focus. The card's padding bridges the gap to the
+// icon, so the pointer can travel into it and press its button.
+function InfoTip({ side, iconSize, children, action }: InfoTipProps) {
+  return (
+    <span tabIndex={0} aria-label="More info" className="group/tip relative flex cursor-default outline-none">
+      <Info size={iconSize} aria-hidden="true" />
+      <span
+        role="tooltip"
+        className={`invisible absolute z-50 opacity-0 transition-[opacity,visibility] delay-100 duration-150 ease-out group-hover/tip:visible group-hover/tip:opacity-100 group-focus-within/tip:visible group-focus-within/tip:opacity-100 ${
+          side === 'left'
+            ? 'right-full top-1/2 -translate-y-1/2 pr-3'
+            : 'bottom-full left-1/2 -translate-x-1/2 pb-2.5'
+        }`}
+      >
+        <span className="smooth flex w-60 flex-col gap-2.5 rounded-[20px] bg-black p-3.5 text-left text-xs font-normal leading-snug tracking-tight text-white shadow-[0_12px_32px_-12px_rgba(0,0,0,0.5)]">
+          <span>{children}</span>
+          <button
+            type="button"
+            onClick={action.onClick}
+            className="smooth h-8 w-full cursor-pointer rounded-[13px] bg-white text-xs font-medium text-black transition-transform duration-200 ease-out active:scale-[0.98]"
+          >
+            {action.label}
+          </button>
+        </span>
+      </span>
+    </span>
+  );
+}
+
+const Divider = () => <div className="mx-2 h-px shrink-0 bg-zinc-200" />;
+
+function UsageCard() {
+  return (
+    <div className="smooth rounded-[22px] bg-zinc-900/5 px-3.5 pb-3 pt-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm tracking-tight text-zinc-600">AI usage</p>
+        <span className="smooth flex items-center gap-1 rounded-lg bg-[#DDF0E2] px-2 py-0.5 text-[10px] font-medium text-[#1F8A3B]">
+          <Check size={10} strokeWidth={2.5} aria-hidden="true" />
+          Plenty left
+        </span>
+      </div>
+
+      {/* Equal space above (to AI usage) and below (to the bar), so the amount sits centered between them. */}
+      <p className="mt-2.5 flex items-baseline gap-1 leading-none">
+        <span className="text-lg text-zinc-600">$</span>
+        <span className="bric text-[28px] font-semibold leading-none tracking-tight">
+          {USAGE.available}
+        </span>
+        <span className="text-sm font-medium tracking-tight">available now</span>
+      </p>
+
+      <div className="mx-0.5 mt-2.5 h-1.5 overflow-hidden rounded-full bg-zinc-300">
+        <div className="h-full rounded-full bg-[#9572FF]" style={{ width: `${USAGE.percentUsed}%` }} />
+      </div>
+
+      <dl className="mt-2.5 flex flex-col gap-1.5 text-sm tracking-tight">
+        <div className="flex items-center justify-between">
+          <dt className="flex items-center gap-1 text-zinc-400">
+            {/* Configuring the cap lands with billing; the button is here so the layout is final. */}
+            <InfoTip side="left" iconSize={13} action={{ label: 'Configure spending cap' }}>
+              Your spending cap is the most Browsie&rsquo;s AI can spend from your OpenRouter credit balance. Once
+              it&rsquo;s used up, the AI stops until you raise it, or until it resets if you&rsquo;ve set it to
+              reset on a schedule.
+            </InfoTip>
+            Spending cap
+          </dt>
+          <dd className="text-zinc-800">
+            {USAGE.used} of {USAGE.cap} used
+          </dd>
+        </div>
+        <div className="flex items-center justify-between">
+          <dt className="text-zinc-400">Credit balance</dt>
+          <dd className="text-zinc-800">{USAGE.balance}</dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+function LockdownRow() {
+  const enabled = useLockdownStore((state) => state.enabled);
+  const toggle = useLockdownStore((state) => state.toggle);
+
+  return (
+    <div className="flex items-center gap-3 px-3.5 py-1">
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-2 text-[15px] font-[460] tracking-tight">
+          <Lock size={20} strokeWidth={1.75} aria-hidden="true" />
+          <span className="flex items-center gap-1.5">
+            Lockdown Mode
+            {/* Settings panel lands later. */}
+            <span className="flex text-zinc-600">
+              <InfoTip side="top" iconSize={14} action={{ label: 'Change this in settings' }}>
+                When Lockdown Mode is on, the browser is only usable by the agent. The agent only works when
+                Lockdown Mode is on.
+              </InfoTip>
+            </span>
+          </span>
+        </p>
+        <p className="mt-1 text-xs tracking-tight text-zinc-600">
+          {enabled ? 'Browser is locked, agent-control only.' : 'Full browser control'}
+        </p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label="Lockdown Mode"
+        data-click-sound="heavy"
+        onClick={toggle}
+        className={`relative h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-out ${
+          enabled ? 'bg-[#9572FF]' : 'bg-zinc-300'
+        }`}
+      >
+        <span
+          className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out ${
+            enabled ? 'translate-x-5' : 'translate-x-0'
+          }`}
+        />
+      </button>
+    </div>
   );
 }
 
@@ -64,7 +204,7 @@ type ProfileMenuProps = {
   triggerClassName?: string;
   /** Called while the menu is mounted, including the blur-out, so a browser overlay can stay up. */
   onOpenChange?: (open: boolean) => void;
-  /** Replaces Log out: e.g. Quit in the browser chrome, which leaves the browser for the dashboard. */
+  /** Browser chrome variant: adds Lockdown Mode and replaces Log out with Quit (back to the dashboard). */
   quit?: { label?: string; onClick: () => void };
   /** CSS selector for a chrome card. The panel is portaled there, inset evenly from its top-right corner. */
   panelTarget?: string;
@@ -74,6 +214,8 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
   const firstName = useAuthStore((state) => state.firstName);
   const email = useAuthStore((state) => state.email);
   const pictureDataUrl = useAuthStore((state) => state.pictureDataUrl);
+  // Lockdown only exists in the chrome; there it locks Change mode and Quit.
+  const locked = useLockdownStore((state) => state.enabled) && Boolean(quit);
   const [open, setOpen] = useState(false);
   // Still mounted while the blur-out plays; unmounted when that animation ends.
   const [closing, setClosing] = useState(false);
@@ -175,48 +317,57 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
                 setClosing(false);
               }
             }}
-            className={`${closing ? 'exit-blur-fast pointer-events-none' : 'enter-blur-fast'} app-region-no-drag absolute z-40 w-80 border border-zinc-200 bg-white p-4 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.25)] ${
-              panelTarget ? 'top-3 right-3 rounded-2xl' : '-right-3 top-full mt-3 rounded-[1.75rem]'
+            className={`${closing ? 'exit-blur-fast pointer-events-none' : 'enter-blur-fast'} smooth app-region-no-drag absolute z-40 flex w-80 flex-col gap-1.5 rounded-[34px] border border-zinc-200/70 bg-white/75 p-3 backdrop-blur-2xl backdrop-saturate-150 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.25)] ${
+              panelTarget ? 'top-3 right-3' : '-right-3 top-full mt-3'
             }`}
           >
-          <div className="flex items-center gap-3 px-1">
-            <Avatar
-              pictureDataUrl={pictureDataUrl}
-              className="h-11 w-11 shrink-0"
-            />
-            <div className="min-w-0">
-              <p className="bric truncate text-xl leading-tight tracking-tight">
-                {firstName}
-              </p>
-              <p className="truncate text-sm tracking-tight text-zinc-500">
-                {email}
-              </p>
+            <div className="flex items-center gap-3 px-2 py-1">
+              <Avatar
+                pictureDataUrl={pictureDataUrl}
+                className="h-10 w-10 shrink-0"
+              />
+              <div className="min-w-0">
+                <p className="bric truncate text-xl font-medium leading-tight tracking-tight">
+                  {firstName}
+                </p>
+                <p className="truncate text-sm tracking-tight text-zinc-600">
+                  {email}
+                </p>
+              </div>
             </div>
-          </div>
 
-          <div className="mt-4 flex flex-col">
-            <MenuItem icon={Users} label="Change mode" onClick={changeMode} />
+            <Divider />
+            <UsageCard />
             <MenuItem
-              icon={DollarSign}
-              label="Check Openrouter billing"
+              icon={Gauge}
+              label="Check OpenRouter billing"
               onClick={openBilling}
+              trailing={<ArrowUpRight size={16} strokeWidth={1.75} className="text-zinc-600" aria-hidden="true" />}
             />
-          </div>
+            <Divider />
 
-          {quit ? (
-            <>
-              <div className="mx-1 my-2 h-px bg-zinc-200" />
-              <MenuItem icon={LogOut} label={quit.label ?? 'Quit'} danger onClick={quitApp} />
-            </>
-          ) : (
-            // Main wipes the vault and pushes SIGNED_OUT; the OnboardingLayer gate then swaps Dashboard for Auth.
-            <PrimaryButton
-              onClick={() => window.browsie?.auth.signOut()}
-              className="mt-3 w-full"
-            >
-              Log out
-            </PrimaryButton>
-          )}
+            {quit ? (
+              <>
+                <LockdownRow />
+                <Divider />
+                {/* A pair, so tighter than the panel's gap between sections. */}
+                <div className="flex flex-col gap-0.5">
+                  <MenuItem icon={Users} label="Change mode" disabled={locked} onClick={changeMode} />
+                  <MenuItem icon={LogOut} label={quit.label ?? 'Quit'} disabled={locked} danger onClick={quitApp} />
+                </div>
+              </>
+            ) : (
+              <>
+                <MenuItem icon={Users} label="Change mode" onClick={changeMode} />
+                {/* Main wipes the vault and pushes SIGNED_OUT; the OnboardingLayer gate then swaps Dashboard for Auth. */}
+                <PrimaryButton
+                  onClick={() => window.browsie?.auth.signOut()}
+                  className="smooth h-10! w-full rounded-[18px]!"
+                >
+                  Log out
+                </PrimaryButton>
+              </>
+            )}
           </div>,
         )}
     </div>

@@ -85,15 +85,6 @@ function NewTab({ entranceDelay: initialDelay }: NewTabProps) {
       >
         <button
           type="button"
-          aria-label="Go to Google"
-          title="Google"
-          onClick={() => browser?.navigate("google.com")}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-900 transition-[background-color,transform] duration-150 hover:bg-zinc-100 active:scale-90"
-        >
-          <i className="bi bi-google text-[1.05rem]" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
           aria-label="Google apps"
           title="Google apps"
           onClick={() => browser?.navigate(GOOGLE_APPS_URL)}

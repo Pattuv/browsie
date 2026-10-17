@@ -106,8 +106,10 @@
     }
   }
 
+  /* `backwards`, not `both`: a held `filter: blur(0)` would make this element a backdrop root, and
+     backdrop-filter on anything inside it (the profile menu's glass) would see nothing behind it. */
   .enter-blur {
-    animation: blur-fade-in 0.55s ease-out both;
+    animation: blur-fade-in 0.55s ease-out backwards;
   }
 
   @keyframes blur-fade-out {
@@ -161,7 +163,7 @@
 
   /* Small popovers (profile menu) */
   .enter-blur-fast {
-    animation: blur-fade-in 0.2s ease-out both;
+    animation: blur-fade-in 0.2s ease-out backwards;
   }
 
   .exit-blur-fast {
@@ -455,6 +457,12 @@
       animation-duration: 1ms !important;
       animation-delay: 0ms !important;
     }
+  }
+
+  /* Squircle corners, ~Figma's 100% corner smoothing. The curve sits tighter than a plain arc at the
+     same radius, so pair it with a somewhat larger radius. Not for circles or pills. */
+  .smooth {
+    corner-shape: superellipse(2);
   }
 
   /* Electron hidden-titlebar window drag (onboarding shell) */
