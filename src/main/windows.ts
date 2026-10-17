@@ -4,15 +4,11 @@ import {
   Menu,
   screen,
   type BrowserWindowConstructorOptions,
-  type MenuItemConstructorOptions,
 } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { attachTabs, handleShortcut } from "./browser/tabs";
 import { getData } from "./data/localStore";
-
-const isMac = process.platform === "darwin";
-const isWindows = process.platform === "win32";
 
 const disableZoom = (webContents: Electron.WebContents) => {
   webContents.setVisualZoomLevelLimits(1, 1);
@@ -23,10 +19,9 @@ const disableZoom = (webContents: Electron.WebContents) => {
       return;
     }
 
-    const hasZoomModifier = input.control || input.meta;
     const isZoomKey = ["+", "-", "=", "0", "Plus", "Minus"].includes(input.key);
 
-    if (hasZoomModifier && isZoomKey) {
+    if (input.control && isZoomKey) {
       event.preventDefault();
     }
   });
@@ -38,74 +33,20 @@ const DEV_ICONS_DIR = "src/renderer/assets/icons";
 const devIconPath = (file: string) =>
   app.isPackaged ? undefined : path.join(app.getAppPath(), DEV_ICONS_DIR, file);
 
-export const setDevDockIcon = () => {
-  const iconPath = devIconPath("macos/1024x1024.png");
-
-  if (isMac && iconPath) {
-    app.dock?.setIcon(iconPath);
-  }
-};
-
-/** Shared chrome: mac keeps traffic lights; Windows/Linux render custom caption buttons in the renderer. */
-const windowChromeOptions = (): Partial<BrowserWindowConstructorOptions> => {
-  if (isMac) {
-    return {
-      titleBarStyle: "hidden",
-      trafficLightPosition: { x: 32, y: 32 },
-      minimizable: false,
-      maximizable: false,
-      resizable: true,
-      fullscreenable: false,
-    };
-  }
-
-  return {
-    titleBarStyle: "hidden",
-    backgroundColor: "#ffffff",
-    icon: devIconPath(isWindows ? "windows/icon.ico" : "icon.png"),
-    autoHideMenuBar: true,
-    minimizable: true,
-    maximizable: true,
-    resizable: true,
-    fullscreenable: false,
-  };
-};
+/** Shared chrome: hidden title bar, custom caption buttons in the renderer. */
+const windowChromeOptions = (): Partial<BrowserWindowConstructorOptions> => ({
+  titleBarStyle: "hidden",
+  backgroundColor: "#ffffff",
+  icon: devIconPath("windows/icon.ico"),
+  autoHideMenuBar: true,
+  minimizable: true,
+  maximizable: true,
+  resizable: true,
+  fullscreenable: false,
+});
 
 export const setAppMenu = () => {
-  if (isWindows) {
-    Menu.setApplicationMenu(null);
-    return;
-  }
-
-  const template: MenuItemConstructorOptions[] = [
-    ...(isMac
-      ? [
-          {
-            label: app.name,
-            submenu: [
-              { role: "about" as const },
-              { type: "separator" as const },
-              { role: "services" as const },
-              { type: "separator" as const },
-              { role: "hide" as const },
-              { role: "hideOthers" as const },
-              { role: "unhide" as const },
-              { type: "separator" as const },
-              { role: "quit" as const },
-            ],
-          },
-        ]
-      : []),
-    { role: "fileMenu" },
-    { role: "editMenu" },
-    {
-      label: "View",
-      submenu: [{ role: "togglefullscreen" }],
-    },
-    { role: "windowMenu" },
-  ];
-
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  Menu.setApplicationMenu(null);
 };
 
 // __dirname is .vite/build at runtime (Vite bundles main there), so this path
@@ -115,9 +56,7 @@ const rendererIndexPath = () =>
 
 // Windows paths are case-insensitive and the drive letter's case varies (C: vs c:), so compare normalized.
 const isSamePath = (a: string, b: string) =>
-  isWindows
-    ? path.normalize(a).toLowerCase() === path.normalize(b).toLowerCase()
-    : a === b;
+  path.normalize(a).toLowerCase() === path.normalize(b).toLowerCase();
 
 // "Is this one of Browsie's own pages?" Dev: anything on the Vite dev server.
 // Packaged: exactly our index.html on disk (any ?window=... query is fine).
@@ -239,7 +178,7 @@ const createMenuPickerWindow = () => {
   loadRenderer(menuPickerWindow, "menu-picker");
 
   // Create main before this window finishes closing so window-all-closed
-  // does not quit the app on Windows/Linux during the handoff.
+  // does not quit the app during the handoff.
   // Opened from "Change mode", main is already there, so don't make a second one.
   menuPickerWindow.on("close", () => {
     if (hasUserMode() && !mainWindow) {
@@ -269,10 +208,6 @@ export const bringToFront = (window: BrowserWindow) => {
   window.show();
   window.focus();
   window.setAlwaysOnTop(false);
-
-  if (isMac) {
-    app.focus({ steal: true });
-  }
 };
 
 // "Change mode" in the profile menu: bring up the picker (or the one already open).
@@ -288,17 +223,24 @@ export const openModePicker = () => {
 // How long the desktop stays up after the Dashboard has closed, before the browser is created.
 const BROWSER_HANDOFF_MS = 400;
 
-// The browser: one frameless, always-fullscreen window. Its own page is the chrome (tabs, address
-// bar), which is trusted and gets the preload. Websites are separate views on top (see browser/tabs.ts).
+// The browser: one frameless window that fills the display and cannot be resized or moved.
+// Its own page is the chrome (tabs, address bar), which is trusted and gets the preload.
+// Websites are separate views on top (see browser/tabs.ts).
 // Created only after the Dashboard has closed and the handoff has elapsed. Nothing is constructed before that.
 const createBrowserWindow = (display: Electron.Display) => {
   const window = new BrowserWindow({
     ...display.bounds,
     // Hidden until the splash has painted, so the first thing on screen is the spinner.
-    // Not created fullscreen: on Windows that ignores `show: false` and plays the fullscreen animation immediately.
+    // Not created fullscreen: Windows ignores `show: false` and plays the fullscreen animation immediately.
     show: false,
     frame: false,
     fullscreenable: true,
+    // Left resizable until kiosk is entered. `resizable: false` pins min and max size,
+    // and that pin blocks the window from growing to cover the display.
+    resizable: true,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
     autoHideMenuBar: true,
     thickFrame: false,
     hasShadow: false,
@@ -306,14 +248,7 @@ const createBrowserWindow = (display: Electron.Display) => {
     paintWhenInitiallyHidden: true,
     // Solid. A transparent window on a second monitor is what flickered.
     backgroundColor: "#111111",
-    ...(isMac ? { fullscreen: true } : {}),
-    icon: devIconPath(
-      isWindows
-        ? "windows/icon.ico"
-        : isMac
-          ? "macos/1024x1024.png"
-          : "icon.png",
-    ),
+    icon: devIconPath("windows/icon.ico"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       sandbox: true,
@@ -322,6 +257,8 @@ const createBrowserWindow = (display: Electron.Display) => {
       webviewTag: false,
       // The startup sound plays without anyone clicking first.
       autoplayPolicy: "no-user-gesture-required",
+      // A video's HTML fullscreen must not resize this window. It is already the whole display.
+      disableHtmlFullscreenWindowResize: true,
     },
   });
   browserWindow = window;
@@ -335,12 +272,73 @@ const createBrowserWindow = (display: Electron.Display) => {
     }
   });
 
-  // Armed once the open transition has finished. Forcing fullscreen back during show() makes
+  // Manual drags only. setBounds / setKiosk do not emit these, so the lock
+  // does not fight the transition into kiosk.
+  window.on("will-resize", (event) => {
+    event.preventDefault();
+  });
+  window.on("will-move", (event) => {
+    event.preventDefault();
+  });
+
+  const lockChrome = () => {
+    if (window.isDestroyed()) {
+      return;
+    }
+
+    window.setResizable(false);
+    window.setMovable(false);
+    window.setMinimizable(false);
+    window.setMaximizable(false);
+  };
+
+  // Armed once the open transition has finished. Forcing kiosk back during show() makes
   // Windows leave and re-enter it, which flashes the whole display.
   let enforceFullscreen = false;
+  let enteringFullscreen = false;
+
+  // Cover the whole display, including the taskbar, then freeze the size.
+  // Resizable has to stay on until that cover happens (see the constructor note).
+  const enterExclusiveFullscreen = () => {
+    if (window.isDestroyed() || enteringFullscreen) {
+      return;
+    }
+
+    if (window.isKiosk()) {
+      lockChrome();
+      return;
+    }
+
+    enteringFullscreen = true;
+
+    try {
+      window.setResizable(true);
+
+      const target = screen.getDisplayMatching(window.getBounds());
+      window.setBounds(target.bounds);
+      window.setKiosk(true);
+
+      if (window.isKiosk()) {
+        lockChrome();
+      }
+    } finally {
+      enteringFullscreen = false;
+    }
+  };
+
+  window.on("enter-full-screen", lockChrome);
   window.on("leave-full-screen", () => {
-    if (enforceFullscreen && !window.isDestroyed() && !window.isFullScreen()) {
-      window.setFullScreen(true);
+    if (enforceFullscreen) {
+      enterExclusiveFullscreen();
+    }
+  });
+  window.on("resize", () => {
+    if (!enforceFullscreen || enteringFullscreen || window.isDestroyed()) {
+      return;
+    }
+
+    if (!window.isKiosk()) {
+      enterExclusiveFullscreen();
     }
   });
 
@@ -352,17 +350,23 @@ const createBrowserWindow = (display: Electron.Display) => {
       return;
     }
 
-    if (!window.isFullScreen()) {
-      window.setFullScreen(true);
-    }
-
+    enterExclusiveFullscreen();
     window.show();
     window.focus();
 
+    // A kiosk request made while the window was hidden can be dropped.
+    // Enter once more only if it never took, so Windows does not leave and re-enter.
+    if (!window.isKiosk()) {
+      enterExclusiveFullscreen();
+    }
+
     setTimeout(() => {
-      if (!window.isDestroyed()) {
-        enforceFullscreen = true;
+      if (window.isDestroyed()) {
+        return;
       }
+
+      enforceFullscreen = true;
+      enterExclusiveFullscreen();
     }, 700);
   });
 

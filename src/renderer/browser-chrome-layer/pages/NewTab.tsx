@@ -6,8 +6,7 @@ import mascot from "../../assets/mascot.svg";
 const GUIDE_URL = "https://browsiedocs.super.site/browsie-help-center";
 const GOOGLE_APPS_URL = "https://about.google/products/";
 
-// Shortcuts use Ctrl on Windows/Linux and ⌘ on Mac (main accepts either).
-const MOD = window.browsie?.platform === "darwin" ? "⌘" : "Ctrl";
+const MOD = "Ctrl";
 
 // Same rotating tips as the dashboard, but about getting around the browser itself.
 const BROWSER_TIPS: Tip[] = [

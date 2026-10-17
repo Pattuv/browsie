@@ -23,7 +23,7 @@ type LiveSession = {
   vault: VaultContents;
   accessToken?: string;
   accessTokenExpiresAt?: number;
-  // False when there's no real keyring (Linux basic_text): this sign-in won't survive a restart.
+  // False when Windows DPAPI could not save the vault: this sign-in won't survive a restart.
   persisted: boolean;
 };
 
@@ -121,8 +121,8 @@ const runSignIn = async (onBrowserReturned?: () => void): Promise<AuthSession> =
     };
     rememberAccessToken(live, tokens);
 
-    // 5. Lock the refresh token in the vault. If there's no real keyring (Linux basic_text) we skip
-    //    writing, so the session lasts for this run only. Telling the user about that is slice 5.
+    // 5. Lock the refresh token in the vault. If DPAPI cannot encrypt it we skip writing,
+    //    so the session lasts for this run only.
     live.persisted = writeVault(live.vault);
 
     signedOutReason = undefined;

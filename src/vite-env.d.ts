@@ -49,7 +49,7 @@ type AuthSession = {
   pictureDataUrl?: string;
   // False when the user didn't grant Drive access on the consent screen.
   syncEnabled?: boolean;
-  // False when this computer has no keyring to save the sign-in (Linux): it ends when the app quits.
+  // False when Windows DPAPI could not save the sign-in: it ends when the app quits.
   rememberedOnDevice?: boolean;
   // Set when Google ended the session (revoked, expired), not the user. Auth can say "sign in again".
   signedOutReason?: 'expired';
@@ -142,7 +142,6 @@ interface BrowsieBrowserAPI {
 }
 
 interface BrowsieAPI {
-  platform: NodeJS.Platform;
   auth: BrowsieAuthAPI;
   data: BrowsieDataAPI;
   browser: BrowsieBrowserAPI;

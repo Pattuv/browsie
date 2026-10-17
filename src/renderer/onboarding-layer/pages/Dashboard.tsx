@@ -250,14 +250,10 @@ function Dashboard() {
     return undefined;
   }, [showRestLayout]);
 
-  const isMac = window.browsie?.platform === "darwin";
-
   return (
     <Boiler>
       <div
-        className={`absolute inset-x-0 z-20 flex h-8 items-center justify-between ${
-          isMac ? "top-6 pl-[4.5rem] pr-10" : "top-4 pl-5 pr-40"
-        } ${revealClass(shouldAnimate.current, showTopBar)}`}
+        className={`absolute inset-x-0 top-4 z-20 flex h-8 items-center justify-between pl-5 pr-40 ${revealClass(shouldAnimate.current, showTopBar)}`}
       >
         <img
           src={wordmark}

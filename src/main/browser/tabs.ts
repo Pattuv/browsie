@@ -542,7 +542,7 @@ export const handleShortcut = (input: Input, source: 'chrome' | 'tab') => {
     return false;
   }
 
-  const ctrl = input.control || input.meta;
+  const ctrl = input.control;
   const key = input.key.toLowerCase();
   const run = (action: () => void) => {
     action();

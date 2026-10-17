@@ -6,8 +6,7 @@ const ICONS_DIR = 'src/renderer/assets/icons';
 module.exports = {
   packagerConfig: {
     asar: true,
-    // .ico and .icns live in separate folders, so pick by the platform being built (Forge builds for the host OS).
-    icon: process.platform === 'darwin' ? `${ICONS_DIR}/macos/icon.icns` : `${ICONS_DIR}/windows/icon.ico`,
+    icon: `${ICONS_DIR}/windows/icon.ico`,
   },
   rebuildConfig: {},
   makers: [
@@ -15,22 +14,6 @@ module.exports = {
       name: '@electron-forge/maker-squirrel',
       config: {
         setupIcon: `${ICONS_DIR}/windows/icon.ico`,
-      },
-    },
-    {
-      name: '@electron-forge/maker-zip',
-      platforms: ['darwin'],
-    },
-    {
-      name: '@electron-forge/maker-deb',
-      config: {
-        options: { icon: `${ICONS_DIR}/icon.png` },
-      },
-    },
-    {
-      name: '@electron-forge/maker-rpm',
-      config: {
-        options: { icon: `${ICONS_DIR}/icon.png` },
       },
     },
   ],

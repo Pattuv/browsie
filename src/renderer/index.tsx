@@ -10,8 +10,6 @@ if (!container) {
   throw new Error('Root element "#root" not found');
 }
 
-const platform = window.browsie?.platform ?? 'darwin';
-document.documentElement.dataset.platform = platform;
 installClickSounds();
 
 const windowKind = new URLSearchParams(window.location.search).get('window');

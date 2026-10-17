@@ -71,7 +71,6 @@ const browser: BrowsieBrowserAPI = {
 };
 
 contextBridge.exposeInMainWorld("browsie", {
-  platform: process.platform,
   auth,
   data,
   browser,

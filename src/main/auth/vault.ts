@@ -14,11 +14,8 @@ export type VaultContents = {
 
 const vaultPath = () => path.join(app.getPath('userData'), 'session.bin');
 
-// safeStorage borrows a key from the OS (macOS Keychain, Windows DPAPI, Linux libsecret/kwallet).
-// On Linux with no keyring it falls back to "basic_text", a hardcoded key: effectively plaintext.
-export const canPersistSecrets = () =>
-  safeStorage.isEncryptionAvailable() &&
-  !(process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text');
+// safeStorage borrows a key from Windows DPAPI.
+export const canPersistSecrets = () => safeStorage.isEncryptionAvailable();
 
 export const readVault = (): VaultContents | null => {
   try {
@@ -29,7 +26,7 @@ export const readVault = (): VaultContents | null => {
   }
 };
 
-// Returns false when nothing was written (no real keyring), so the caller knows the session won't survive a restart.
+// Returns false when nothing was written (DPAPI unavailable), so the caller knows the session won't survive a restart.
 export const writeVault = (contents: VaultContents) => {
   if (!canPersistSecrets()) {
     return false;
