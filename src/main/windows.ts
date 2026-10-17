@@ -1,23 +1,30 @@
-import { app, BrowserWindow, Menu, screen, type BrowserWindowConstructorOptions, type MenuItemConstructorOptions } from 'electron';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { attachTabs, handleShortcut } from './browser/tabs';
-import { getData } from './data/localStore';
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  screen,
+  type BrowserWindowConstructorOptions,
+  type MenuItemConstructorOptions,
+} from "electron";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { attachTabs, handleShortcut } from "./browser/tabs";
+import { getData } from "./data/localStore";
 
-const isMac = process.platform === 'darwin';
-const isWindows = process.platform === 'win32';
+const isMac = process.platform === "darwin";
+const isWindows = process.platform === "win32";
 
 const disableZoom = (webContents: Electron.WebContents) => {
   webContents.setVisualZoomLevelLimits(1, 1);
   webContents.setZoomFactor(1);
 
-  webContents.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown') {
+  webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown") {
       return;
     }
 
     const hasZoomModifier = input.control || input.meta;
-    const isZoomKey = ['+', '-', '=', '0', 'Plus', 'Minus'].includes(input.key);
+    const isZoomKey = ["+", "-", "=", "0", "Plus", "Minus"].includes(input.key);
 
     if (hasZoomModifier && isZoomKey) {
       event.preventDefault();
@@ -26,12 +33,13 @@ const disableZoom = (webContents: Electron.WebContents) => {
 };
 
 // Packaged builds get the icon baked in by forge.config.js. `npm start` runs stock Electron, so set it by hand.
-const DEV_ICONS_DIR = 'src/renderer/assets/icons';
+const DEV_ICONS_DIR = "src/renderer/assets/icons";
 
-const devIconPath = (file: string) => (app.isPackaged ? undefined : path.join(app.getAppPath(), DEV_ICONS_DIR, file));
+const devIconPath = (file: string) =>
+  app.isPackaged ? undefined : path.join(app.getAppPath(), DEV_ICONS_DIR, file);
 
 export const setDevDockIcon = () => {
-  const iconPath = devIconPath('macos/1024x1024.png');
+  const iconPath = devIconPath("macos/1024x1024.png");
 
   if (isMac && iconPath) {
     app.dock?.setIcon(iconPath);
@@ -42,7 +50,7 @@ export const setDevDockIcon = () => {
 const windowChromeOptions = (): Partial<BrowserWindowConstructorOptions> => {
   if (isMac) {
     return {
-      titleBarStyle: 'hidden',
+      titleBarStyle: "hidden",
       trafficLightPosition: { x: 32, y: 32 },
       minimizable: false,
       maximizable: false,
@@ -52,9 +60,9 @@ const windowChromeOptions = (): Partial<BrowserWindowConstructorOptions> => {
   }
 
   return {
-    titleBarStyle: 'hidden',
-    backgroundColor: '#ffffff',
-    icon: devIconPath(isWindows ? 'windows/icon.ico' : 'icon.png'),
+    titleBarStyle: "hidden",
+    backgroundColor: "#ffffff",
+    icon: devIconPath(isWindows ? "windows/icon.ico" : "icon.png"),
     autoHideMenuBar: true,
     minimizable: true,
     maximizable: true,
@@ -75,26 +83,26 @@ export const setAppMenu = () => {
           {
             label: app.name,
             submenu: [
-              { role: 'about' as const },
-              { type: 'separator' as const },
-              { role: 'services' as const },
-              { type: 'separator' as const },
-              { role: 'hide' as const },
-              { role: 'hideOthers' as const },
-              { role: 'unhide' as const },
-              { type: 'separator' as const },
-              { role: 'quit' as const },
+              { role: "about" as const },
+              { type: "separator" as const },
+              { role: "services" as const },
+              { type: "separator" as const },
+              { role: "hide" as const },
+              { role: "hideOthers" as const },
+              { role: "unhide" as const },
+              { type: "separator" as const },
+              { role: "quit" as const },
             ],
           },
         ]
       : []),
-    { role: 'fileMenu' },
-    { role: 'editMenu' },
+    { role: "fileMenu" },
+    { role: "editMenu" },
     {
-      label: 'View',
-      submenu: [{ role: 'togglefullscreen' }],
+      label: "View",
+      submenu: [{ role: "togglefullscreen" }],
     },
-    { role: 'windowMenu' },
+    { role: "windowMenu" },
   ];
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -102,11 +110,14 @@ export const setAppMenu = () => {
 
 // __dirname is .vite/build at runtime (Vite bundles main there), so this path
 // does not depend on where this source file lives.
-const rendererIndexPath = () => path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`);
+const rendererIndexPath = () =>
+  path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`);
 
 // Windows paths are case-insensitive and the drive letter's case varies (C: vs c:), so compare normalized.
 const isSamePath = (a: string, b: string) =>
-  isWindows ? path.normalize(a).toLowerCase() === path.normalize(b).toLowerCase() : a === b;
+  isWindows
+    ? path.normalize(a).toLowerCase() === path.normalize(b).toLowerCase()
+    : a === b;
 
 // "Is this one of Browsie's own pages?" Dev: anything on the Vite dev server.
 // Packaged: exactly our index.html on disk (any ?window=... query is fine).
@@ -118,7 +129,10 @@ export const isAppUrl = (rawUrl: string) => {
       return url.origin === new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL).origin;
     }
 
-    return url.protocol === 'file:' && isSamePath(fileURLToPath(url), rendererIndexPath());
+    return (
+      url.protocol === "file:" &&
+      isSamePath(fileURLToPath(url), rendererIndexPath())
+    );
   } catch {
     return false;
   }
@@ -127,16 +141,19 @@ export const isAppUrl = (rawUrl: string) => {
 // Our windows carry the preload (window.browsie), so they must never wander off to another site
 // or pop open new windows. Real websites will live in separate tabs that get no preload.
 const lockNavigation = (webContents: Electron.WebContents) => {
-  webContents.on('will-navigate', (event, url) => {
+  webContents.on("will-navigate", (event, url) => {
     if (!isAppUrl(url)) {
       event.preventDefault();
     }
   });
-  webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 };
 
-const loadRenderer = (window: BrowserWindow, windowKind?: 'menu-picker' | 'browser') => {
-  const search = windowKind ? `?window=${windowKind}` : '';
+const loadRenderer = (
+  window: BrowserWindow,
+  windowKind?: "menu-picker" | "browser",
+) => {
+  const search = windowKind ? `?window=${windowKind}` : "";
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     window.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}${search}`);
@@ -144,17 +161,17 @@ const loadRenderer = (window: BrowserWindow, windowKind?: 'menu-picker' | 'brows
   }
 
   window.loadFile(rendererIndexPath(), {
-    search: search.replace(/^\?/, ''),
+    search: search.replace(/^\?/, ""),
   });
 };
 
 const wireWindowStateEvents = (window: BrowserWindow) => {
   const notify = () => {
-    window.webContents.send('window-maximized-changed', window.isMaximized());
+    window.webContents.send("window-maximized-changed", window.isMaximized());
   };
 
-  window.on('maximize', notify);
-  window.on('unmaximize', notify);
+  window.on("maximize", notify);
+  window.on("unmaximize", notify);
 };
 
 // At most one of each. Kept so "Change mode" can reuse them instead of stacking duplicates.
@@ -168,7 +185,7 @@ let holdingLastWindow = false;
 
 export const shouldQuitOnLastWindow = () => !holdingLastWindow;
 
-app.on('before-quit', () => {
+app.on("before-quit", () => {
   quitting = true;
 });
 
@@ -184,8 +201,8 @@ export const createMainWindow = () => {
     minHeight: 480,
     ...windowChromeOptions(),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      autoplayPolicy: 'no-user-gesture-required',
+      preload: path.join(__dirname, "preload.js"),
+      autoplayPolicy: "no-user-gesture-required",
     },
   });
 
@@ -195,7 +212,7 @@ export const createMainWindow = () => {
   lockNavigation(mainWindow.webContents);
   wireWindowStateEvents(mainWindow);
   loadRenderer(mainWindow);
-  mainWindow.on('closed', () => {
+  mainWindow.on("closed", () => {
     mainWindow = null;
   });
 
@@ -212,24 +229,24 @@ const createMenuPickerWindow = () => {
     // A small picker, not a workspace. Also stops double-clicking the drag region from maximizing it.
     maximizable: false,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
     },
   });
 
   disableZoom(menuPickerWindow.webContents);
   lockNavigation(menuPickerWindow.webContents);
   wireWindowStateEvents(menuPickerWindow);
-  loadRenderer(menuPickerWindow, 'menu-picker');
+  loadRenderer(menuPickerWindow, "menu-picker");
 
   // Create main before this window finishes closing so window-all-closed
   // does not quit the app on Windows/Linux during the handoff.
   // Opened from "Change mode", main is already there, so don't make a second one.
-  menuPickerWindow.on('close', () => {
+  menuPickerWindow.on("close", () => {
     if (hasUserMode() && !mainWindow) {
       createMainWindow();
     }
   });
-  menuPickerWindow.on('closed', () => {
+  menuPickerWindow.on("closed", () => {
     menuPickerWindow = null;
   });
 
@@ -283,29 +300,28 @@ const createBrowserWindow = (display: Electron.Display) => {
     frame: false,
     fullscreenable: true,
     autoHideMenuBar: true,
-    // Transparent windows on Windows flash a white frame unless the thick resize border is off.
     thickFrame: false,
     hasShadow: false,
     roundedCorners: false,
     paintWhenInitiallyHidden: true,
-    // The splash is see-through: the OS blurs the desktop wallpaper behind the window (acrylic on
-    // Windows 11, vibrancy on mac) with a translucent black over that. The chrome is opaque once it's in.
-    // `transparent` is what makes it actually see-through; acrylic alone paints an opaque grey.
-    transparent: true,
-    backgroundColor: '#00000000',
-    ...(isWindows ? { backgroundMaterial: 'acrylic' as const } : {}),
-    // macOS honors `show: false` with `fullscreen: true`. Windows does not, so it enters fullscreen
-    // below, while still hidden.
-    ...(isMac ? { fullscreen: true, vibrancy: 'fullscreen-ui' as const, visualEffectState: 'active' as const } : {}),
-    icon: devIconPath(isWindows ? 'windows/icon.ico' : isMac ? 'macos/1024x1024.png' : 'icon.png'),
+    // Solid. A transparent window on a second monitor is what flickered.
+    backgroundColor: "#111111",
+    ...(isMac ? { fullscreen: true } : {}),
+    icon: devIconPath(
+      isWindows
+        ? "windows/icon.ico"
+        : isMac
+          ? "macos/1024x1024.png"
+          : "icon.png",
+    ),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
       webviewTag: false,
       // The startup sound plays without anyone clicking first.
-      autoplayPolicy: 'no-user-gesture-required',
+      autoplayPolicy: "no-user-gesture-required",
     },
   });
   browserWindow = window;
@@ -313,8 +329,8 @@ const createBrowserWindow = (display: Electron.Display) => {
 
   disableZoom(window.webContents);
   lockNavigation(window.webContents);
-  window.webContents.on('before-input-event', (event, input) => {
-    if (handleShortcut(input, 'chrome')) {
+  window.webContents.on("before-input-event", (event, input) => {
+    if (handleShortcut(input, "chrome")) {
       event.preventDefault();
     }
   });
@@ -322,7 +338,7 @@ const createBrowserWindow = (display: Electron.Display) => {
   // Armed once the open transition has finished. Forcing fullscreen back during show() makes
   // Windows leave and re-enter it, which flashes the whole display.
   let enforceFullscreen = false;
-  window.on('leave-full-screen', () => {
+  window.on("leave-full-screen", () => {
     if (enforceFullscreen && !window.isDestroyed() && !window.isFullScreen()) {
       window.setFullScreen(true);
     }
@@ -330,8 +346,8 @@ const createBrowserWindow = (display: Electron.Display) => {
 
   attachTabs(window);
 
-  window.once('ready-to-show', () => {
-    // First frame is the translucent splash and the spinner. Show that, then the page plays the rest.
+  window.once("ready-to-show", () => {
+    // First frame is the deep gray splash and the spinner.
     if (window.isDestroyed()) {
       return;
     }
@@ -352,16 +368,16 @@ const createBrowserWindow = (display: Electron.Display) => {
 
   // Leaving the browser lands back on the Dashboard. Opened in 'close' (before the window is gone)
   // for the same zero-windows reason.
-  window.on('close', () => {
+  window.on("close", () => {
     if (!quitting && !mainWindow) {
       createMainWindow();
     }
   });
-  window.on('closed', () => {
+  window.on("closed", () => {
     browserWindow = null;
   });
 
-  loadRenderer(window, 'browser');
+  loadRenderer(window, "browser");
 };
 
 // "Open browser" on the Dashboard. Takes no URL or options on purpose: the renderer can only say "go".
@@ -376,7 +392,9 @@ export const openBrowser = () => {
     return;
   }
 
-  const display = mainWindow ? screen.getDisplayMatching(mainWindow.getBounds()) : screen.getPrimaryDisplay();
+  const display = mainWindow
+    ? screen.getDisplayMatching(mainWindow.getBounds())
+    : screen.getPrimaryDisplay();
 
   const launch = () => {
     setTimeout(() => {
@@ -392,7 +410,7 @@ export const openBrowser = () => {
   holdingLastWindow = true;
 
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.once('closed', launch);
+    mainWindow.once("closed", launch);
     mainWindow.close();
     return;
   }

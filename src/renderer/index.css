@@ -3,7 +3,8 @@
 
 @font-face {
   font-family: "Inter";
-  src: url("./assets/fonts/Inter/Inter-VariableFont_opsz,wght.ttf") format("truetype");
+  src: url("./assets/fonts/Inter/Inter-VariableFont_opsz,wght.ttf")
+    format("truetype");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -11,7 +12,8 @@
 
 @font-face {
   font-family: "Inter";
-  src: url("./assets/fonts/Inter/Inter-Italic-VariableFont_opsz,wght.ttf") format("truetype");
+  src: url("./assets/fonts/Inter/Inter-Italic-VariableFont_opsz,wght.ttf")
+    format("truetype");
   font-weight: 100 900;
   font-style: italic;
   font-display: swap;
@@ -19,7 +21,8 @@
 
 @font-face {
   font-family: "Bricolage Grotesque";
-  src: url("./assets/fonts/Bricolage/BricolageGrotesque-VariableFont_opsz,wdth,wght.ttf") format("truetype");
+  src: url("./assets/fonts/Bricolage/BricolageGrotesque-VariableFont_opsz,wdth,wght.ttf")
+    format("truetype");
   font-weight: 200 800;
   font-style: normal;
   font-display: swap;
@@ -27,7 +30,9 @@
 
 /* Bundled Inter everywhere, so Windows doesn't fall back to Segoe UI. Also drives Tailwind's `font-sans`. */
 @theme {
-  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans:
+    "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
 }
 
 @layer base {
@@ -47,20 +52,46 @@
     background-color: #ffffff;
   }
 
-  /* The browser window is transparent: the splash shows the blurred wallpaper until the chrome is in. */
+  /* Solid. The window itself is never see-through (that flickered on a second monitor).
+     The splash paints this until the chrome is in; then the overlay blurs over the chrome. */
   html[data-window="browser"],
   html[data-window="browser"] body {
-    background-color: transparent;
+    background-color: #111111;
+  }
+
+  /* Hidden from the browser button until the chrome is ready. `!important` beats
+     cursor-pointer on the button and the chrome controls underneath the splash. */
+  html[data-cursor-hidden],
+  html[data-cursor-hidden] *,
+  html[data-window="browser"]:not([data-chrome-ready]),
+  html[data-window="browser"]:not([data-chrome-ready]) * {
+    cursor: none !important;
   }
 }
 
 @layer components {
   .inter {
-    font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family:
+      "Inter",
+      system-ui,
+      -apple-system,
+      "Segoe UI",
+      Roboto,
+      Helvetica,
+      Arial,
+      sans-serif;
   }
 
   .bric {
-    font-family: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family:
+      "Bricolage Grotesque",
+      system-ui,
+      -apple-system,
+      "Segoe UI",
+      Roboto,
+      Helvetica,
+      Arial,
+      sans-serif;
   }
 
   @keyframes blur-fade-in {
@@ -233,10 +264,26 @@
     }
   }
 
-  /* Translucent black over the OS-blurred wallpaper. The window's own acrylic/vibrancy
-     is the only blur; a second backdrop-filter on top of it piled another one on. */
+  /* Frost over whatever is in this window (the solid gray, then the chrome).
+     Not the desktop — the window is opaque. */
   .splash-tint {
-    background-color: rgba(0, 0, 0, 0.3);
+    background-color: rgba(17, 17, 17, 0.78);
+    -webkit-backdrop-filter: blur(48px);
+    backdrop-filter: blur(48px);
+  }
+
+  @keyframes splash-glass-clear {
+    from {
+      background-color: rgba(17, 17, 17, 0.78);
+      -webkit-backdrop-filter: blur(48px);
+      backdrop-filter: blur(48px);
+    }
+
+    to {
+      background-color: rgba(17, 17, 17, 0);
+      -webkit-backdrop-filter: blur(0);
+      backdrop-filter: blur(0);
+    }
   }
 
   /* A calm, steady turn. */
@@ -244,12 +291,27 @@
     animation: chrome-spin 2.4s linear infinite;
   }
 
-  /* Leaving: the tint and the spinner fade away. The chrome underneath is already in. */
+  /* Leaving: the frost clears so the chrome underneath, already in, comes into focus. */
   .splash-leaving .splash-tint {
-    animation: splash-layer-out 0.9s cubic-bezier(0.4, 0, 0.2, 1) both;
+    animation: splash-glass-clear 0.9s cubic-bezier(0.4, 0, 0.2, 1) both;
   }
 
   .splash-leaving .splash-spinner-wrap {
+    animation: splash-layer-out 0.55s ease-in both;
+  }
+
+  /* Quiet boot line under the spinner. It crossfades between steps, then leaves with the glass. */
+  .splash-status {
+    color: rgba(255, 255, 255, 0.22);
+    opacity: 0;
+    transition: opacity 0.18s ease;
+  }
+
+  .splash-status.is-shown {
+    opacity: 1;
+  }
+
+  .splash-leaving .splash-status {
     animation: splash-layer-out 0.55s ease-in both;
   }
 
@@ -378,8 +440,13 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .splash-status {
+      transition: none;
+    }
+
     .splash-tint,
     .splash-spinner-wrap,
+    .splash-status,
     .chrome-materialize,
     .chrome-drop,
     .chrome-item,

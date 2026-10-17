@@ -121,6 +121,14 @@ function BrowserChrome() {
 
   useReportContentBounds(viewportRef, phase === 'ready');
 
+  // The browser window's page hides the pointer from its first paint (see index.css).
+  // Give it back once the splash has finished and the chrome is ready.
+  useLayoutEffect(() => {
+    if (phase === 'ready') {
+      document.documentElement.dataset.chromeReady = 'true';
+    }
+  }, [phase]);
+
   useEffect(() => {
     if (showChrome && activeTab?.url === null) {
       shownNewTabs.current.add(activeTab.id);
@@ -136,8 +144,8 @@ function BrowserChrome() {
   };
 
   return (
-    // Nothing behind the glass at first but the (OS-blurred) wallpaper; once loaded, the chrome's frame
-    // scales and blurs in. chrome-waiting freezes every entrance inside it until the glass starts clearing.
+    // Solid gray at first. Once loaded, the chrome's frame scales and blurs in behind the splash.
+    // chrome-waiting freezes every entrance inside it until the glass starts clearing.
     <div className={`browser-chrome relative h-screen overflow-hidden ${phase === 'loaded' ? 'chrome-waiting' : ''}`}>
       {showChrome && (
         <div className="chrome-materialize absolute inset-0 bg-[#EDE7FF]">
