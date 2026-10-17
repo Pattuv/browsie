@@ -314,7 +314,14 @@ function Dashboard() {
             className={`group relative inline-flex items-center my-[clamp(2.5rem,5vh,5rem)] text-black transition-all duration-300 ease-out hover:scale-110 has-active:scale-100 ${revealClass(shouldAnimate.current, showButton)}`}
           >
             <ActionLines className="absolute right-full mr-10" />
-            <button data-click-sound="heavy" onClick={() => window.browsie?.browser.launch()} className="cursor-pointer bg-black ring-8 ring-black/70 text-white text-[1.0625rem] px-7 py-4.5 rounded-full tracking-tight transition-all duration-300 ease-out group-hover:py-6.5 group-hover:ring-0">
+            <button
+              data-click-sound="heavy"
+              onClick={() => {
+                document.documentElement.dataset.cursorHidden = 'true';
+                void window.browsie?.browser.launch();
+              }}
+              className="cursor-pointer bg-black ring-8 ring-black/70 text-white text-[1.0625rem] px-7 py-4.5 rounded-full tracking-tight transition-all duration-300 ease-out group-hover:py-6.5 group-hover:ring-0"
+            >
               Open browser for {firstName}
             </button>
             <ActionLines className="absolute left-full ml-10" mirrored />

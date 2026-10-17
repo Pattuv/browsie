@@ -15,6 +15,8 @@ document.documentElement.dataset.platform = platform;
 installClickSounds();
 
 const windowKind = new URLSearchParams(window.location.search).get('window');
+// The browser window's page starts see-through (the launch splash sits on the OS-blurred wallpaper).
+document.documentElement.dataset.window = windowKind ?? 'main';
 
 const layers = {
   'menu-picker': MenuPickerLayer,
