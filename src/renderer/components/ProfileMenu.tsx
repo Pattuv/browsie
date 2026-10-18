@@ -216,7 +216,7 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
   const firstName = useAuthStore((state) => state.firstName);
   const email = useAuthStore((state) => state.email);
   const pictureDataUrl = useAuthStore((state) => state.pictureDataUrl);
-  // Lockdown only exists in the chrome; there it locks Change mode and Quit.
+  // Lockdown only exists in the chrome; there it locks billing, Change mode and Quit.
   const locked = useLockdownStore((state) => state.enabled) && Boolean(quit);
   return (
     <DropdownMenu
@@ -257,6 +257,7 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
           <MenuItem
             icon={Gauge}
             label="Check OpenRouter billing"
+            disabled={locked}
             onClick={() => {
               close();
               window.browsie?.openExternal(OPENROUTER_BILLING_URL);

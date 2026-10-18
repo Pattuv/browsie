@@ -1,4 +1,5 @@
 import {
+  app,
   BrowserWindow,
   Menu,
   WebContentsView,
@@ -209,6 +210,17 @@ const showContextMenu = (tab: Tab, contents: WebContents, params: ContextMenuPar
     );
   }
 
+  if (params.mediaType === 'image' && isWebUrl(params.srcURL)) {
+    items.push(
+      { label: 'Open image in new tab', click: () => newTab(params.srcURL) },
+      { label: 'Copy image', click: () => contents.copyImageAt(params.x, params.y) },
+      { label: 'Copy image address', click: () => clipboard.writeText(params.srcURL) },
+      { type: 'separator' },
+    );
+  }
+
+  const selection = params.selectionText.trim();
+
   if (params.isEditable) {
     items.push(
       { role: 'undo' },
@@ -220,8 +232,13 @@ const showContextMenu = (tab: Tab, contents: WebContents, params: ContextMenuPar
       { role: 'selectAll' },
       { type: 'separator' },
     );
-  } else if (params.selectionText.trim()) {
-    items.push({ role: 'copy' }, { type: 'separator' });
+  } else if (selection) {
+    const preview = selection.length > 30 ? `${selection.slice(0, 30)}…` : selection;
+    items.push(
+      { role: 'copy' },
+      { label: `Search Google for “${preview}”`, click: () => newTab(toUrl(selection)) },
+      { type: 'separator' },
+    );
   }
 
   items.push(
@@ -233,6 +250,11 @@ const showContextMenu = (tab: Tab, contents: WebContents, params: ContextMenuPar
     },
     { label: 'Reload', click: () => contents.reload() },
   );
+
+  // Developer tools are for building Browsie, not for the people using it, so packaged builds leave them out.
+  if (!app.isPackaged) {
+    items.push({ type: 'separator' }, { label: 'Inspect', click: () => contents.inspectElement(params.x, params.y) });
+  }
 
   Menu.buildFromTemplate(items).popup(host ? { window: host } : undefined);
 };
@@ -596,6 +618,11 @@ export const handleShortcut = (input: Input, source: 'chrome' | 'tab') => {
 
   if (ctrl && key === 'tab') {
     return run(() => cycleTab(input.shift ? -1 : 1));
+  }
+
+  // Developer tools for the website on screen, in development builds only (same as Inspect in the context menu).
+  if (source === 'tab' && !app.isPackaged && (key === 'f12' || (ctrl && input.shift && key === 'i'))) {
+    return run(() => activeContents()?.toggleDevTools());
   }
 
   // The window is always fullscreen; F11 has nothing to toggle.

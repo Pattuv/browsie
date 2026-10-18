@@ -1,5 +1,6 @@
-import { Bookmark, ChevronRight, EllipsisVertical, History, Info, KeyRound, Settings } from 'lucide-react';
+import { Bookmark, ChevronRight, EllipsisVertical, History, Info, KeyRound, Lock, Settings } from 'lucide-react';
 import DropdownMenu, { MenuDivider, MenuGroup, MenuItem } from '../components/DropdownMenu';
+import { useLockdownStore } from '../stores/browserStore';
 import gmailIcon from '../assets/utility-icons/gmail.svg';
 import calendarIcon from '../assets/utility-icons/calendar.svg';
 import driveIcon from '../assets/utility-icons/drive.svg';
@@ -16,6 +17,8 @@ type UtilityMenuProps = {
 
 /** The ⋮ menu in the tab strip: browser tools, help and settings, and Google Workspace shortcuts. */
 function UtilityMenu({ onOpenChange }: UtilityMenuProps) {
+  const locked = useLockdownStore((state) => state.enabled);
+
   return (
     <DropdownMenu
       widthClassName="w-68"
@@ -47,21 +50,30 @@ function UtilityMenu({ onOpenChange }: UtilityMenuProps) {
           <>
             {/* Bookmarks, Passwords and History open their own panels later; the rows are here so the layout is final. */}
             <MenuGroup>
-              <MenuItem icon={Bookmark} label="Bookmarks" trailing={chevron} />
-              <MenuItem icon={KeyRound} label="Passwords" trailing={chevron} />
-              <MenuItem icon={History} label="History" trailing={chevron} />
+              <MenuItem icon={Bookmark} label="Bookmarks" disabled={locked} trailing={chevron} />
+              <MenuItem icon={KeyRound} label="Passwords" disabled={locked} trailing={chevron} />
+              <MenuItem icon={History} label="History" disabled={locked} trailing={chevron} />
             </MenuGroup>
             <MenuDivider />
             <MenuGroup>
-              <MenuItem icon={Info} label="Browsie Help Center" onClick={go(GUIDE_URL)} />
-              <MenuItem icon={Settings} label="Settings" />
+              <MenuItem icon={Info} label="Browsie Help Center" disabled={locked} onClick={go(GUIDE_URL)} />
+              <MenuItem icon={Settings} label="Settings" disabled={locked} />
             </MenuGroup>
             <MenuDivider />
             <MenuGroup>
-              <MenuItem icon={gmailIcon} label="Email" onClick={go('https://mail.google.com')} />
-              <MenuItem icon={calendarIcon} label="Calendar" onClick={go('https://calendar.google.com')} />
-              <MenuItem icon={driveIcon} label="Drive" onClick={go('https://drive.google.com')} />
+              <MenuItem icon={gmailIcon} label="Email" disabled={locked} onClick={go('https://mail.google.com')} />
+              <MenuItem icon={calendarIcon} label="Calendar" disabled={locked} onClick={go('https://calendar.google.com')} />
+              <MenuItem icon={driveIcon} label="Drive" disabled={locked} onClick={go('https://drive.google.com')} />
             </MenuGroup>
+            {locked && (
+              <>
+                <MenuDivider />
+                <p className="smooth flex items-center gap-2 rounded-[16px] bg-zinc-100 px-3.5 py-2.5 text-[13px] tracking-tight text-zinc-600">
+                  <Lock size={16} strokeWidth={1.75} aria-hidden="true" />
+                  Lockdown Mode is on
+                </p>
+              </>
+            )}
           </>
         );
       }}
