@@ -76,11 +76,9 @@ type TitleBarProps = {
 };
 
 /**
- * Drag region for the hidden title bar. On macOS it leaves room for the traffic lights;
- * elsewhere it stops short of the custom caption buttons.
+ * Drag region for the hidden title bar. Stops short of the custom caption buttons.
  */
 function TitleBar({ children, controlsClassName, maximizable = true }: TitleBarProps) {
-  const isMac = window.browsie?.platform === 'darwin';
   // Each caption button is w-12 (3rem).
   const controlsInset = maximizable ? 'right-36' : 'right-24';
 
@@ -88,13 +86,11 @@ function TitleBar({ children, controlsClassName, maximizable = true }: TitleBarP
     <>
       {/* Drag region must not overlap the caption buttons, or Windows swallows their clicks. */}
       <header
-        className={`app-region-drag absolute top-0 left-0 z-10 flex h-10 items-center ${
-          isMac ? 'right-0 pl-16 pr-4' : `${controlsInset} pl-4`
-        }`}
+        className={`app-region-drag absolute top-0 left-0 z-10 flex h-10 items-center ${controlsInset} pl-4`}
       >
         {children}
       </header>
-      {isMac ? null : <WindowControls className={controlsClassName} maximizable={maximizable} />}
+      <WindowControls className={controlsClassName} maximizable={maximizable} />
     </>
   );
 }

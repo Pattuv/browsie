@@ -3,11 +3,10 @@ import { Grip, HeartHandshake } from "lucide-react";
 import DashboardTip, { type Tip } from "../../components/DashboardTip";
 import mascot from "../../assets/mascot.svg";
 
-const GUIDE_URL = "https://browsiedocs.super.site/browsie-help-center";
+const GUIDE_URL = "https://browsie.org/help-center";
 const GOOGLE_APPS_URL = "https://about.google/products/";
 
-// Shortcuts use Ctrl on Windows/Linux and ⌘ on Mac (main accepts either).
-const MOD = window.browsie?.platform === "darwin" ? "⌘" : "Ctrl";
+const MOD = "Ctrl";
 
 // Same rotating tips as the dashboard, but about getting around the browser itself.
 const BROWSER_TIPS: Tip[] = [
@@ -83,15 +82,6 @@ function NewTab({ entranceDelay: initialDelay }: NewTabProps) {
         className="chrome-item absolute right-4 top-3 flex items-center gap-1"
         style={delay(40)}
       >
-        <button
-          type="button"
-          aria-label="Go to Google"
-          title="Google"
-          onClick={() => browser?.navigate("google.com")}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-900 transition-[background-color,transform] duration-150 hover:bg-zinc-100 active:scale-90"
-        >
-          <i className="bi bi-google text-[1.05rem]" aria-hidden="true" />
-        </button>
         <button
           type="button"
           aria-label="Google apps"

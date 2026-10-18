@@ -1,8 +1,9 @@
 import { Fragment, useState, type CSSProperties } from "react";
-import { Globe, Plus, SlidersHorizontal, X } from "lucide-react";
+import { Globe, Plus, X } from "lucide-react";
 import IconButton from "./IconButton";
 import ProfileMenu from "../components/ProfileMenu";
-import { setChromeOverlay, useBrowserStore } from "../stores/browserStore";
+import UtilityMenu from "./UtilityMenu";
+import { trackChromeMenu, useBrowserStore } from "../stores/browserStore";
 import mascot from "../assets/mascot.svg";
 
 // The site's icon, or the globe until one arrives (or if it won't decode).
@@ -113,9 +114,8 @@ function TabPill({ tab, active }: TabPillProps) {
   );
 }
 
-// Module-level so it's the same function every render: ProfileMenu re-runs onOpenChange whenever it
-// changes, and a fresh arrow each render would re-capture the page on every tab update.
-const handleProfileOpenChange = (open: boolean) => void setChromeOverlay(open);
+const handleProfileOpenChange = trackChromeMenu("profile");
+const handleUtilityOpenChange = trackChromeMenu("utility");
 
 // The thin line between two tabs. Hidden next to the active tab, and fades out while the tab on
 // either side is hovered so it never cuts through a hover highlight.
@@ -185,10 +185,7 @@ function TabStrip({ style }: TabStripProps) {
       </div>
 
       <div className="mb-1.5 mr-2 flex items-center gap-1">
-        {/* Settings panel lands later; the button is here so the layout is final. */}
-        <IconButton label="Settings" className="hover:bg-[#E2D9FF]!">
-          <SlidersHorizontal size={16} aria-hidden="true" />
-        </IconButton>
+        <UtilityMenu onOpenChange={handleUtilityOpenChange} />
         <ProfileMenu
           triggerClassName="h-6 w-6 hover:bg-[#E2D9FF]"
           panelTarget="#browser-chrome-card"

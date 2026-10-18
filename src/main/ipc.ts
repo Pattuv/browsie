@@ -16,6 +16,7 @@ import {
   setOverlayOpen,
   stop,
 } from './browser/tabs';
+import { clearSiteData, getSiteInfo } from './browser/siteInfo';
 import { bringToFront, getBrowserWindow, isAppUrl, openBrowser, openModePicker } from './windows';
 
 let dashboardAnimatedThisSession = false;
@@ -119,6 +120,8 @@ export const registerIpc = () => {
   handleFromBrowser('browser:set-content-bounds', (_event, bounds: unknown) => setContentBounds(bounds));
   handleFromBrowser('browser:capture-page', () => captureActivePage());
   handleFromBrowser('browser:set-overlay-open', (_event, open: unknown) => setOverlayOpen(open === true));
+  handleFromBrowser('browser:get-site-info', () => getSiteInfo());
+  handleFromBrowser('browser:clear-site-data', () => clearSiteData());
 
   handle('auth:get-session', () => getSession());
   handle('auth:sign-in', (event) => {

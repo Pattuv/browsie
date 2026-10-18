@@ -5,7 +5,6 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { SlidersHorizontal } from "lucide-react";
 import Boiler from "../../components/Boiler";
 import DashboardTip from "../../components/DashboardTip";
 import ProfileMenu from "../../components/ProfileMenu";
@@ -27,7 +26,7 @@ const REST_LAYOUT_MS = TITLE_DELAY_MS + BLUR_DURATION_MS + POST_TITLE_DELAY_MS;
 const REST_FADE_START_MS = REST_LAYOUT_MS + TITLE_MOVE_MS + 50;
 const NOTCH_DROP_MS =
   REST_FADE_START_MS + REST_STAGGER_MS * 3 + BLUR_DURATION_MS + 150;
-const GUIDE_URL = "https://browsiedocs.super.site/browsie-help-center";
+const GUIDE_URL = "https://browsie.org/help-center";
 
 function revealClass(shouldAnimate: boolean, visible: boolean): string {
   if (!shouldAnimate) {
@@ -250,31 +249,17 @@ function Dashboard() {
     return undefined;
   }, [showRestLayout]);
 
-  const isMac = window.browsie?.platform === "darwin";
-
   return (
     <Boiler>
       <div
-        className={`absolute inset-x-0 z-20 flex h-8 items-center justify-between ${
-          isMac ? "top-6 pl-[4.5rem] pr-10" : "top-4 pl-5 pr-40"
-        } ${revealClass(shouldAnimate.current, showTopBar)}`}
+        className={`absolute inset-x-0 top-4 z-20 flex h-8 items-center justify-between pl-5 pr-40 ${revealClass(shouldAnimate.current, showTopBar)}`}
       >
         <img
           src={wordmark}
           alt="Browsie"
           className="pointer-events-none h-5 -translate-y-1"
         />
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            aria-label="Settings"
-            title="Settings"
-            className="app-region-no-drag flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl text-black transition-colors duration-200 ease-out hover:bg-zinc-200/70"
-          >
-            <SlidersHorizontal size={18} strokeWidth={2} aria-hidden="true" />
-          </button>
-          <ProfileMenu />
-        </div>
+        <ProfileMenu />
       </div>
 
       {mode && showNotch && (

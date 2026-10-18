@@ -18,6 +18,12 @@ export const browserStateLoaded: Promise<void> = browser
       .catch(() => undefined)
   : Promise.resolve();
 
+// Lockdown Mode: the browser is agent-controlled only. UI-only for now; main isn't told yet.
+export const useLockdownStore = create<{ enabled: boolean; toggle: () => void }>()((set) => ({
+  enabled: false,
+  toggle: () => set((state) => ({ enabled: !state.enabled })),
+}));
+
 export const useActiveTab = () =>
   useBrowserStore((state) => state.tabs.find((tab) => tab.id === state.activeTabId) ?? null);
 
@@ -68,5 +74,23 @@ export const setChromeOverlay = async (open: boolean) => {
 
   if (request === overlayRequest) {
     await browser.setOverlayOpen(true);
+  }
+};
+
+// The page overlay stays up while any chrome menu is mounted. Opening one while another blurs out
+// would otherwise let the closing menu drop the overlay from under the new one.
+const openMenus = new Set<string>();
+
+export const trackChromeMenu = (id: string) => (open: boolean) => {
+  const wasOpen = openMenus.size > 0;
+
+  if (open) {
+    openMenus.add(id);
+  } else {
+    openMenus.delete(id);
+  }
+
+  if (wasOpen !== openMenus.size > 0) {
+    void setChromeOverlay(openMenus.size > 0);
   }
 };

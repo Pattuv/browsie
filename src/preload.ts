@@ -63,6 +63,8 @@ const browser: BrowsieBrowserAPI = {
   capturePage: () => ipcRenderer.invoke("browser:capture-page"),
   setOverlayOpen: (open) =>
     ipcRenderer.invoke("browser:set-overlay-open", open),
+  getSiteInfo: () => ipcRenderer.invoke("browser:get-site-info"),
+  clearSiteData: () => ipcRenderer.invoke("browser:clear-site-data"),
   onFocusAddress: (callback) => {
     const listener = () => callback();
     ipcRenderer.on("browser:focus-address", listener);
@@ -71,7 +73,6 @@ const browser: BrowsieBrowserAPI = {
 };
 
 contextBridge.exposeInMainWorld("browsie", {
-  platform: process.platform,
   auth,
   data,
   browser,
