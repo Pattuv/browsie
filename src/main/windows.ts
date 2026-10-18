@@ -161,9 +161,9 @@ export const createMainWindow = () => {
 const createMenuPickerWindow = () => {
   menuPickerWindow = new BrowserWindow({
     width: 640,
-    height: 600,
+    height: 500,
     minWidth: 640,
-    minHeight: 600,
+    minHeight: 570,
     ...windowChromeOptions(),
     // A small picker, not a workspace. Also stops double-clicking the drag region from maximizing it.
     maximizable: false,

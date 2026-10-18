@@ -30,7 +30,15 @@ function CaptionButton({ label, icon: Icon, iconSize, danger = false, onClick }:
   );
 }
 
-function WindowControls({ className = 'h-10', maximizable }: { className?: string; maximizable: boolean }) {
+function WindowControls({
+  className = 'h-10',
+  maximizable,
+  offsetClassName,
+}: {
+  className?: string;
+  maximizable: boolean;
+  offsetClassName: string;
+}) {
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -51,7 +59,7 @@ function WindowControls({ className = 'h-10', maximizable }: { className?: strin
   }, []);
 
   return (
-    <div className={`app-region-no-drag absolute top-0 right-0 z-50 flex ${className}`}>
+    <div className={`app-region-no-drag absolute right-0 z-50 flex ${offsetClassName} ${className}`}>
       <CaptionButton label="Minimize" icon={Minus} iconSize={16} onClick={() => window.browsie?.minimizeWindow()} />
       {maximizable && (
         <CaptionButton
@@ -73,12 +81,14 @@ type TitleBarProps = {
   controlsClassName?: string;
   /** False hides the maximize button; must match the window's `maximizable` option in main. */
   maximizable?: boolean;
+  /** Vertical offset for the wordmark and caption buttons. Defaults to the top edge. */
+  offsetClassName?: string;
 };
 
 /**
  * Drag region for the hidden title bar. Stops short of the custom caption buttons.
  */
-function TitleBar({ children, controlsClassName, maximizable = true }: TitleBarProps) {
+function TitleBar({ children, controlsClassName, maximizable = true, offsetClassName = 'top-0' }: TitleBarProps) {
   // Each caption button is w-12 (3rem).
   const controlsInset = maximizable ? 'right-36' : 'right-24';
 
@@ -86,11 +96,11 @@ function TitleBar({ children, controlsClassName, maximizable = true }: TitleBarP
     <>
       {/* Drag region must not overlap the caption buttons, or Windows swallows their clicks. */}
       <header
-        className={`app-region-drag absolute top-0 left-0 z-10 flex h-10 items-center ${controlsInset} pl-4`}
+        className={`app-region-drag absolute left-0 z-10 flex h-10 items-center ${offsetClassName} ${controlsInset} pl-4`}
       >
         {children}
       </header>
-      <WindowControls className={controlsClassName} maximizable={maximizable} />
+      <WindowControls className={controlsClassName} maximizable={maximizable} offsetClassName={offsetClassName} />
     </>
   );
 }

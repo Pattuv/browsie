@@ -129,18 +129,15 @@ function BrowserChrome() {
     }
   }, [phase]);
 
-  useEffect(() => {
-    if (showChrome && activeTab?.url === null) {
-      shownNewTabs.current.add(activeTab.id);
-    }
-  }, [showChrome, activeTab?.id, activeTab?.url]);
-
+  // Claim the id during render so switching back (or activating while dragging) never replays the fade.
   const newTabEntranceDelay = (tabId: number) => {
     if (shownNewTabs.current.has(tabId)) {
       return null;
     }
 
-    return phase === 'ready' ? 0 : LAUNCH_PAGE_DELAY;
+    const delay = phase === 'ready' ? 0 : LAUNCH_PAGE_DELAY;
+    shownNewTabs.current.add(tabId);
+    return delay;
   };
 
   return (
@@ -159,7 +156,11 @@ function BrowserChrome() {
             <div ref={viewportRef} className="relative min-h-0 flex-1">
               {activeTab?.url === null && (
                 // Keyed by tab, so each tab gets its own page.
-                <NewTab key={activeTab.id} entranceDelay={newTabEntranceDelay(activeTab.id)} />
+                <NewTab
+                  key={activeTab.id}
+                  entranceDelay={newTabEntranceDelay(activeTab.id)}
+                  launched={phase === 'ready'}
+                />
               )}
               {/* Freeze-frame of the website while a popover has the real page hidden (see setChromeOverlay). */}
               {pageSnapshot && activeTab?.url !== null && (

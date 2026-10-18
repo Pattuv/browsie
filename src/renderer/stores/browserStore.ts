@@ -1,7 +1,12 @@
 import { create } from 'zustand';
 
 // Main owns the tabs; this is the chrome's read-only mirror of them (same idea as authStore).
-export const useBrowserStore = create<BrowserState>()(() => ({ tabs: [], activeTabId: 0 }));
+export const useBrowserStore = create<BrowserState>()(() => ({
+  tabs: [],
+  activeTabId: 0,
+  lockdown: true,
+  lockdownNotice: 0,
+}));
 
 // Every window bundles this file, but only the browser window may ask main about tabs.
 const isBrowserWindow = new URLSearchParams(window.location.search).get('window') === 'browser';
@@ -18,11 +23,44 @@ export const browserStateLoaded: Promise<void> = browser
       .catch(() => undefined)
   : Promise.resolve();
 
-// Lockdown Mode: the browser is agent-controlled only. UI-only for now; main isn't told yet.
+// Lockdown Mode: a person can't drive the browser. Main owns it (on at launch, off while Google
+// sign-in is on screen); this mirrors it from the browser state, and toggle asks main to change it.
+// The agent later uses main-process navigation and script, which this does not block.
 export const useLockdownStore = create<{ enabled: boolean; toggle: () => void }>()((set) => ({
-  enabled: false,
-  toggle: () => set((state) => ({ enabled: !state.enabled })),
+  enabled: true,
+  toggle: () =>
+    set((state) => {
+      const enabled = !state.enabled;
+      void window.browsie?.browser.setLockdown(enabled);
+      return { enabled };
+    }),
 }));
+
+// The "Lockdown mode is on" notice on the New Tab page. Once per launch, even if another New Tab page
+// mounts later; shown again when lockdown comes back on after Google sign-in.
+export const useLockdownNotice = create<{ open: boolean }>()(() => ({ open: true }));
+
+// Main's notice count when this window first heard from it; only later bumps reopen the notice.
+let seenLockdownNotice: number | null = null;
+
+const followLockdown = ({ lockdown, lockdownNotice }: BrowserState) => {
+  // Nothing in the chrome keeps focus (or a half-typed address) once a person can't use it.
+  if (lockdown && !useLockdownStore.getState().enabled && document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur();
+  }
+
+  useLockdownStore.setState({ enabled: lockdown });
+
+  if (seenLockdownNotice !== null && lockdownNotice > seenLockdownNotice) {
+    useLockdownNotice.setState({ open: true });
+  }
+
+  seenLockdownNotice = lockdownNotice;
+};
+
+if (browser) {
+  useBrowserStore.subscribe(followLockdown);
+}
 
 export const useActiveTab = () =>
   useBrowserStore((state) => state.tabs.find((tab) => tab.id === state.activeTabId) ?? null);

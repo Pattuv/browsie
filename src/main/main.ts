@@ -1,7 +1,9 @@
 import { app } from 'electron';
 import started from 'electron-squirrel-startup';
-import { loadSession } from './auth/session';
-import { configureWebSession } from './browser/webSession';
+import { getAccountId, loadSession, onSessionChange } from './auth/session';
+import { migrateSitePermissions } from './browser/sitePermissions';
+import { resetTabsForAccount } from './browser/tabs';
+import { configureWebSession, setWebAccount } from './browser/webSession';
 import { loadLocalStore } from './data/localStore';
 import { startSync } from './data/syncEngine';
 import { registerIpc } from './ipc';
@@ -23,8 +25,15 @@ app.on('web-contents-created', (_event, contents) => {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   loadLocalStore();
+  migrateSitePermissions();
   loadSession();
-  configureWebSession();
+  configureWebSession(getAccountId());
+  // Signed out, or a different account signed in: switch the tabs to that account's own web storage.
+  onSessionChange(() => {
+    if (setWebAccount(getAccountId())) {
+      resetTabsForAccount();
+    }
+  });
   registerIpc();
   setAppMenu();
   createWindow();

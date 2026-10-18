@@ -1,14 +1,20 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
+  Bell,
   Check,
+  ChevronDown,
   ChevronRight,
   Cookie,
   FileCheck,
   LockKeyhole,
   LockKeyholeOpen,
+  MapPin,
+  Mic,
   Settings,
   Settings2,
   Trash2,
+  Video,
+  type LucideIcon,
 } from 'lucide-react';
 import DropdownMenu, { MenuDivider, MenuGroup, MenuItem } from '../components/DropdownMenu';
 import { trackChromeMenu } from '../stores/browserStore';
@@ -29,12 +35,25 @@ const Note = ({ children }: { children: ReactNode }) => (
   <p className="px-3.5 text-[13px] leading-snug tracking-tight text-zinc-500">{children}</p>
 );
 
+const PERMISSION_ROWS: Record<SitePermissionKind, { label: string; icon: LucideIcon }> = {
+  geolocation: { label: 'Location', icon: MapPin },
+  camera: { label: 'Camera', icon: Video },
+  microphone: { label: 'Microphone', icon: Mic },
+  notifications: { label: 'Notifications', icon: Bell },
+};
+
+const formatBytes = (bytes: number) => {
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const power = Math.min(Math.floor(Math.log(Math.max(bytes, 1)) / Math.log(1024)), units.length - 1);
+  return `${power === 0 ? bytes : (bytes / 1024 ** power).toFixed(1)} ${units[power]}`;
+};
+
 /** The smaller panel that opens beside a row, lined up with its top. */
-function SidePanel({ children }: { children: ReactNode }) {
+function SidePanel({ children, widthClassName = 'w-72' }: { children: ReactNode; widthClassName?: string }) {
   return (
     <div
       role="menu"
-      className="enter-blur-fast smooth absolute top-0 left-full ml-5 flex w-72 flex-col gap-1.5 rounded-[28px] border border-zinc-200 bg-white p-3 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.25)]"
+      className={`enter-blur-fast smooth absolute top-0 left-full ml-5 flex ${widthClassName} flex-col gap-1.5 rounded-[28px] border border-zinc-200 bg-white p-3 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.25)]`}
     >
       {children}
     </div>
@@ -46,6 +65,127 @@ function Detail({ label, value }: { label: string; value: string }) {
     <div className="flex flex-col px-3.5 py-1">
       <span className="text-[13px] tracking-tight text-zinc-500">{label}</span>
       <span className="text-[15px] font-[460] tracking-tight break-words text-zinc-900">{value}</span>
+    </div>
+  );
+}
+
+function OutlineButton({ children, disabled, onClick }: { children: ReactNode; disabled?: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="h-8 shrink-0 cursor-pointer rounded-full border border-[#9572FF]/50 px-3.5 text-[13px] font-[500] tracking-tight text-[#6B4CE0] transition-[background-color,transform] duration-150 ease-out enabled:hover:bg-[#9572FF]/10 enabled:active:scale-95 disabled:cursor-default disabled:opacity-40"
+    >
+      {children}
+    </button>
+  );
+}
+
+const SectionHeading = ({ children }: { children: ReactNode }) => (
+  <h3 className="text-[13px] font-[500] tracking-tight text-zinc-500">{children}</h3>
+);
+
+/** Like a browser's site settings page: what the site stores, and what it's allowed to use. */
+function SiteSettings({ info, close }: { info: SiteInfo; close: () => void }) {
+  const [permissions, setPermissions] = useState(info.permissions);
+  // A page keeps what it was already given until it reloads, so offer a reload after any change.
+  const [changed, setChanged] = useState(false);
+
+  const apply = (request: Promise<SitePermission[]> | undefined) => {
+    void request
+      ?.then((next) => {
+        setPermissions(next);
+        setChanged(true);
+      })
+      .catch((error: unknown) => console.error('Could not change site permissions:', error));
+  };
+
+  const usage = [
+    info.storageBytes !== null && formatBytes(info.storageBytes),
+    `${info.cookieCount} ${info.cookieCount === 1 ? 'cookie' : 'cookies'}`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <div className="flex flex-col gap-3 px-2 py-1">
+      <h2 className="text-[17px] font-[560] tracking-tight break-words text-zinc-900">{info.host}</h2>
+
+      <section className="flex flex-col gap-1.5">
+        <SectionHeading>Usage</SectionHeading>
+        <div className="flex items-center gap-3">
+          <span className="flex-1 text-[15px] font-[460] tracking-tight text-zinc-900">{usage}</span>
+          <OutlineButton
+            onClick={() => {
+              close();
+              void browser?.clearSiteData();
+            }}
+          >
+            Delete data
+          </OutlineButton>
+        </div>
+      </section>
+
+      <MenuDivider />
+
+      <section className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-3">
+          <span className="flex-1">
+            <SectionHeading>Permissions</SectionHeading>
+          </span>
+          <OutlineButton
+            disabled={permissions.every(({ setting }) => setting === 'block')}
+            onClick={() => apply(browser?.resetSitePermissions())}
+          >
+            Reset permissions
+          </OutlineButton>
+        </div>
+
+        {permissions.map(({ kind, setting }) => {
+          const { label, icon: Icon } = PERMISSION_ROWS[kind];
+
+          return (
+            <label key={kind} className="flex h-10 items-center gap-2.5 text-[15px] font-[460] tracking-tight">
+              <Icon size={18} strokeWidth={1.75} className="text-zinc-500" aria-hidden="true" />
+              <span className="flex-1">{label}</span>
+              <span className="relative">
+                <select
+                  value={setting}
+                  onChange={(event) =>
+                    apply(browser?.setSitePermission(kind, event.target.value as SitePermission['setting']))
+                  }
+                  className="smooth h-9 w-36 cursor-pointer appearance-none rounded-[12px] border border-zinc-200 bg-white pr-8 pl-3 text-[14px] text-zinc-800 transition-colors hover:border-zinc-300 focus:border-[#9572FF]/60 focus:outline-none"
+                >
+                  <option value="block">Block (default)</option>
+                  <option value="allow">Allow</option>
+                </select>
+                <ChevronDown
+                  size={15}
+                  className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-zinc-500"
+                  aria-hidden="true"
+                />
+              </span>
+            </label>
+          );
+        })}
+
+        {changed && (
+          <div className="mt-1 flex items-center gap-3">
+            <p className="flex-1 text-[13px] leading-snug tracking-tight text-zinc-500">
+              Reload the page to apply your changes.
+            </p>
+            <OutlineButton
+              onClick={() => {
+                close();
+                void browser?.reload();
+              }}
+            >
+              Reload
+            </OutlineButton>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -114,10 +254,15 @@ function SiteInfoPanel({ close }: { close: () => void }) {
   const toggle = (next: Section) => () => setSection((current) => (current === next ? null : next));
 
   // One row of the panel; its side panel opens beside it.
-  const row = (id: Section, item: Omit<Parameters<typeof MenuItem>[0], 'expanded' | 'onClick'>, panel: ReactNode) => (
+  const row = (
+    id: Section,
+    item: Omit<Parameters<typeof MenuItem>[0], 'expanded' | 'onClick'>,
+    panel: ReactNode,
+    panelWidth?: string,
+  ) => (
     <div className="relative">
       <MenuItem {...item} expanded={section === id} onClick={toggle(id)} />
-      {section === id && <SidePanel>{panel}</SidePanel>}
+      {section === id && <SidePanel widthClassName={panelWidth}>{panel}</SidePanel>}
     </div>
   );
 
@@ -179,18 +324,8 @@ function SiteInfoPanel({ close }: { close: () => void }) {
         {row(
           'settings',
           { icon: Settings, label: 'Site settings', trailing: chevron },
-          <>
-            {info.permissions.map(({ label, allowed }) => (
-              <div key={label} className="flex h-9 items-center px-3.5 text-[15px] font-[460] tracking-tight">
-                <span className="flex-1">{label}</span>
-                <span className={`text-[13px] ${allowed ? 'text-emerald-700' : 'text-zinc-500'}`}>
-                  {allowed ? 'Allowed' : 'Blocked'}
-                </span>
-              </div>
-            ))}
-            <MenuDivider />
-            <Note>Browsie blocks these on every website to keep you safe.</Note>
-          </>,
+          <SiteSettings info={info} close={close} />,
+          'w-[23rem]',
         )}
       </MenuGroup>
     </>

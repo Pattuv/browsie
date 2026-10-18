@@ -203,6 +203,9 @@ export const invalidateAccessToken = () => {
   }
 };
 
+// Main only: which account's web storage the tabs should use. Never sent to the renderer.
+export const getAccountId = () => current?.vault.sub ?? null;
+
 // Local wipe first, so signing out works offline and the next person on a shared device sees nothing.
 // Then best-effort revoke, so the token is also dead on Google's side.
 export const signOut = async () => {

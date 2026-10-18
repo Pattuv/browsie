@@ -1,25 +1,77 @@
-import { app, session } from 'electron';
+import { app, session, type WebContents } from 'electron';
+import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { forgetGoogleLogin, setGoogleLoginPartition, watchGoogleLogin } from './googleWebLogin';
+import { isAllowed } from './sitePermissions';
 
-// Websites get their own storage partition: cookies, cache and logins for the web live here,
-// completely apart from the default session that Browsie's own pages use.
-export const WEB_PARTITION = 'persist:web';
+// Websites get their own storage partition: cookies, cache and logins for the web live there,
+// completely apart from the default session that Browsie's own pages use. Each Browsie account has its
+// own, like Chrome profiles: signing out locks your web logins away on this device, someone else signing
+// in starts with their own, and signing back in brings yours back.
+// While nobody is signed in, websites get an in-memory partition (no "persist:") that's never saved.
+const GUEST_PARTITION = 'web-guest';
+// Before web storage was split per account, every account shared this one.
+const LEGACY_PARTITION_FOLDER = 'web';
 
-// Everything a page asks for (camera, location, notifications...) is refused unless listed here.
-// Fullscreen lets videos fill the screen; clipboard-sanitized-write lets "copy" buttons work.
-const ALLOWED_PERMISSIONS = new Set(['fullscreen', 'clipboard-sanitized-write']);
+let webPartition = GUEST_PARTITION;
+const configured = new Set<string>();
 
-// What the site info panel lists under Site settings, in plain words.
-const SITE_PERMISSIONS = [
-  { label: 'Location', permission: 'geolocation' },
-  { label: 'Camera and microphone', permission: 'media' },
-  { label: 'Notifications', permission: 'notifications' },
-  { label: 'Full screen', permission: 'fullscreen' },
-];
+// A short hash of the account's Google ID: the same account always gets the same folder, and the ID
+// itself never appears in folder names on disk.
+const partitionFor = (accountId: string) =>
+  `persist:web-${createHash('sha256').update(accountId).digest('hex').slice(0, 16)}`;
 
-export const getSitePermissions = (): SitePermission[] => [
-  ...SITE_PERMISSIONS.map(({ label, permission }) => ({ label, allowed: ALLOWED_PERMISSIONS.has(permission) })),
-  { label: 'Downloads', allowed: false },
-];
+export const getWebPartition = () => webPartition;
+export const webSession = () => session.fromPartition(webPartition);
+
+// Every website may use these. Fullscreen lets videos fill the screen; clipboard-sanitized-write
+// lets "copy" buttons work.
+const ALWAYS_ALLOWED = new Set(['fullscreen', 'clipboard-sanitized-write']);
+
+const originOf = (url: string | undefined) => {
+  try {
+    return url ? new URL(url).origin : null;
+  } catch {
+    return null;
+  }
+};
+
+// Location, camera, microphone and notifications follow the user's choice in Site settings, and only
+// for the page itself: an ad or other embedded frame never inherits what its host page was allowed.
+// Everything else a page asks for is refused.
+const decide = (
+  contents: WebContents | null,
+  permission: string,
+  requestingUrl: string | undefined,
+  isMainFrame: boolean,
+  mediaTypes: string[],
+) => {
+  if (ALWAYS_ALLOWED.has(permission)) {
+    return true;
+  }
+
+  const origin = originOf(requestingUrl);
+
+  if (!origin || !isMainFrame || origin !== originOf(contents?.getURL())) {
+    return false;
+  }
+
+  if (permission === 'geolocation' || permission === 'notifications') {
+    return isAllowed(origin, permission);
+  }
+
+  if (permission === 'media') {
+    return (
+      mediaTypes.length > 0 &&
+      mediaTypes.every((type) =>
+        type === 'video' ? isAllowed(origin, 'camera') : type === 'audio' && isAllowed(origin, 'microphone'),
+      )
+    );
+  }
+
+  return false;
+};
 
 // The last certificate Chromium checked for each host, for the site info panel. Chromium makes the
 // call; we only take notes. Entries are dropped oldest-first past the cap.
@@ -48,20 +100,62 @@ export const isWebUrl = (rawUrl: string) => {
   }
 };
 
-const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Electron puts our app name between "(KHTML, like Gecko)" and "Chrome/". Drop only that.
+// Keep "Electron/…": Google sends an honest Electron browser to its simpler sign-in page, while one
+// posing as plain Chrome gets the full page, which then rejects it ("This browser or app may not be secure").
+const webUserAgent = (userAgent: string) =>
+  userAgent.replace(/\(KHTML, like Gecko\) .*?Chrome\//, '(KHTML, like Gecko) Chrome/');
 
-export const configureWebSession = () => {
-  const web = session.fromPartition(WEB_PARTITION);
+// One failed Google sign-in leaves these cookies behind, and from then on Google goes straight to
+// the error page. Clearing them leaves real logins (SID, __Secure-…) alone.
+const GOOGLE_REJECTION_COOKIES = new Set(['__Host-GAPS', 'OTZ']);
+const GOOGLE_DOMAINS = ['google.com', 'accounts.google.com', 'mail.google.com'];
 
-  // Electron's default user agent mentions "Electron/…" and our app name, and some sites
-  // (Google sign-in especially) refuse browsers they don't recognize. Look like plain Chrome.
-  const extraTokens = new RegExp(`\\s(Electron|${escapeRegExp(app.getName())})/\\S+`, 'g');
-  web.setUserAgent(web.getUserAgent().replace(extraTokens, ''));
+export const clearGoogleRejectionCookies = async (web = webSession()) => {
+  const { cookies } = web;
 
-  web.setPermissionRequestHandler((_contents, permission, callback) => {
-    callback(ALLOWED_PERMISSIONS.has(permission));
+  for (const domain of GOOGLE_DOMAINS) {
+    for (const cookie of await cookies.get({ domain })) {
+      if (!GOOGLE_REJECTION_COOKIES.has(cookie.name)) {
+        continue;
+      }
+
+      const host = (cookie.domain ?? domain).replace(/^\./, '');
+      await cookies.remove(`${cookie.secure ? 'https' : 'http'}://${host}${cookie.path || '/'}`, cookie.name);
+    }
+  }
+};
+
+// Google's sign-in error page, after it has rejected the browser.
+export const isGoogleSignInRejection = (url: string) =>
+  url.includes('accounts.google.com') && (url.includes('signin/rejected') || url.includes('rrk=46'));
+
+// Every account's partition lives by the same rules. Runs once per partition, the first time it's used.
+const configurePartition = (partition: string) => {
+  if (configured.has(partition)) {
+    return;
+  }
+
+  configured.add(partition);
+  const web = session.fromPartition(partition);
+
+  // Set on the session, not per tab, so the page and its fetch/XHR requests all send the same string.
+  web.setUserAgent(webUserAgent(web.getUserAgent()));
+  void clearGoogleRejectionCookies(web).catch(() => undefined);
+  watchGoogleLogin(partition, web);
+
+  web.setPermissionRequestHandler((contents, permission, callback, details) => {
+    const mediaTypes = 'mediaTypes' in details ? (details.mediaTypes ?? []) : [];
+    callback(decide(contents, permission, details.requestingUrl, details.isMainFrame, mediaTypes));
   });
-  web.setPermissionCheckHandler((_contents, permission) => ALLOWED_PERMISSIONS.has(permission));
+  web.setPermissionCheckHandler((contents, permission, _origin, { requestingUrl, isMainFrame, mediaType }) => {
+    // A media check without a type (listing devices) passes if either the camera or mic is allowed.
+    if (permission === 'media' && mediaType !== 'video' && mediaType !== 'audio') {
+      return ['video', 'audio'].some((type) => decide(contents, permission, requestingUrl, isMainFrame, [type]));
+    }
+
+    return decide(contents, permission, requestingUrl, isMainFrame, mediaType ? [mediaType] : []);
+  });
 
   // -3 means "use Chromium's own verdict", so bad certificates are still refused exactly as before.
   // Never call back with 0 here: that would accept every certificate.
@@ -82,4 +176,47 @@ export const configureWebSession = () => {
 
   // No downloads until there's a download UI that can ask first.
   web.on('will-download', (event) => event.preventDefault());
+};
+
+// Points websites at this account's storage (null = signed out). Returns true if that changed, so the
+// caller can close tabs still attached to the previous account's storage.
+export const setWebAccount = (accountId: string | null) => {
+  const next = accountId ? partitionFor(accountId) : GUEST_PARTITION;
+  configurePartition(next);
+  setGoogleLoginPartition(next);
+
+  if (next === webPartition) {
+    return false;
+  }
+
+  webPartition = next;
+  return true;
+};
+
+// "Remove my data from this device" at sign-out: that account's cookies, logins, site storage and cache.
+export const removeWebData = async (accountId: string) => {
+  const partition = partitionFor(accountId);
+  const web = session.fromPartition(partition);
+  await web.clearStorageData();
+  await web.clearCache();
+  forgetGoogleLogin(partition);
+};
+
+// Startup, before any partition is opened: the old shared storage holds logins from whoever used it
+// before accounts were separated, so it can't be handed to anyone. Delete it; nothing opens it any more.
+const removeLegacyWebData = () => {
+  try {
+    fs.rmSync(path.join(app.getPath('userData'), 'Partitions', LEGACY_PARTITION_FOLDER), {
+      recursive: true,
+      force: true,
+    });
+  } catch {
+    // Locked or already gone: harmless, it's never read.
+  }
+};
+
+export const configureWebSession = (accountId: string | null) => {
+  removeLegacyWebData();
+  configurePartition(GUEST_PARTITION);
+  setWebAccount(accountId);
 };

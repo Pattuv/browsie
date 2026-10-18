@@ -1,5 +1,4 @@
-import { session } from 'electron';
-import { WEB_PARTITION, isWebUrl } from './webSession';
+import { webSession, isWebUrl } from './webSession';
 
 const MAX_BYTES = 256 * 1024;
 const TIMEOUT_MS = 8000;
@@ -8,6 +7,9 @@ const MAX_CACHED = 200;
 // Favicon URL → data: URL, or null if it couldn't be used. Shared by every tab, so ten tabs of one
 // site download the icon once. Failures are cached too, so a broken icon isn't retried on every page.
 const cache = new Map<string, Promise<string | null>>();
+
+// A different account signed in: drop icons fetched with the previous account's cookies.
+export const clearFaviconCache = () => cache.clear();
 
 const imageTypeFor = (url: string, header: string) => {
   const type = header.split(';')[0].trim().toLowerCase();
@@ -23,8 +25,7 @@ const imageTypeFor = (url: string, header: string) => {
 const download = async (url: string) => {
   try {
     // Through the websites' partition, never Browsie's own session.
-    const response = await session
-      .fromPartition(WEB_PARTITION)
+    const response = await webSession()
       .fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
 
     if (!response.ok || Number(response.headers.get('content-length') ?? 0) > MAX_BYTES) {
