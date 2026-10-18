@@ -198,13 +198,22 @@ function SiteInfoPanel({ close }: { close: () => void }) {
 }
 
 /** The button at the left of the address bar and its panel: connection, certificate, cookies, permissions. */
-function SiteInfoMenu({ visible }: { visible: boolean }) {
+function SiteInfoMenu({
+  visible,
+  armed,
+  onMouseDown,
+}: {
+  visible: boolean;
+  /** Hit target stays active while the icon is faded, so the field underneath never receives the press. */
+  armed: boolean;
+  onMouseDown: () => void;
+}) {
   return (
     <DropdownMenu
       align="left"
       widthClassName="w-80"
       onOpenChange={handleOpenChange}
-      className="absolute top-1/2 left-1.5 z-10 -translate-y-1/2"
+      className={`absolute inset-y-0 left-0 z-10 flex w-9 ${armed ? '' : 'pointer-events-none'}`}
       trigger={({ open, toggle }) => (
         <button
           type="button"
@@ -214,12 +223,23 @@ function SiteInfoMenu({ visible }: { visible: boolean }) {
           aria-expanded={open}
           tabIndex={visible ? 0 : -1}
           aria-hidden={!visible}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onMouseDown();
+          }}
           onClick={toggle}
-          className={`flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 transition-[opacity,background-color,color,transform] duration-200 ease-out hover:bg-zinc-200/80 hover:text-zinc-900 active:scale-90 ${
-            open ? 'bg-zinc-200/80 text-zinc-900' : ''
-          } ${visible ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+          className={`group flex h-full w-full items-center justify-center text-zinc-500 transition-opacity duration-200 ease-out ${
+            visible ? 'opacity-100' : 'opacity-0'
+          }`}
         >
-          <Settings2 size={15} aria-hidden="true" />
+          <span
+            className={`flex h-6 w-6 items-center justify-center rounded-md transition-[background-color,color,transform] duration-200 ease-out group-hover:bg-zinc-200/80 group-hover:text-zinc-900 group-active:scale-90 ${
+              open ? 'bg-zinc-200/80 text-zinc-900' : ''
+            }`}
+          >
+            <Settings2 size={15} aria-hidden="true" />
+          </span>
         </button>
       )}
     >
