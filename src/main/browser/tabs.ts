@@ -580,12 +580,14 @@ export const newTab = (url?: string) => {
     return;
   }
 
-  const tab = blankTab({ showingNewTab: !url });
+  // From the chrome: only real http(s) addresses. Internal callers already pass safe URLs.
+  const target = typeof url === 'string' && isWebUrl(url) ? new URL(url).href : undefined;
+  const tab = blankTab({ showingNewTab: !target });
   tabs.push(tab);
   activeTabId = tab.id;
 
-  if (url) {
-    load(tab, url);
+  if (target) {
+    load(tab, target);
   }
 
   layout();

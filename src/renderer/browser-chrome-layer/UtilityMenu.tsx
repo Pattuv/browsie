@@ -43,7 +43,7 @@ function UtilityMenu({ onOpenChange }: UtilityMenuProps) {
       {(close) => {
         const go = (url: string) => () => {
           close();
-          void browser?.navigate(url);
+          void browser?.newTab(url);
         };
 
         return (

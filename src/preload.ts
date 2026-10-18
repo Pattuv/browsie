@@ -50,7 +50,7 @@ const browser: BrowsieBrowserAPI = {
     ipcRenderer.on("browser:state-changed", listener);
     return () => ipcRenderer.removeListener("browser:state-changed", listener);
   },
-  newTab: () => ipcRenderer.invoke("browser:new-tab"),
+  newTab: (url) => ipcRenderer.invoke("browser:new-tab", url),
   closeTab: (id) => ipcRenderer.invoke("browser:close-tab", id),
   activateTab: (id) => ipcRenderer.invoke("browser:activate-tab", id),
   moveTab: (id, index) => ipcRenderer.invoke("browser:move-tab", id, index),

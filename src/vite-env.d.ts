@@ -172,7 +172,8 @@ interface BrowsieBrowserAPI {
   getState: () => Promise<BrowserState>;
   // Returns an unsubscribe function.
   onStateChanged: (callback: (state: BrowserState) => void) => () => void;
-  newTab: () => Promise<void>;
+  // Optional url opens that site in the new tab; omit for a blank New Tab page.
+  newTab: (url?: string) => Promise<void>;
   closeTab: (id: number) => Promise<void>;
   activateTab: (id: number) => Promise<void>;
   // Puts that tab at index, shifting the others along. Index is clamped to the strip.

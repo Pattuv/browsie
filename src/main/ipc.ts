@@ -114,7 +114,9 @@ export const registerIpc = () => {
   handle('browser:launch', () => openBrowser());
   handleFromBrowser('browser:exit', () => getBrowserWindow()?.close());
   handleFromBrowser('browser:get-state', () => getBrowserState());
-  handleFromBrowser('browser:new-tab', () => newTab());
+  handleFromBrowser('browser:new-tab', (_event, url?: unknown) =>
+    newTab(typeof url === 'string' ? url : undefined),
+  );
   handleFromBrowser('browser:close-tab', (_event, id: unknown) => closeTab(id));
   handleFromBrowser('browser:activate-tab', (_event, id: unknown) => activateTab(id));
   handleFromBrowser('browser:move-tab', (_event, id: unknown, index: unknown) => moveTab(id, index));

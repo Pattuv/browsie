@@ -197,7 +197,7 @@ function NewTab({ entranceDelay: initialDelay, launched }: NewTabProps) {
       <button
         type="button"
         role="link"
-        onClick={() => browser?.navigate(GUIDE_URL)}
+        onClick={() => browser?.newTab(GUIDE_URL)}
         className="chrome-item absolute left-4 top-4 text-xs text-zinc-500 underline underline-offset-2 transition-colors duration-150 hover:text-zinc-900"
         style={delay(0)}
       >
@@ -212,7 +212,7 @@ function NewTab({ entranceDelay: initialDelay, launched }: NewTabProps) {
           type="button"
           aria-label="Google apps"
           title="Google apps"
-          onClick={() => browser?.navigate(GOOGLE_APPS_URL)}
+          onClick={() => browser?.newTab(GOOGLE_APPS_URL)}
           className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-900 transition-[background-color,transform] duration-150 hover:bg-zinc-100 active:scale-90"
         >
           <Grip size={20} aria-hidden="true" />
