@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Grip, HeartHandshake, X } from "lucide-react";
+import { HeartHandshake, X } from "lucide-react";
 import DashboardTip, { type Tip } from "../../components/DashboardTip";
 import { useLockdownStore } from "../../stores/browserStore";
 import mascot from "../../assets/mascot.svg";
 
 const GUIDE_URL = "https://browsie.org/help-center";
-const GOOGLE_APPS_URL = "https://about.google/products/";
 
 const MOD = "Ctrl";
 // How long the launch notice stays before it dismisses itself.
@@ -192,21 +191,6 @@ function NewTab({ entranceDelay: initialDelay, launched }: NewTabProps) {
       >
         Need help?
       </button>
-
-      <div
-        className="chrome-item absolute right-4 top-3 flex items-center gap-1"
-        style={delay(40)}
-      >
-        <button
-          type="button"
-          aria-label="Google apps"
-          title="Google apps"
-          onClick={() => browser?.navigate(GOOGLE_APPS_URL)}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-900 transition-[background-color,transform] duration-150 hover:bg-zinc-100 active:scale-90"
-        >
-          <Grip size={20} aria-hidden="true" />
-        </button>
-      </div>
 
       <div className="flex flex-1 flex-col items-center justify-center gap-[clamp(0.5rem,1vh,1rem)] pb-16">
         <img
