@@ -1,9 +1,9 @@
 import { Fragment, useState, type CSSProperties } from "react";
-import { Globe, Plus, X } from "lucide-react";
+import { Globe, LockOpen, Plus, X } from "lucide-react";
 import IconButton from "./IconButton";
 import ProfileMenu from "../components/ProfileMenu";
 import UtilityMenu from "./UtilityMenu";
-import { trackChromeMenu, useBrowserStore } from "../stores/browserStore";
+import { trackChromeMenu, useBrowserStore, useLockdownStore } from "../stores/browserStore";
 import mascot from "../assets/mascot.svg";
 
 // The site's icon, or the globe until one arrives (or if it won't decode).
@@ -138,6 +138,7 @@ type TabStripProps = {
 function TabStrip({ style }: TabStripProps) {
   const tabs = useBrowserStore((state) => state.tabs);
   const activeTabId = useBrowserStore((state) => state.activeTabId);
+  const locked = useLockdownStore((state) => state.enabled);
 
   return (
     // The active tab runs from pt-1.5 down to the strip's bottom edge, its title centered in its own body.
@@ -161,7 +162,7 @@ function TabStrip({ style }: TabStripProps) {
       <div
         role="tablist"
         aria-label="Tabs"
-        className="flex min-w-0 flex-1 items-center gap-1 self-stretch pl-1"
+        className={`flex min-w-0 flex-1 items-center gap-1 self-stretch pl-1 ${locked ? "pointer-events-none" : ""}`}
       >
         {tabs.map((tab, index) => {
           const active = tab.id === activeTabId;
@@ -178,13 +179,49 @@ function TabStrip({ style }: TabStripProps) {
         <IconButton
           label="New tab"
           onClick={() => window.browsie?.browser.newTab()}
-          className="mb-1.5 h-7 w-7 hover:bg-[#E2D9FF]! hover:[&_svg]:rotate-90"
+          className={`mb-1.5 h-7 w-7 hover:bg-[#E2D9FF]! hover:[&_svg]:rotate-90 ${locked ? "pointer-events-none" : ""}`}
         >
           <Plus size={16} aria-hidden="true" />
         </IconButton>
       </div>
 
       <div className="mb-1.5 mr-2 flex items-center gap-1">
+        <span
+          aria-label={locked ? "Lockdown on" : "Lockdown off"}
+          title={locked ? "Lockdown on" : "Lockdown off"}
+          className={`flex h-8 w-8 items-center justify-center ${locked ? "text-[#9572FF]" : "text-zinc-600"}`}
+        >
+          {locked ? (
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
+              <rect
+                x="3"
+                y="11"
+                width="18"
+                height="11"
+                rx="2"
+                fill="currentColor"
+                stroke="currentColor"
+                strokeWidth="1.75"
+              />
+              <path
+                d="M7 11V7a5 5 0 0 1 10 0v4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          ) : (
+            <LockOpen size={16} strokeWidth={1.75} aria-hidden="true" />
+          )}
+        </span>
         <UtilityMenu onOpenChange={handleUtilityOpenChange} />
         <ProfileMenu
           triggerClassName="h-6 w-6 hover:bg-[#E2D9FF]"

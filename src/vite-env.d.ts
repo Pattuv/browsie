@@ -167,6 +167,8 @@ interface BrowsieBrowserAPI {
   // A still image (data: URL) of the website on screen, or null if there isn't one.
   capturePage: () => Promise<string | null>;
   setOverlayOpen: (open: boolean) => Promise<void>;
+  // Human input on websites is ignored while this is on. Main-process loads still run.
+  setLockdown: (enabled: boolean) => Promise<void>;
   // Null on the New Tab page.
   getSiteInfo: () => Promise<SiteInfo | null>;
   // Deletes the open site's cookies and storage, then reloads it.

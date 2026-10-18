@@ -13,6 +13,7 @@ import {
   newTab,
   reload,
   setContentBounds,
+  setLockdown,
   setOverlayOpen,
   stop,
 } from './browser/tabs';
@@ -120,6 +121,7 @@ export const registerIpc = () => {
   handleFromBrowser('browser:set-content-bounds', (_event, bounds: unknown) => setContentBounds(bounds));
   handleFromBrowser('browser:capture-page', () => captureActivePage());
   handleFromBrowser('browser:set-overlay-open', (_event, open: unknown) => setOverlayOpen(open === true));
+  handleFromBrowser('browser:set-lockdown', (_event, enabled: unknown) => setLockdown(enabled === true));
   handleFromBrowser('browser:get-site-info', () => getSiteInfo());
   handleFromBrowser('browser:clear-site-data', () => clearSiteData());
   handleFromBrowser('browser:set-site-permission', (_event, kind: unknown, setting: unknown) =>

@@ -18,10 +18,21 @@ export const browserStateLoaded: Promise<void> = browser
       .catch(() => undefined)
   : Promise.resolve();
 
-// Lockdown Mode: the browser is agent-controlled only. UI-only for now; main isn't told yet.
+// Lockdown Mode: a person can't drive the browser. Main is told so it can ignore input on websites.
+// The agent later uses main-process navigation and script, which this does not block.
 export const useLockdownStore = create<{ enabled: boolean; toggle: () => void }>()((set) => ({
-  enabled: false,
-  toggle: () => set((state) => ({ enabled: !state.enabled })),
+  enabled: true,
+  toggle: () =>
+    set((state) => {
+      const enabled = !state.enabled;
+
+      if (enabled && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+
+      void window.browsie?.browser.setLockdown(enabled);
+      return { enabled };
+    }),
 }));
 
 export const useActiveTab = () =>

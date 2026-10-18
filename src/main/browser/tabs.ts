@@ -53,6 +53,10 @@ let contentBounds: ContentBounds | null = null;
 let overlayOpen = false;
 // The tab playing a video (or anything else) in HTML fullscreen, if any.
 let fullscreenTabId: number | null = null;
+// A person can't click, type, or use shortcuts. Main-process loads and scripts still work for the agent.
+let lockdown = false;
+const lockdownCssKey = new Map<number, string>();
+const LOCKDOWN_CSS = 'html { pointer-events: none !important; }';
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
@@ -304,11 +308,75 @@ const wireContents = (tab: Tab, contents: WebContents) => {
   });
 
   contents.on('before-input-event', (event, input) => {
+    if (lockdown) {
+      event.preventDefault();
+      return;
+    }
+
     if (handleShortcut(input, 'tab')) {
       event.preventDefault();
     }
   });
-  contents.on('context-menu', (_event, params) => showContextMenu(tab, contents, params));
+  contents.on('context-menu', (event, params) => {
+    if (lockdown) {
+      event.preventDefault();
+      return;
+    }
+
+    showContextMenu(tab, contents, params);
+  });
+  contents.on('did-finish-load', () => {
+    if (lockdown) {
+      void applyLockdownCss(contents);
+    }
+  });
+};
+
+const applyLockdownCss = async (contents: WebContents) => {
+  if (!lockdown || contents.isDestroyed()) {
+    return;
+  }
+
+  const key = await contents.insertCSS(LOCKDOWN_CSS);
+
+  if (!lockdown || contents.isDestroyed()) {
+    await contents.removeInsertedCSS(key).catch(() => undefined);
+    return;
+  }
+
+  const previous = lockdownCssKey.get(contents.id);
+  lockdownCssKey.set(contents.id, key);
+
+  if (previous) {
+    await contents.removeInsertedCSS(previous).catch(() => undefined);
+  }
+};
+
+const clearLockdownCss = async (contents: WebContents) => {
+  const key = lockdownCssKey.get(contents.id);
+  lockdownCssKey.delete(contents.id);
+
+  if (key && !contents.isDestroyed()) {
+    await contents.removeInsertedCSS(key).catch(() => undefined);
+  }
+};
+
+export const setLockdown = (enabled: boolean) => {
+  lockdown = enabled;
+
+  for (const tab of tabs) {
+    const contents = tab.view?.webContents;
+
+    if (!contents) {
+      continue;
+    }
+
+    if (enabled) {
+      void applyLockdownCss(contents);
+    } else {
+      void clearLockdownCss(contents);
+    }
+  }
 };
 
 const createView = (tab: Tab) => {
@@ -568,7 +636,7 @@ const zoomActiveTab = (key: string) => {
 // Browser keyboard shortcuts. Main sees keys before any page does (before-input-event), so they
 // work the same whether focus is in the chrome or inside a website. Returns true if handled.
 export const handleShortcut = (input: Input, source: 'chrome' | 'tab') => {
-  if (input.type !== 'keyDown') {
+  if (lockdown || input.type !== 'keyDown') {
     return false;
   }
 

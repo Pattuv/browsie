@@ -4,7 +4,7 @@ import TabStrip from './TabStrip';
 import Toolbar from './Toolbar';
 import NewTab from './pages/NewTab';
 import { playStartupSound, startupSoundLoaded } from '../sounds';
-import { browserStateLoaded, useActiveTab, usePageSnapshot } from '../stores/browserStore';
+import { browserStateLoaded, useActiveTab, useLockdownStore, usePageSnapshot } from '../stores/browserStore';
 import mascot from '../assets/mascot.svg';
 
 // The splash stays up at least this long, even if everything loads instantly.
@@ -121,6 +121,13 @@ function BrowserChrome() {
 
   useReportContentBounds(viewportRef, phase === 'ready');
 
+  // Lockdown starts on. Main only hears about it from this window, so tell it once at launch.
+  useEffect(() => {
+    if (useLockdownStore.getState().enabled) {
+      void window.browsie?.browser.setLockdown(true);
+    }
+  }, []);
+
   // The browser window's page hides the pointer from its first paint (see index.css).
   // Give it back once the splash has finished and the chrome is ready.
   useLayoutEffect(() => {
@@ -159,7 +166,11 @@ function BrowserChrome() {
             <div ref={viewportRef} className="relative min-h-0 flex-1">
               {activeTab?.url === null && (
                 // Keyed by tab, so each tab gets its own page.
-                <NewTab key={activeTab.id} entranceDelay={newTabEntranceDelay(activeTab.id)} />
+                <NewTab
+                  key={activeTab.id}
+                  entranceDelay={newTabEntranceDelay(activeTab.id)}
+                  launched={phase === 'ready'}
+                />
               )}
               {/* Freeze-frame of the website while a popover has the real page hidden (see setChromeOverlay). */}
               {pageSnapshot && activeTab?.url !== null && (

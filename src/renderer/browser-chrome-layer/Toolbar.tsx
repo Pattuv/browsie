@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import IconButton from "./IconButton";
 import SiteInfoMenu from "./SiteInfoMenu";
+import { useLockdownStore } from "../stores/browserStore";
 
 // "https://www.example.com/" → "example.com". The full URL comes back when the bar is focused.
 const prettyUrl = (url: string) =>
@@ -185,12 +186,15 @@ type ToolbarProps = {
 /** The bar at the top of the page card: navigation, address bar, Sessions. */
 function Toolbar({ tab, entranceDelay }: ToolbarProps) {
   const browser = window.browsie?.browser;
+  const locked = useLockdownStore((state) => state.enabled);
   const delay = (ms: number): CSSProperties => ({
     animationDelay: `${entranceDelay + ms}ms`,
   });
 
   return (
-    <div className="relative flex h-12 shrink-0 items-center border-b border-zinc-300/80 px-2.5">
+    <div
+      className={`relative flex h-12 shrink-0 items-center border-b border-zinc-300/80 px-2.5 ${locked ? "pointer-events-none" : ""}`}
+    >
       <div className="chrome-item flex items-center gap-0.5" style={delay(0)}>
         <IconButton
           label="Back"
