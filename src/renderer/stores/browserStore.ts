@@ -76,3 +76,21 @@ export const setChromeOverlay = async (open: boolean) => {
     await browser.setOverlayOpen(true);
   }
 };
+
+// The page overlay stays up while any chrome menu is mounted. Opening one while another blurs out
+// would otherwise let the closing menu drop the overlay from under the new one.
+const openMenus = new Set<string>();
+
+export const trackChromeMenu = (id: string) => (open: boolean) => {
+  const wasOpen = openMenus.size > 0;
+
+  if (open) {
+    openMenus.add(id);
+  } else {
+    openMenus.delete(id);
+  }
+
+  if (wasOpen !== openMenus.size > 0) {
+    void setChromeOverlay(openMenus.size > 0);
+  }
+};

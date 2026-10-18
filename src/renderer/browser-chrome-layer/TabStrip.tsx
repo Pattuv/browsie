@@ -3,7 +3,7 @@ import { Globe, Plus, X } from "lucide-react";
 import IconButton from "./IconButton";
 import ProfileMenu from "../components/ProfileMenu";
 import UtilityMenu from "./UtilityMenu";
-import { setChromeOverlay, useBrowserStore } from "../stores/browserStore";
+import { trackChromeMenu, useBrowserStore } from "../stores/browserStore";
 import mascot from "../assets/mascot.svg";
 
 // The site's icon, or the globe until one arrives (or if it won't decode).
@@ -114,28 +114,8 @@ function TabPill({ tab, active }: TabPillProps) {
   );
 }
 
-// The page overlay stays up while either menu is mounted. Opening one while the other blurs out
-// would otherwise let the closing menu drop the overlay from under the new one.
-const openMenus = new Set<string>();
-
-const trackMenu = (id: string) => (open: boolean) => {
-  const wasOpen = openMenus.size > 0;
-
-  if (open) {
-    openMenus.add(id);
-  } else {
-    openMenus.delete(id);
-  }
-
-  if (wasOpen !== openMenus.size > 0) {
-    void setChromeOverlay(openMenus.size > 0);
-  }
-};
-
-// Module-level so they're the same functions every render: the menus re-run onOpenChange whenever it
-// changes, and a fresh arrow each render would re-capture the page on every tab update.
-const handleProfileOpenChange = trackMenu("profile");
-const handleUtilityOpenChange = trackMenu("utility");
+const handleProfileOpenChange = trackChromeMenu("profile");
+const handleUtilityOpenChange = trackChromeMenu("utility");
 
 // The thin line between two tabs. Hidden next to the active tab, and fades out while the tab on
 // either side is hovered so it never cuts through a hover highlight.

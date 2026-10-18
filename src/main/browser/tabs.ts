@@ -472,6 +472,14 @@ export const goForward = () => {
 
   activeContents()?.navigationHistory.goForward();
 };
+// The address of the website on screen, or null on the New Tab page (or a non-web error page).
+export const getActiveWebUrl = () => {
+  // getURL() is empty until the first page commits, so fall back to what we asked it to load.
+  const contents = activeContents();
+  const url = contents && (contents.getURL() || activeTab()?.pendingUrl);
+  return url && isWebUrl(url) ? url : null;
+};
+
 export const reload = () => activeContents()?.reload();
 export const stop = () => activeContents()?.stop();
 

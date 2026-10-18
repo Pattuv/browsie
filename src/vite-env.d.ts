@@ -115,6 +115,30 @@ type ContentBounds = {
   height: number;
 };
 
+// The certificate Chromium accepted for a site. Dates are ISO strings.
+type SiteCertificate = {
+  issuedTo: string;
+  issuedBy: string;
+  validFrom: string;
+  validUntil: string;
+};
+
+type SitePermission = {
+  label: string;
+  allowed: boolean;
+};
+
+// What the site info panel shows about the website on screen.
+type SiteInfo = {
+  host: string;
+  // https with a certificate Chromium accepted.
+  secure: boolean;
+  // Null when the site isn't https, or its certificate wasn't checked this run.
+  certificate: SiteCertificate | null;
+  cookieCount: number;
+  permissions: SitePermission[];
+};
+
 interface BrowsieBrowserAPI {
   // From the Dashboard: open (or focus) the browser window.
   launch: () => Promise<void>;
@@ -137,6 +161,10 @@ interface BrowsieBrowserAPI {
   // A still image (data: URL) of the website on screen, or null if there isn't one.
   capturePage: () => Promise<string | null>;
   setOverlayOpen: (open: boolean) => Promise<void>;
+  // Null on the New Tab page.
+  getSiteInfo: () => Promise<SiteInfo | null>;
+  // Deletes the open site's cookies and storage, then reloads it.
+  clearSiteData: () => Promise<void>;
   // Ctrl+L / F6 / Alt+D. Returns an unsubscribe function.
   onFocusAddress: (callback: () => void) => () => void;
 }

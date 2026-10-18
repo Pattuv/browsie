@@ -9,19 +9,23 @@ type MenuItemProps = {
   disabled?: boolean;
   danger?: boolean;
   trailing?: ReactNode;
+  /** For a row that opens a side panel: whether that panel is showing. */
+  expanded?: boolean;
   onClick?: () => void;
 };
 
-export function MenuItem({ icon: Icon, label, disabled = false, danger = false, trailing, onClick }: MenuItemProps) {
+export function MenuItem({ icon: Icon, label, disabled = false, danger = false, trailing, expanded, onClick }: MenuItemProps) {
   return (
     <button
       type="button"
       role="menuitem"
       disabled={disabled}
+      aria-haspopup={expanded === undefined ? undefined : 'menu'}
+      aria-expanded={expanded}
       onClick={onClick}
       className={`smooth flex h-9 w-full cursor-pointer items-center gap-2 rounded-[16px] px-3.5 text-left text-[15px] font-[460] tracking-tight transition-colors duration-200 ease-out disabled:cursor-default disabled:text-zinc-400 ${
         danger ? 'enabled:hover:bg-[#E81123] enabled:hover:text-white' : 'enabled:hover:bg-zinc-100'
-      }`}
+      } ${expanded ? 'bg-zinc-100' : ''}`}
     >
       {typeof Icon === 'string' ? (
         <span className="flex h-5 w-5 shrink-0 items-center justify-center" aria-hidden="true">
@@ -54,10 +58,22 @@ type DropdownMenuProps = {
   onOpenChange?: (open: boolean) => void;
   /** CSS selector for a chrome card. The panel is portaled there, inset evenly from its top-right corner. */
   panelTarget?: string;
+  /** Which edge of the trigger the panel lines up with (when not portaled). */
+  align?: 'left' | 'right';
+  /** Classes for the wrapper around the trigger, which the panel is positioned from. */
+  className?: string;
 };
 
-/** The white, smoothed-corner popover behind the profile and utility menus. */
-function DropdownMenu({ trigger, children, widthClassName = 'w-80', onOpenChange, panelTarget }: DropdownMenuProps) {
+/** The white, smoothed-corner popover behind the profile, utility and site info menus. */
+function DropdownMenu({
+  trigger,
+  children,
+  widthClassName = 'w-80',
+  onOpenChange,
+  panelTarget,
+  align = 'right',
+  className = 'relative',
+}: DropdownMenuProps) {
   const [open, setOpen] = useState(false);
   // Still mounted while the blur-out plays; unmounted when that animation ends.
   const [closing, setClosing] = useState(false);
@@ -120,7 +136,7 @@ function DropdownMenu({ trigger, children, widthClassName = 'w-80', onOpenChange
   };
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className={className}>
       {trigger({ open: open && !closing, toggle })}
 
       {open &&
@@ -135,7 +151,7 @@ function DropdownMenu({ trigger, children, widthClassName = 'w-80', onOpenChange
               }
             }}
             className={`${closing ? 'exit-blur-fast pointer-events-none' : 'enter-blur-fast'} smooth app-region-no-drag absolute z-40 flex ${widthClassName} flex-col gap-1.5 rounded-[34px] border border-zinc-200 bg-white p-3 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.25)] ${
-              panelTarget ? 'top-3 right-3' : '-right-3 top-full mt-3'
+              panelTarget ? 'top-3 right-3' : `${align === 'left' ? '-left-2' : '-right-3'} top-full mt-3`
             }`}
           >
             {children(close)}

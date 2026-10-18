@@ -5,11 +5,11 @@ import {
   Bookmark,
   MessagesSquare,
   RotateCw,
-  Settings2,
   X,
   type LucideIcon,
 } from "lucide-react";
 import IconButton from "./IconButton";
+import SiteInfoMenu from "./SiteInfoMenu";
 
 // "https://www.example.com/" → "example.com". The full URL comes back when the bar is focused.
 const prettyUrl = (url: string) =>
@@ -73,13 +73,8 @@ function AddressBar({
       style={style}
     >
       <div className="relative h-8 w-full max-w-[31rem] rounded-lg border border-transparent bg-zinc-100 transition-[max-width,background-color,border-color,box-shadow] duration-300 ease-out hover:bg-zinc-200/60 focus-within:max-w-[34rem] focus-within:border-[#9572FF]/40 focus-within:bg-white focus-within:shadow-[0_0_0_4px_rgba(149,114,255,0.12)] hover:focus-within:bg-white">
-        {/* On a website: site settings and bookmark. Both panels land later; the buttons are here so the layout is final. */}
-        <BarButton
-          label="Site settings"
-          icon={Settings2}
-          side="left"
-          visible={Boolean(url) && !editing}
-        />
+        {/* On a website: site information and bookmark. The bookmark panel lands later; its button is here so the layout is final. */}
+        <SiteInfoMenu visible={Boolean(url) && !editing} />
         <BarButton
           label="Bookmark this page"
           icon={Bookmark}
