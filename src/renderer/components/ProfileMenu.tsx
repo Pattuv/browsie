@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Check, Gauge, Info, Lock, LogOut, Users, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, Check, Gauge, Info, Lock, LogOut, Settings, Users, type LucideIcon } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useLockdownStore } from '../stores/browserStore';
 import PrimaryButton from './PrimaryButton';
@@ -336,7 +336,6 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
               </div>
             </div>
 
-            <Divider />
             <UsageCard />
             <MenuItem
               icon={Gauge}
@@ -358,7 +357,11 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
               </>
             ) : (
               <>
-                <MenuItem icon={Users} label="Change mode" onClick={changeMode} />
+                {/* A pair, so tighter than the panel's gap between sections. */}
+                <div className="flex flex-col gap-0.5">
+                  <MenuItem icon={Users} label="Change mode" onClick={changeMode} />
+                  <MenuItem icon={Settings} label="Settings" />
+                </div>
                 {/* Main wipes the vault and pushes SIGNED_OUT; the OnboardingLayer gate then swaps Dashboard for Auth. */}
                 <PrimaryButton
                   onClick={() => window.browsie?.auth.signOut()}

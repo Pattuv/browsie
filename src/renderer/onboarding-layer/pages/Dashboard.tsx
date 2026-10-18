@@ -5,7 +5,6 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { SlidersHorizontal } from "lucide-react";
 import Boiler from "../../components/Boiler";
 import DashboardTip from "../../components/DashboardTip";
 import ProfileMenu from "../../components/ProfileMenu";
@@ -260,17 +259,7 @@ function Dashboard() {
           alt="Browsie"
           className="pointer-events-none h-5 -translate-y-1"
         />
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            aria-label="Settings"
-            title="Settings"
-            className="app-region-no-drag flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl text-black transition-colors duration-200 ease-out hover:bg-zinc-200/70"
-          >
-            <SlidersHorizontal size={18} strokeWidth={2} aria-hidden="true" />
-          </button>
-          <ProfileMenu />
-        </div>
+        <ProfileMenu />
       </div>
 
       {mode && showNotch && (

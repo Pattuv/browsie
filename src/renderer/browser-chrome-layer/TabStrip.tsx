@@ -1,5 +1,5 @@
 import { Fragment, useState, type CSSProperties } from "react";
-import { Globe, Plus, SlidersHorizontal, X } from "lucide-react";
+import { EllipsisVertical, Globe, Plus, X } from "lucide-react";
 import IconButton from "./IconButton";
 import ProfileMenu from "../components/ProfileMenu";
 import { setChromeOverlay, useBrowserStore } from "../stores/browserStore";
@@ -187,7 +187,7 @@ function TabStrip({ style }: TabStripProps) {
       <div className="mb-1.5 mr-2 flex items-center gap-1">
         {/* Settings panel lands later; the button is here so the layout is final. */}
         <IconButton label="Settings" className="hover:bg-[#E2D9FF]!">
-          <SlidersHorizontal size={16} aria-hidden="true" />
+          <EllipsisVertical size={16} aria-hidden="true" />
         </IconButton>
         <ProfileMenu
           triggerClassName="h-6 w-6 hover:bg-[#E2D9FF]"
