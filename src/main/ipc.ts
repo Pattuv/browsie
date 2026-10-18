@@ -16,7 +16,7 @@ import {
   setOverlayOpen,
   stop,
 } from './browser/tabs';
-import { clearSiteData, getSiteInfo } from './browser/siteInfo';
+import { changeSitePermission, clearSiteData, getSiteInfo, resetActiveSitePermissions } from './browser/siteInfo';
 import { bringToFront, getBrowserWindow, isAppUrl, openBrowser, openModePicker } from './windows';
 
 let dashboardAnimatedThisSession = false;
@@ -122,6 +122,10 @@ export const registerIpc = () => {
   handleFromBrowser('browser:set-overlay-open', (_event, open: unknown) => setOverlayOpen(open === true));
   handleFromBrowser('browser:get-site-info', () => getSiteInfo());
   handleFromBrowser('browser:clear-site-data', () => clearSiteData());
+  handleFromBrowser('browser:set-site-permission', (_event, kind: unknown, setting: unknown) =>
+    changeSitePermission(kind, setting),
+  );
+  handleFromBrowser('browser:reset-site-permissions', () => resetActiveSitePermissions());
 
   handle('auth:get-session', () => getSession());
   handle('auth:sign-in', (event) => {

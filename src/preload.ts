@@ -65,6 +65,9 @@ const browser: BrowsieBrowserAPI = {
     ipcRenderer.invoke("browser:set-overlay-open", open),
   getSiteInfo: () => ipcRenderer.invoke("browser:get-site-info"),
   clearSiteData: () => ipcRenderer.invoke("browser:clear-site-data"),
+  setSitePermission: (kind, setting) =>
+    ipcRenderer.invoke("browser:set-site-permission", kind, setting),
+  resetSitePermissions: () => ipcRenderer.invoke("browser:reset-site-permissions"),
   onFocusAddress: (callback) => {
     const listener = () => callback();
     ipcRenderer.on("browser:focus-address", listener);

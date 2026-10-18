@@ -57,7 +57,7 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 
 const activeTab = () => tabs.find((tab) => tab.id === activeTabId);
 // The website the user is looking at, if any. A view hidden behind the New Tab page doesn't count.
-const activeContents = () => {
+export const activeContents = () => {
   const tab = activeTab();
   return tab?.showingNewTab ? undefined : tab?.view?.webContents;
 };

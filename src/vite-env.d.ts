@@ -123,9 +123,13 @@ type SiteCertificate = {
   validUntil: string;
 };
 
+// What a website can be allowed to use, per site. Everything else is always blocked.
+type SitePermissionKind = 'geolocation' | 'camera' | 'microphone' | 'notifications';
+
 type SitePermission = {
-  label: string;
-  allowed: boolean;
+  kind: SitePermissionKind;
+  // Block is the default.
+  setting: 'allow' | 'block';
 };
 
 // What the site info panel shows about the website on screen.
@@ -136,6 +140,8 @@ type SiteInfo = {
   // Null when the site isn't https, or its certificate wasn't checked this run.
   certificate: SiteCertificate | null;
   cookieCount: number;
+  // What the site has stored (databases, caches...), or null if it couldn't be measured.
+  storageBytes: number | null;
   permissions: SitePermission[];
 };
 
@@ -165,6 +171,9 @@ interface BrowsieBrowserAPI {
   getSiteInfo: () => Promise<SiteInfo | null>;
   // Deletes the open site's cookies and storage, then reloads it.
   clearSiteData: () => Promise<void>;
+  // For the site on screen. Both return its permissions after the change.
+  setSitePermission: (kind: SitePermissionKind, setting: 'allow' | 'block') => Promise<SitePermission[]>;
+  resetSitePermissions: () => Promise<SitePermission[]>;
   // Ctrl+L / F6 / Alt+D. Returns an unsubscribe function.
   onFocusAddress: (callback: () => void) => () => void;
 }

@@ -1,25 +1,57 @@
-import { app, session } from 'electron';
+import { app, session, type WebContents } from 'electron';
+import { isAllowed } from './sitePermissions';
 
 // Websites get their own storage partition: cookies, cache and logins for the web live here,
 // completely apart from the default session that Browsie's own pages use.
 export const WEB_PARTITION = 'persist:web';
 
-// Everything a page asks for (camera, location, notifications...) is refused unless listed here.
-// Fullscreen lets videos fill the screen; clipboard-sanitized-write lets "copy" buttons work.
-const ALLOWED_PERMISSIONS = new Set(['fullscreen', 'clipboard-sanitized-write']);
+// Every website may use these. Fullscreen lets videos fill the screen; clipboard-sanitized-write
+// lets "copy" buttons work.
+const ALWAYS_ALLOWED = new Set(['fullscreen', 'clipboard-sanitized-write']);
 
-// What the site info panel lists under Site settings, in plain words.
-const SITE_PERMISSIONS = [
-  { label: 'Location', permission: 'geolocation' },
-  { label: 'Camera and microphone', permission: 'media' },
-  { label: 'Notifications', permission: 'notifications' },
-  { label: 'Full screen', permission: 'fullscreen' },
-];
+const originOf = (url: string | undefined) => {
+  try {
+    return url ? new URL(url).origin : null;
+  } catch {
+    return null;
+  }
+};
 
-export const getSitePermissions = (): SitePermission[] => [
-  ...SITE_PERMISSIONS.map(({ label, permission }) => ({ label, allowed: ALLOWED_PERMISSIONS.has(permission) })),
-  { label: 'Downloads', allowed: false },
-];
+// Location, camera, microphone and notifications follow the user's choice in Site settings, and only
+// for the page itself: an ad or other embedded frame never inherits what its host page was allowed.
+// Everything else a page asks for is refused.
+const decide = (
+  contents: WebContents | null,
+  permission: string,
+  requestingUrl: string | undefined,
+  isMainFrame: boolean,
+  mediaTypes: string[],
+) => {
+  if (ALWAYS_ALLOWED.has(permission)) {
+    return true;
+  }
+
+  const origin = originOf(requestingUrl);
+
+  if (!origin || !isMainFrame || origin !== originOf(contents?.getURL())) {
+    return false;
+  }
+
+  if (permission === 'geolocation' || permission === 'notifications') {
+    return isAllowed(origin, permission);
+  }
+
+  if (permission === 'media') {
+    return (
+      mediaTypes.length > 0 &&
+      mediaTypes.every((type) =>
+        type === 'video' ? isAllowed(origin, 'camera') : type === 'audio' && isAllowed(origin, 'microphone'),
+      )
+    );
+  }
+
+  return false;
+};
 
 // The last certificate Chromium checked for each host, for the site info panel. Chromium makes the
 // call; we only take notes. Entries are dropped oldest-first past the cap.
@@ -58,10 +90,18 @@ export const configureWebSession = () => {
   const extraTokens = new RegExp(`\\s(Electron|${escapeRegExp(app.getName())})/\\S+`, 'g');
   web.setUserAgent(web.getUserAgent().replace(extraTokens, ''));
 
-  web.setPermissionRequestHandler((_contents, permission, callback) => {
-    callback(ALLOWED_PERMISSIONS.has(permission));
+  web.setPermissionRequestHandler((contents, permission, callback, details) => {
+    const mediaTypes = 'mediaTypes' in details ? (details.mediaTypes ?? []) : [];
+    callback(decide(contents, permission, details.requestingUrl, details.isMainFrame, mediaTypes));
   });
-  web.setPermissionCheckHandler((_contents, permission) => ALLOWED_PERMISSIONS.has(permission));
+  web.setPermissionCheckHandler((contents, permission, _origin, { requestingUrl, isMainFrame, mediaType }) => {
+    // A media check without a type (listing devices) passes if either the camera or mic is allowed.
+    if (permission === 'media' && mediaType !== 'video' && mediaType !== 'audio') {
+      return ['video', 'audio'].some((type) => decide(contents, permission, requestingUrl, isMainFrame, [type]));
+    }
+
+    return decide(contents, permission, requestingUrl, isMainFrame, mediaType ? [mediaType] : []);
+  });
 
   // -3 means "use Chromium's own verdict", so bad certificates are still refused exactly as before.
   // Never call back with 0 here: that would accept every certificate.
