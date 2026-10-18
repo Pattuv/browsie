@@ -3,7 +3,7 @@ import { Grip, HeartHandshake } from "lucide-react";
 import DashboardTip, { type Tip } from "../../components/DashboardTip";
 import mascot from "../../assets/mascot.svg";
 
-const GUIDE_URL = "https://browsiedocs.super.site/browsie-help-center";
+const GUIDE_URL = "https://browsie.org/help-center";
 const GOOGLE_APPS_URL = "https://about.google/products/";
 
 const MOD = "Ctrl";

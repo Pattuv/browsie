@@ -1,7 +1,8 @@
 import { Fragment, useState, type CSSProperties } from "react";
-import { EllipsisVertical, Globe, Plus, X } from "lucide-react";
+import { Globe, Plus, X } from "lucide-react";
 import IconButton from "./IconButton";
 import ProfileMenu from "../components/ProfileMenu";
+import UtilityMenu from "./UtilityMenu";
 import { setChromeOverlay, useBrowserStore } from "../stores/browserStore";
 import mascot from "../assets/mascot.svg";
 
@@ -113,9 +114,28 @@ function TabPill({ tab, active }: TabPillProps) {
   );
 }
 
-// Module-level so it's the same function every render: ProfileMenu re-runs onOpenChange whenever it
+// The page overlay stays up while either menu is mounted. Opening one while the other blurs out
+// would otherwise let the closing menu drop the overlay from under the new one.
+const openMenus = new Set<string>();
+
+const trackMenu = (id: string) => (open: boolean) => {
+  const wasOpen = openMenus.size > 0;
+
+  if (open) {
+    openMenus.add(id);
+  } else {
+    openMenus.delete(id);
+  }
+
+  if (wasOpen !== openMenus.size > 0) {
+    void setChromeOverlay(openMenus.size > 0);
+  }
+};
+
+// Module-level so they're the same functions every render: the menus re-run onOpenChange whenever it
 // changes, and a fresh arrow each render would re-capture the page on every tab update.
-const handleProfileOpenChange = (open: boolean) => void setChromeOverlay(open);
+const handleProfileOpenChange = trackMenu("profile");
+const handleUtilityOpenChange = trackMenu("utility");
 
 // The thin line between two tabs. Hidden next to the active tab, and fades out while the tab on
 // either side is hovered so it never cuts through a hover highlight.
@@ -185,10 +205,7 @@ function TabStrip({ style }: TabStripProps) {
       </div>
 
       <div className="mb-1.5 mr-2 flex items-center gap-1">
-        {/* Settings panel lands later; the button is here so the layout is final. */}
-        <IconButton label="Settings" className="hover:bg-[#E2D9FF]!">
-          <EllipsisVertical size={16} aria-hidden="true" />
-        </IconButton>
+        <UtilityMenu onOpenChange={handleUtilityOpenChange} />
         <ProfileMenu
           triggerClassName="h-6 w-6 hover:bg-[#E2D9FF]"
           panelTarget="#browser-chrome-card"

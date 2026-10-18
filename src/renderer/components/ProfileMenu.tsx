@@ -1,10 +1,15 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
-import { ArrowUpRight, Check, Gauge, Info, Lock, LogOut, Settings, Users, type LucideIcon } from 'lucide-react';
+import type { KeyboardEvent, ReactNode } from 'react';
+import { ArrowUpRight, Check, Gauge, Info, Lock, LogOut, Settings, Users } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useLockdownStore } from '../stores/browserStore';
 import { playClick } from '../sounds';
+import DropdownMenu, { MenuDivider, MenuGroup, MenuItem } from './DropdownMenu';
 import PrimaryButton from './PrimaryButton';
+
+const changeMode = (close: () => void) => {
+  close();
+  window.browsie?.openModePicker();
+};
 
 const OPENROUTER_BILLING_URL = 'https://openrouter.ai/settings/credits';
 
@@ -38,33 +43,6 @@ function Avatar({
         aria-hidden="true"
       />
     </span>
-  );
-}
-
-type MenuItemProps = {
-  icon: LucideIcon;
-  label: string;
-  disabled?: boolean;
-  danger?: boolean;
-  trailing?: ReactNode;
-  onClick?: () => void;
-};
-
-function MenuItem({ icon: Icon, label, disabled = false, danger = false, trailing, onClick }: MenuItemProps) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      disabled={disabled}
-      onClick={onClick}
-      className={`smooth flex h-9 w-full cursor-pointer items-center gap-2 rounded-[16px] px-3.5 text-left text-[15px] font-[460] tracking-tight transition-colors duration-200 ease-out disabled:cursor-default disabled:text-zinc-400 ${
-        danger ? 'enabled:hover:bg-[#E81123] enabled:hover:text-white' : 'enabled:hover:bg-zinc-100'
-      }`}
-    >
-      <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
-      <span className="flex-1">{label}</span>
-      {trailing}
-    </button>
   );
 }
 
@@ -104,8 +82,6 @@ function InfoTip({ side, iconSize, children, action }: InfoTipProps) {
     </span>
   );
 }
-
-const Divider = () => <div className="mx-2 h-px shrink-0 bg-zinc-200" />;
 
 function UsageCard() {
   return (
@@ -242,164 +218,89 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
   const pictureDataUrl = useAuthStore((state) => state.pictureDataUrl);
   // Lockdown only exists in the chrome; there it locks Change mode and Quit.
   const locked = useLockdownStore((state) => state.enabled) && Boolean(quit);
-  const [open, setOpen] = useState(false);
-  // Still mounted while the blur-out plays; unmounted when that animation ends.
-  const [closing, setClosing] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  const close = () => setClosing(true);
-
-  const toggle = () => {
-    if (open && !closing) {
-      close();
-      return;
-    }
-
-    setOpen(true);
-    setClosing(false);
-  };
-
-  useEffect(() => {
-    onOpenChange?.(open);
-  }, [open, onOpenChange]);
-
-  // While open, any click outside the avatar + menu, or Escape, closes it.
-  useEffect(() => {
-    if (!open || closing) {
-      return undefined;
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as Node;
-
-      if (containerRef.current?.contains(target) || panelRef.current?.contains(target)) {
-        return;
-      }
-
-      close();
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        close();
-      }
-    };
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open, closing]);
-
-  const changeMode = () => {
-    close();
-    window.browsie?.openModePicker();
-  };
-
-  const openBilling = () => {
-    close();
-    window.browsie?.openExternal(OPENROUTER_BILLING_URL);
-  };
-
-  const quitApp = () => {
-    close();
-    quit?.onClick();
-  };
-
-  const mountPanel = (panel: ReactNode) => {
-    if (!panelTarget) {
-      return panel;
-    }
-
-    const host = document.querySelector(panelTarget);
-
-    return host ? createPortal(panel, host) : panel;
-  };
-
   return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        title="Profile"
-        aria-label="Account"
-        aria-haspopup="menu"
-        aria-expanded={open && !closing}
-        onClick={toggle}
-        className={`app-region-no-drag flex cursor-pointer items-center justify-center rounded-full transition-[background-color,transform] duration-150 ease-out active:scale-85 ${triggerClassName}`}
-      >
-        <Avatar pictureDataUrl={pictureDataUrl} className="h-full w-full" />
-      </button>
-
-      {open &&
-        mountPanel(
-          <div
-            ref={panelRef}
-            role="menu"
-            onAnimationEnd={(event) => {
-              if (closing && event.target === event.currentTarget) {
-                setOpen(false);
-                setClosing(false);
-              }
-            }}
-            className={`${closing ? 'exit-blur-fast pointer-events-none' : 'enter-blur-fast'} smooth app-region-no-drag absolute z-40 flex w-80 flex-col gap-1.5 rounded-[34px] border border-zinc-200 bg-white p-3 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.25)] ${
-              panelTarget ? 'top-3 right-3' : '-right-3 top-full mt-3'
-            }`}
-          >
-            <div className="flex items-center gap-3 px-2 py-1">
-              <Avatar
-                pictureDataUrl={pictureDataUrl}
-                className="h-10 w-10 shrink-0"
-              />
-              <div className="min-w-0">
-                <p className="bric truncate text-xl font-medium leading-tight tracking-tight">
-                  {firstName}
-                </p>
-                <p className="truncate text-sm tracking-tight text-zinc-600">
-                  {email}
-                </p>
-              </div>
-            </div>
-
-            <UsageCard />
-            <MenuItem
-              icon={Gauge}
-              label="Check OpenRouter billing"
-              onClick={openBilling}
-              trailing={<ArrowUpRight size={16} strokeWidth={1.75} className="text-zinc-600" aria-hidden="true" />}
+    <DropdownMenu
+      panelTarget={panelTarget}
+      onOpenChange={onOpenChange}
+      trigger={({ open, toggle }) => (
+        <button
+          type="button"
+          title="Profile"
+          aria-label="Account"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={toggle}
+          className={`app-region-no-drag flex cursor-pointer items-center justify-center rounded-full transition-[background-color,transform] duration-150 ease-out active:scale-85 ${triggerClassName}`}
+        >
+          <Avatar pictureDataUrl={pictureDataUrl} className="h-full w-full" />
+        </button>
+      )}
+    >
+      {(close) => (
+        <>
+          <div className="flex items-center gap-3 px-2 py-1">
+            <Avatar
+              pictureDataUrl={pictureDataUrl}
+              className="h-10 w-10 shrink-0"
             />
-            <Divider />
+            <div className="min-w-0">
+              <p className="bric truncate text-xl font-medium leading-tight tracking-tight">
+                {firstName}
+              </p>
+              <p className="truncate text-sm tracking-tight text-zinc-600">
+                {email}
+              </p>
+            </div>
+          </div>
 
-            {quit ? (
-              <>
-                <LockdownRow />
-                <Divider />
-                {/* A pair, so tighter than the panel's gap between sections. */}
-                <div className="flex flex-col gap-0.5">
-                  <MenuItem icon={Users} label="Change mode" disabled={locked} onClick={changeMode} />
-                  <MenuItem icon={LogOut} label={quit.label ?? 'Quit'} disabled={locked} danger onClick={quitApp} />
-                </div>
-              </>
-            ) : (
-              <>
-                {/* A pair, so tighter than the panel's gap between sections. */}
-                <div className="flex flex-col gap-0.5">
-                  <MenuItem icon={Users} label="Change mode" onClick={changeMode} />
-                  <MenuItem icon={Settings} label="Settings" />
-                </div>
-                {/* Main wipes the vault and pushes SIGNED_OUT; the OnboardingLayer gate then swaps Dashboard for Auth. */}
-                <PrimaryButton
-                  onClick={() => window.browsie?.auth.signOut()}
-                  className="smooth h-10! w-full rounded-[18px]!"
-                >
-                  Log out
-                </PrimaryButton>
-              </>
-            )}
-          </div>,
-        )}
-    </div>
+          <UsageCard />
+          <MenuItem
+            icon={Gauge}
+            label="Check OpenRouter billing"
+            onClick={() => {
+              close();
+              window.browsie?.openExternal(OPENROUTER_BILLING_URL);
+            }}
+            trailing={<ArrowUpRight size={16} strokeWidth={1.75} className="text-zinc-600" aria-hidden="true" />}
+          />
+          <MenuDivider />
+
+          {quit ? (
+            <>
+              <LockdownRow />
+              <MenuDivider />
+              <MenuGroup>
+                <MenuItem icon={Users} label="Change mode" disabled={locked} onClick={() => changeMode(close)} />
+                <MenuItem
+                  icon={LogOut}
+                  label={quit.label ?? 'Quit'}
+                  disabled={locked}
+                  danger
+                  onClick={() => {
+                    close();
+                    quit.onClick();
+                  }}
+                />
+              </MenuGroup>
+            </>
+          ) : (
+            <>
+              <MenuGroup>
+                <MenuItem icon={Users} label="Change mode" onClick={() => changeMode(close)} />
+                <MenuItem icon={Settings} label="Settings" />
+              </MenuGroup>
+              {/* Main wipes the vault and pushes SIGNED_OUT; the OnboardingLayer gate then swaps Dashboard for Auth. */}
+              <PrimaryButton
+                onClick={() => window.browsie?.auth.signOut()}
+                className="smooth h-10! w-full rounded-[18px]!"
+              >
+                Log out
+              </PrimaryButton>
+            </>
+          )}
+        </>
+      )}
+    </DropdownMenu>
   );
 }
 

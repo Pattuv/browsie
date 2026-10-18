@@ -26,7 +26,7 @@ const REST_LAYOUT_MS = TITLE_DELAY_MS + BLUR_DURATION_MS + POST_TITLE_DELAY_MS;
 const REST_FADE_START_MS = REST_LAYOUT_MS + TITLE_MOVE_MS + 50;
 const NOTCH_DROP_MS =
   REST_FADE_START_MS + REST_STAGGER_MS * 3 + BLUR_DURATION_MS + 150;
-const GUIDE_URL = "https://browsiedocs.super.site/browsie-help-center";
+const GUIDE_URL = "https://browsie.org/help-center";
 
 function revealClass(shouldAnimate: boolean, visible: boolean): string {
   if (!shouldAnimate) {
