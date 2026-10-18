@@ -72,7 +72,7 @@ function AddressBar({
       className="chrome-item flex min-w-0 flex-1 justify-center px-6"
       style={style}
     >
-      <div className="relative h-8 w-full max-w-[31rem] rounded-lg border border-transparent bg-zinc-100 transition-[max-width,background-color,border-color,box-shadow] duration-300 ease-out hover:bg-zinc-200/60 focus-within:max-w-[34rem] focus-within:border-[#9572FF]/40 focus-within:bg-white focus-within:shadow-[0_0_0_4px_rgba(149,114,255,0.12)] hover:focus-within:bg-white">
+      <div className="relative h-8 w-full max-w-[31rem] rounded-lg border border-transparent bg-zinc-100 transition-[max-width,background-color,border-color,box-shadow] duration-300 ease-out hover:bg-zinc-200/60 has-[input:focus]:max-w-[34rem] has-[input:focus]:border-[#9572FF]/40 has-[input:focus]:bg-white has-[input:focus]:shadow-[0_0_0_4px_rgba(149,114,255,0.12)] hover:has-[input:focus]:bg-white">
         {/* On a website: site information and bookmark. The bookmark panel lands later; its button is here so the layout is final. */}
         <SiteInfoMenu visible={Boolean(url) && !editing} />
         <BarButton
