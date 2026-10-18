@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, Check, Gauge, Info, Lock, LogOut, Settings, Users, type LucideIcon } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useLockdownStore } from '../stores/browserStore';
+import { playClick } from '../sounds';
 import PrimaryButton from './PrimaryButton';
 
 const OPENROUTER_BILLING_URL = 'https://openrouter.ai/settings/credits';
@@ -158,15 +159,45 @@ function LockdownRow() {
   const enabled = useLockdownStore((state) => state.enabled);
   const toggle = useLockdownStore((state) => state.toggle);
 
+  const handleToggle = () => {
+    playClick('heavy');
+    toggle();
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleToggle();
+    }
+  };
+
+  // Stop the (i) from toggling: its tooltip and button live in this wrapper.
+  const ignoreTip = (event: { stopPropagation: () => void }) => {
+    event.stopPropagation();
+  };
+
   return (
-    <div className="flex items-center gap-3 px-3.5 py-1">
+    <div
+      role="switch"
+      tabIndex={0}
+      aria-checked={enabled}
+      aria-label="Lockdown Mode"
+      onClick={handleToggle}
+      onKeyDown={handleKeyDown}
+      className="smooth flex w-full cursor-pointer items-center gap-3 rounded-[16px] px-3.5 py-1 text-left outline-none transition-colors duration-200 ease-out hover:bg-zinc-100"
+    >
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-2 text-[15px] font-[460] tracking-tight">
           <Lock size={20} strokeWidth={1.75} aria-hidden="true" />
           <span className="flex items-center gap-1.5">
             Lockdown Mode
             {/* Settings panel lands later. */}
-            <span className="flex text-zinc-600">
+            <span
+              className="flex cursor-default text-zinc-600"
+              onClick={ignoreTip}
+              onPointerDown={ignoreTip}
+              onKeyDown={ignoreTip}
+            >
               <InfoTip side="top" iconSize={14} action={{ label: 'Change this in settings' }}>
                 When Lockdown Mode is on, the browser is only usable by the agent. The agent only works when
                 Lockdown Mode is on.
@@ -178,14 +209,9 @@ function LockdownRow() {
           {enabled ? 'Browser is locked, agent-control only.' : 'Full browser control'}
         </p>
       </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={enabled}
-        aria-label="Lockdown Mode"
-        data-click-sound="heavy"
-        onClick={toggle}
-        className={`relative h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-out ${
+      <span
+        aria-hidden="true"
+        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ease-out ${
           enabled ? 'bg-[#9572FF]' : 'bg-zinc-300'
         }`}
       >
@@ -194,7 +220,7 @@ function LockdownRow() {
             enabled ? 'translate-x-5' : 'translate-x-0'
           }`}
         />
-      </button>
+      </span>
     </div>
   );
 }
