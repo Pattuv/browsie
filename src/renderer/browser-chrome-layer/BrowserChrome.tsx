@@ -4,7 +4,7 @@ import TabStrip from './TabStrip';
 import Toolbar from './Toolbar';
 import NewTab from './pages/NewTab';
 import { playStartupSound, startupSoundLoaded } from '../sounds';
-import { browserStateLoaded, useActiveTab, useLockdownStore, usePageSnapshot } from '../stores/browserStore';
+import { browserStateLoaded, useActiveTab, usePageSnapshot } from '../stores/browserStore';
 import mascot from '../assets/mascot.svg';
 
 // The splash stays up at least this long, even if everything loads instantly.
@@ -121,13 +121,6 @@ function BrowserChrome() {
 
   useReportContentBounds(viewportRef, phase === 'ready');
 
-  // Lockdown starts on. Main only hears about it from this window, so tell it once at launch.
-  useEffect(() => {
-    if (useLockdownStore.getState().enabled) {
-      void window.browsie?.browser.setLockdown(true);
-    }
-  }, []);
-
   // The browser window's page hides the pointer from its first paint (see index.css).
   // Give it back once the splash has finished and the chrome is ready.
   useLayoutEffect(() => {
@@ -136,18 +129,15 @@ function BrowserChrome() {
     }
   }, [phase]);
 
-  useEffect(() => {
-    if (showChrome && activeTab?.url === null) {
-      shownNewTabs.current.add(activeTab.id);
-    }
-  }, [showChrome, activeTab?.id, activeTab?.url]);
-
+  // Claim the id during render so switching back (or activating while dragging) never replays the fade.
   const newTabEntranceDelay = (tabId: number) => {
     if (shownNewTabs.current.has(tabId)) {
       return null;
     }
 
-    return phase === 'ready' ? 0 : LAUNCH_PAGE_DELAY;
+    const delay = phase === 'ready' ? 0 : LAUNCH_PAGE_DELAY;
+    shownNewTabs.current.add(tabId);
+    return delay;
   };
 
   return (

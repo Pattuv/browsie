@@ -9,8 +9,10 @@ import {
   type MenuItemConstructorOptions,
   type WebContents,
 } from 'electron';
-import { resolveFavicon } from './favicons';
-import { WEB_PARTITION, isWebUrl } from './webSession';
+import { getSession } from '../auth/session';
+import { clearFaviconCache, resolveFavicon } from './favicons';
+import { getGoogleLogin, googleSignInUrl, isGoogleAccountsUrl, onGoogleLoginChange } from './googleWebLogin';
+import { clearGoogleRejectionCookies, getWebPartition, isGoogleSignInRejection, isWebUrl } from './webSession';
 
 // One tab. The chrome draws Browsie's own New Tab page itself; a website only gets a view
 // (its own sandboxed process) once one is opened.
@@ -30,6 +32,9 @@ type Tab = {
   faviconRequest: number;
   // The site (origin) the current icon or lookup belongs to.
   faviconOrigin: string | null;
+  // Opened on Google's sign-in page because this account's web storage had no Google login. Turns into
+  // the New Tab page once sign-in finishes.
+  googleSignIn: boolean;
 };
 
 const SEARCH_URL = 'https://www.google.com/search?q=';
@@ -54,7 +59,15 @@ let overlayOpen = false;
 // The tab playing a video (or anything else) in HTML fullscreen, if any.
 let fullscreenTabId: number | null = null;
 // A person can't click, type, or use shortcuts. Main-process loads and scripts still work for the agent.
-let lockdown = false;
+// Main owns it (the chrome mirrors it from getBrowserState): on for every new browser window.
+let lockdown = true;
+// Lockdown was switched off for Google sign-in, and goes back on once it finishes. Closing the sign-in
+// tab (or going somewhere else in it) leaves lockdown off: the user chose to use the browser themselves.
+let relockAfterGoogleSignIn = false;
+// Bumped each time lockdown comes back on after Google sign-in, so the chrome shows its notice again.
+let lockdownNotice = 0;
+// The first tab of a window or account, while we're still waiting to hear whether Google is logged in.
+let startTabId: number | null = null;
 const lockdownCssKey = new Map<number, string>();
 const LOCKDOWN_CSS = 'html { pointer-events: none !important; }';
 
@@ -74,7 +87,16 @@ const describeTab = (tab: Tab): BrowserTab => {
   const { id, view, pendingUrl, favicon } = tab;
 
   if (!view || tab.showingNewTab) {
-    return { id, title: 'New Tab', url: null, favicon: null, loading: false, canGoBack: false, canGoForward: view !== null };
+    return {
+      id,
+      title: 'New Tab',
+      url: null,
+      favicon: null,
+      loading: false,
+      muted: false,
+      canGoBack: false,
+      canGoForward: view !== null,
+    };
   }
 
   const contents = view.webContents;
@@ -86,12 +108,18 @@ const describeTab = (tab: Tab): BrowserTab => {
     url,
     favicon,
     loading: contents.isLoading(),
+    muted: contents.isAudioMuted(),
     canGoBack: canGoBackFrom(tab, contents),
     canGoForward: contents.navigationHistory.canGoForward(),
   };
 };
 
-export const getBrowserState = (): BrowserState => ({ tabs: tabs.map(describeTab), activeTabId });
+export const getBrowserState = (): BrowserState => ({
+  tabs: tabs.map(describeTab),
+  activeTabId,
+  lockdown,
+  lockdownNotice,
+});
 
 const emit = () => {
   if (host && !host.isDestroyed()) {
@@ -263,9 +291,31 @@ const showContextMenu = (tab: Tab, contents: WebContents, params: ContextMenuPar
   Menu.buildFromTemplate(items).popup(host ? { window: host } : undefined);
 };
 
-// The rules every website lives by. This is the security boundary, so it's all in one place.
-const wireContents = (tab: Tab, contents: WebContents) => {
-  // Popups and target=_blank links become tabs, never new OS windows.
+const blockNonWeb = (event: Electron.Event, url: string) => {
+  if (!isWebUrl(url)) {
+    event.preventDefault();
+  }
+};
+
+// Sign-in popups that are open right now ("Sign in with Google" on Figma, say). Closed when the account changes.
+const popups = new Set<BrowserWindow>();
+
+const POPUP_OPTIONS: Electron.BrowserWindowConstructorOptions = {
+  width: 500,
+  height: 680,
+  backgroundColor: '#ffffff',
+  // Same rules as a tab: no preload, sandboxed, isolated, no Node, no <webview>. A popup shares the
+  // opener's session, so it has the same account's logins and user agent.
+  webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, webviewTag: false, safeDialogs: true },
+};
+
+// A popup lives by the same rules as a tab, and goes away with the page that opened it.
+const wirePopup = (popup: BrowserWindow, opener: WebContents) => {
+  const { webContents: contents } = popup;
+  popups.add(popup);
+  popup.removeMenu();
+
+  // Anything the popup opens in turn becomes a tab.
   contents.setWindowOpenHandler(({ url }) => {
     if (isWebUrl(url)) {
       newTab(url);
@@ -273,12 +323,41 @@ const wireContents = (tab: Tab, contents: WebContents) => {
 
     return { action: 'deny' };
   });
+  contents.on('will-navigate', blockNonWeb);
+  contents.on('will-redirect', blockNonWeb);
+  contents.on('will-attach-webview', (event) => event.preventDefault());
 
-  const blockNonWeb = (event: Electron.Event, url: string) => {
-    if (!isWebUrl(url)) {
-      event.preventDefault();
+  const closeWithOpener = () => {
+    if (!popup.isDestroyed()) {
+      popup.close();
     }
   };
+  opener.once('destroyed', closeWithOpener);
+  popup.once('closed', () => {
+    popups.delete(popup);
+    opener.removeListener('destroyed', closeWithOpener);
+  });
+};
+
+// The rules every website lives by. This is the security boundary, so it's all in one place.
+const wireContents = (tab: Tab, contents: WebContents) => {
+  // Links (target=_blank) become tabs. Real popups, opened with a size (the way "Sign in with Google"
+  // and other sign-in buttons open), get a small window instead: the sign-in page has to report back to
+  // the page that opened it through window.opener, which a separate tab doesn't have.
+  contents.setWindowOpenHandler(({ url, disposition }) => {
+    if (!isWebUrl(url)) {
+      return { action: 'deny' };
+    }
+
+    if (disposition === 'new-window' && host && !host.isDestroyed()) {
+      return { action: 'allow', overrideBrowserWindowOptions: { ...POPUP_OPTIONS, parent: host } };
+    }
+
+    newTab(url);
+    return { action: 'deny' };
+  });
+  contents.on('did-create-window', (popup) => wirePopup(popup, contents));
+
   contents.on('will-navigate', blockNonWeb);
   contents.on('will-redirect', blockNonWeb);
 
@@ -288,8 +367,18 @@ const wireContents = (tab: Tab, contents: WebContents) => {
     emit();
   });
   contents.on('did-navigate', (_event, url) => {
+    // So the next sign-in attempt gets a fresh chance instead of the remembered rejection.
+    if (isGoogleSignInRejection(url)) {
+      void clearGoogleRejectionCookies().catch(() => undefined);
+    }
+
     onNavigatedForFavicon(tab, url);
     emit();
+
+    // After the event, not inside it: finishing closes this very page.
+    if (tab.googleSignIn) {
+      setImmediate(() => finishGoogleSignIn(tab));
+    }
   });
   contents.on('page-favicon-updated', (_event, favicons) => {
     void updateFavicon(tab, contents, favicons);
@@ -361,7 +450,7 @@ const clearLockdownCss = async (contents: WebContents) => {
   }
 };
 
-export const setLockdown = (enabled: boolean) => {
+const applyLockdown = (enabled: boolean) => {
   lockdown = enabled;
 
   for (const tab of tabs) {
@@ -379,11 +468,49 @@ export const setLockdown = (enabled: boolean) => {
   }
 };
 
+// The user's own choice, from the chrome. It replaces any pending re-lock after sign-in.
+export const setLockdown = (enabled: boolean) => {
+  relockAfterGoogleSignIn = false;
+  applyLockdown(enabled);
+  emit();
+};
+
+// Google sign-in needs a person at the keyboard. Called before the sign-in page loads.
+const startGoogleSignIn = (tab: Tab) => {
+  tab.googleSignIn = true;
+
+  if (lockdown) {
+    relockAfterGoogleSignIn = true;
+    applyLockdown(false);
+  }
+};
+
+// The tab is done with sign-in: finished (lockdown goes back on, with its notice) or abandoned (stays off).
+// Callers emit afterwards.
+const endGoogleSignIn = (tab: Tab, finished: boolean) => {
+  if (!tab.googleSignIn) {
+    return;
+  }
+
+  tab.googleSignIn = false;
+
+  if (tabs.some((entry) => entry.googleSignIn)) {
+    return;
+  }
+
+  if (finished && relockAfterGoogleSignIn) {
+    applyLockdown(true);
+    lockdownNotice++;
+  }
+
+  relockAfterGoogleSignIn = false;
+};
+
 const createView = (tab: Tab) => {
   // No preload: websites never get window.browsie. Sandboxed, isolated, no Node, no <webview>.
   const view = new WebContentsView({
     webPreferences: {
-      partition: WEB_PARTITION,
+      partition: getWebPartition(),
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
@@ -444,6 +571,7 @@ const blankTab = (overrides: Partial<Tab> = {}): Tab => ({
   favicon: null,
   faviconRequest: 0,
   faviconOrigin: null,
+  googleSignIn: false,
   ...overrides,
 });
 
@@ -473,6 +601,7 @@ export const closeTab = (id: unknown) => {
 
   const [tab] = tabs.splice(index, 1);
   destroyView(tab);
+  endGoogleSignIn(tab, false);
 
   if (fullscreenTabId === tab.id) {
     fullscreenTabId = null;
@@ -502,6 +631,29 @@ export const activateTab = (id: unknown) => {
   emit();
 };
 
+// Drops a tab at a new index. `toIndex` is where it should sit after the move.
+export const moveTab = (id: unknown, toIndex: unknown) => {
+  if (typeof id !== 'number' || typeof toIndex !== 'number' || !Number.isInteger(toIndex)) {
+    return;
+  }
+
+  const from = tabs.findIndex((tab) => tab.id === id);
+
+  if (from === -1) {
+    return;
+  }
+
+  const index = clamp(toIndex, 0, tabs.length - 1);
+
+  if (from === index) {
+    return;
+  }
+
+  const [tab] = tabs.splice(from, 1);
+  tabs.splice(index, 0, tab);
+  emit();
+};
+
 const cycleTab = (direction: 1 | -1) => {
   const index = tabs.findIndex((tab) => tab.id === activeTabId);
   activateTab(tabs[(index + direction + tabs.length) % tabs.length]?.id);
@@ -514,6 +666,8 @@ export const navigate = (input: unknown) => {
     return;
   }
 
+  // The user chose somewhere else to go; this tab is theirs now, not the sign-in page's.
+  endGoogleSignIn(tab, false);
   load(tab, toUrl(input));
   layout();
   emit();
@@ -572,6 +726,66 @@ export const getActiveWebUrl = () => {
 
 export const reload = () => activeContents()?.reload();
 export const stop = () => activeContents()?.stop();
+
+const tabContents = (tab: Tab) => (tab.showingNewTab ? undefined : tab.view?.webContents);
+
+const reloadTab = (tab: Tab) => {
+  tabContents(tab)?.reload();
+};
+
+const duplicateTab = (tab: Tab) => {
+  const contents = tabContents(tab);
+  const url = contents && (contents.getURL() || tab.pendingUrl);
+
+  if (url && isWebUrl(url)) {
+    newTab(url);
+    return;
+  }
+
+  newTab();
+};
+
+const toggleMuteTab = (tab: Tab) => {
+  const contents = tabContents(tab);
+
+  if (!contents) {
+    return;
+  }
+
+  contents.setAudioMuted(!contents.isAudioMuted());
+  emit();
+};
+
+// Right-click on a tab in the chrome. Same native menu as the page context menu.
+export const showTabMenu = (id: unknown) => {
+  if (typeof id !== 'number' || lockdown) {
+    return;
+  }
+
+  const tab = tabs.find((entry) => entry.id === id);
+
+  if (!tab) {
+    return;
+  }
+
+  const contents = tabContents(tab);
+  const muted = contents?.isAudioMuted() ?? false;
+
+  Menu.buildFromTemplate([
+    {
+      label: 'Reload',
+      accelerator: 'CmdOrCtrl+R',
+      enabled: Boolean(contents),
+      click: () => reloadTab(tab),
+    },
+    { label: 'Duplicate', click: () => duplicateTab(tab) },
+    {
+      label: muted ? 'Unmute site' : 'Mute site',
+      enabled: Boolean(contents),
+      click: () => toggleMuteTab(tab),
+    },
+  ]).popup(host ? { window: host } : undefined);
+};
 
 // The chrome measures its page area and reports it here. It's still input from a renderer, so check it.
 export const setContentBounds = (raw: unknown) => {
@@ -688,6 +902,13 @@ export const handleShortcut = (input: Input, source: 'chrome' | 'tab') => {
     return run(() => cycleTab(input.shift ? -1 : 1));
   }
 
+  // The keyboard version of dragging a tab along the strip. Page Up/Down, so it doesn't steal
+  // Ctrl+Shift+arrows from text (those select a word in the address bar and on websites).
+  if (ctrl && input.shift && !input.alt && (key === 'pageup' || key === 'pagedown')) {
+    const index = tabs.findIndex((tab) => tab.id === activeTabId);
+    return run(() => moveTab(activeTabId, index + (key === 'pageup' ? -1 : 1)));
+  }
+
   // Developer tools for the website on screen, in development builds only (same as Inspect in the context menu).
   if (source === 'tab' && !app.isPackaged && (key === 'f12' || (ctrl && input.shift && key === 'i'))) {
     return run(() => activeContents()?.toggleDevTools());
@@ -706,7 +927,92 @@ export const handleShortcut = (input: Input, source: 'chrome' | 'tab') => {
   return false;
 };
 
-// Hands the tab system a window to live in and opens the first New Tab.
+// Google's sign-in page, when the Browsie account is signed in but its web storage has no Google login.
+const googleSignInStartUrl = () => {
+  const { email } = getSession();
+  return email && getGoogleLogin() === false ? googleSignInUrl(email) : null;
+};
+
+// The first tab of a window or account: Google's sign-in page if this account's web storage isn't
+// logged in to Google, New Tab otherwise. If we don't know yet, New Tab now and maybe switch when we do.
+const openStartTab = () => {
+  const url = googleSignInStartUrl();
+  const tab = blankTab({ showingNewTab: true });
+  tabs.push(tab);
+  activeTabId = tab.id;
+
+  if (url) {
+    startGoogleSignIn(tab);
+    load(tab, url);
+  }
+
+  layout();
+  emit();
+  startTabId = tab && getGoogleLogin() === null ? tab.id : null;
+};
+
+// Sign-in is done once Google's login cookie exists and the tab has left the sign-in pages. The tab
+// becomes the New Tab page with a fresh history, so Back can't lead into the sign-in pages again.
+const finishGoogleSignIn = (tab: Tab) => {
+  const url = tab.view?.webContents.getURL();
+
+  if (
+    !tabs.includes(tab) ||
+    !tab.googleSignIn ||
+    tab.showingNewTab ||
+    !url ||
+    !isWebUrl(url) ||
+    isGoogleAccountsUrl(url) ||
+    getGoogleLogin() !== true
+  ) {
+    return;
+  }
+
+  endGoogleSignIn(tab, true);
+  destroyView(tab);
+  tab.showingNewTab = true;
+  tab.startedFromNewTab = false;
+  tab.pendingUrl = null;
+  tab.favicon = null;
+  tab.faviconRequest++;
+  tab.faviconOrigin = null;
+
+  if (fullscreenTabId === tab.id) {
+    fullscreenTabId = null;
+  }
+
+  if (tab.id === activeTabId) {
+    host?.webContents.focus();
+  }
+
+  layout();
+  emit();
+};
+
+onGoogleLoginChange((signedIn) => {
+  // The cookie can land after the tab reached google.com, so check the sign-in tabs here too.
+  if (signedIn) {
+    startTabId = null;
+    tabs.filter((tab) => tab.googleSignIn).forEach(finishGoogleSignIn);
+    return;
+  }
+
+  // The first answer arrived after the start tab opened: switch it, but only if it's still untouched.
+  const tab = tabs.find((entry) => entry.id === startTabId);
+  startTabId = null;
+  const url = googleSignInStartUrl();
+
+  if (!tab || !url || !tab.showingNewTab || tab.view) {
+    return;
+  }
+
+  startGoogleSignIn(tab);
+  load(tab, url);
+  layout();
+  emit();
+});
+
+// Hands the tab system a window to live in and opens the first tab.
 export const attachTabs = (window: BrowserWindow) => {
   host = window;
   tabs = [];
@@ -714,7 +1020,9 @@ export const attachTabs = (window: BrowserWindow) => {
   contentBounds = null;
   overlayOpen = false;
   fullscreenTabId = null;
-  newTab();
+  lockdown = true;
+  relockAfterGoogleSignIn = false;
+  openStartTab();
 
   window.on('resize', layout);
   window.on('closed', () => {
@@ -725,4 +1033,32 @@ export const attachTabs = (window: BrowserWindow) => {
     tabs = [];
     host = null;
   });
+};
+
+// A different account (or nobody) is signed in now. Every open page belongs to the previous account's
+// web storage, so close them all and start over with one tab in the new account's storage.
+export const resetTabsForAccount = () => {
+  clearFaviconCache();
+
+  for (const popup of popups) {
+    popup.close();
+  }
+
+  if (!host || host.isDestroyed()) {
+    return;
+  }
+
+  for (const tab of tabs) {
+    destroyView(tab);
+  }
+
+  // A sign-in left unfinished by the previous account doesn't get to leave lockdown off.
+  if (relockAfterGoogleSignIn) {
+    relockAfterGoogleSignIn = false;
+    applyLockdown(true);
+  }
+
+  tabs = [];
+  fullscreenTabId = null;
+  openStartTab();
 };

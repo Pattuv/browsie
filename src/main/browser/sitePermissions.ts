@@ -1,6 +1,7 @@
 import { app } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
+import { getData, updateData } from '../data/localStore';
 
 // What a website can be allowed to use, set per site from the site info panel. Everything starts
 // blocked: there's no permission prompt yet, so "ask" would just mean "block" anyway.
@@ -8,35 +9,65 @@ export const SITE_PERMISSION_KINDS: SitePermissionKind[] = ['geolocation', 'came
 
 type StoredPermissions = Record<string, Partial<Record<SitePermissionKind, 'allow'>>>;
 
-const filePath = () => path.join(app.getPath('userData'), 'site-permissions.json');
+// Kept in the app settings, so they're backed up to Drive with everything else, follow the account to
+// other computers, and are cleared on sign-out like the rest of that account's settings.
+const SETTINGS_KEY = 'sitePermissions';
 
-// Origin ("https://www.google.com") → what it's been allowed. Only allows are stored; anything else is blocked.
-let allowed: StoredPermissions | null = null;
-
-const load = (): StoredPermissions => {
-  if (allowed) {
-    return allowed;
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(fs.readFileSync(filePath(), 'utf8'));
-    allowed = parsed && typeof parsed === 'object' ? (parsed as StoredPermissions) : {};
-  } catch {
-    allowed = {};
-  }
-
-  return allowed;
-};
-
-// Write-then-rename, like localStore: a crash mid-write leaves the old file intact.
-const save = () => {
-  const tempPath = `${filePath()}.tmp`;
-  fs.writeFileSync(tempPath, JSON.stringify(load(), null, 2));
-  fs.renameSync(tempPath, filePath());
-};
+// Before permissions moved into the settings, they lived in their own file on this device.
+const legacyFilePath = () => path.join(app.getPath('userData'), 'site-permissions.json');
 
 export const isSitePermissionKind = (value: unknown): value is SitePermissionKind =>
   SITE_PERMISSION_KINDS.includes(value as SitePermissionKind);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+// Settings can arrive from Drive, so keep only well-formed entries: origin → { kind: 'allow' }.
+const clean = (raw: unknown): StoredPermissions => {
+  const permissions: StoredPermissions = {};
+
+  if (!isRecord(raw)) {
+    return permissions;
+  }
+
+  for (const [origin, site] of Object.entries(raw)) {
+    if (!isRecord(site)) {
+      continue;
+    }
+
+    const allowed = Object.keys(site).filter((kind) => isSitePermissionKind(kind) && site[kind] === 'allow');
+
+    if (allowed.length) {
+      permissions[origin] = Object.fromEntries(allowed.map((kind) => [kind, 'allow']));
+    }
+  }
+
+  return permissions;
+};
+
+// Origin ("https://www.google.com") → what it's been allowed. Only allows are stored; anything else is blocked.
+const load = () => clean(getData().settings[SETTINGS_KEY]);
+
+const save = (permissions: StoredPermissions) => {
+  updateData({ settings: { [SETTINGS_KEY]: permissions } });
+};
+
+// Startup, once: carry the old file's permissions into the settings, then delete the file.
+export const migrateSitePermissions = () => {
+  let legacy: unknown;
+
+  try {
+    legacy = JSON.parse(fs.readFileSync(legacyFilePath(), 'utf8'));
+  } catch {
+    return;
+  }
+
+  if (getData().settings[SETTINGS_KEY] === undefined) {
+    save(clean(legacy));
+  }
+
+  fs.rmSync(legacyFilePath(), { force: true });
+};
 
 export const isAllowed = (origin: string, kind: SitePermissionKind) => load()[origin]?.[kind] === 'allow';
 
@@ -59,10 +90,11 @@ export const setSitePermission = (origin: string, kind: SitePermissionKind, sett
     delete permissions[origin];
   }
 
-  save();
+  save(permissions);
 };
 
 export const resetSitePermissions = (origin: string) => {
-  delete load()[origin];
-  save();
+  const permissions = load();
+  delete permissions[origin];
+  save(permissions);
 };

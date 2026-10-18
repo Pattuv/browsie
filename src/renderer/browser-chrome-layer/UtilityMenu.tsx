@@ -1,6 +1,9 @@
 import { Bookmark, ChevronRight, EllipsisVertical, History, Info, KeyRound, Lock, Settings } from 'lucide-react';
 import DropdownMenu, { MenuDivider, MenuGroup, MenuItem } from '../components/DropdownMenu';
 import { useLockdownStore } from '../stores/browserStore';
+import gmailIcon from '../assets/utility-icons/gmail.svg';
+import calendarIcon from '../assets/utility-icons/calendar.svg';
+import driveIcon from '../assets/utility-icons/drive.svg';
 
 const GUIDE_URL = 'https://browsie.org/help-center';
 
@@ -12,7 +15,7 @@ type UtilityMenuProps = {
   onOpenChange?: (open: boolean) => void;
 };
 
-/** The ⋮ menu in the tab strip: browser tools, help and settings. */
+/** The ⋮ menu in the tab strip: browser tools, help and settings, and Google Workspace shortcuts. */
 function UtilityMenu({ onOpenChange }: UtilityMenuProps) {
   const locked = useLockdownStore((state) => state.enabled);
 
@@ -55,6 +58,12 @@ function UtilityMenu({ onOpenChange }: UtilityMenuProps) {
             <MenuGroup>
               <MenuItem icon={Info} label="Browsie Help Center" disabled={locked} onClick={go(GUIDE_URL)} />
               <MenuItem icon={Settings} label="Settings" disabled={locked} />
+            </MenuGroup>
+            <MenuDivider />
+            <MenuGroup>
+              <MenuItem icon={gmailIcon} label="Email" disabled={locked} onClick={go('https://mail.google.com')} />
+              <MenuItem icon={calendarIcon} label="Calendar" disabled={locked} onClick={go('https://calendar.google.com')} />
+              <MenuItem icon={driveIcon} label="Drive" disabled={locked} onClick={go('https://drive.google.com')} />
             </MenuGroup>
             {locked && (
               <>

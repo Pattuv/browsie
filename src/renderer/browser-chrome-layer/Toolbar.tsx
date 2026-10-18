@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -10,14 +10,13 @@ import {
 } from "lucide-react";
 import IconButton from "./IconButton";
 import SiteInfoMenu from "./SiteInfoMenu";
-import { useLockdownStore } from "../stores/browserStore";
+import SuggestionList from "./SuggestionList";
+import { prettyUrl } from "./prettyUrl";
+import { useSuggestions } from "./useSuggestions";
+import { trackChromeMenu, useLockdownStore } from "../stores/browserStore";
 
-// "https://www.example.com/" → "example.com". The full URL comes back when the bar is focused.
-const prettyUrl = (url: string) =>
-  url
-    .replace(/^https?:\/\//, "")
-    .replace(/^www\./, "")
-    .replace(/\/$/, "");
+// The suggestion list hangs down over the website, so it needs the page freeze-frame like the menus.
+const trackSuggestionList = trackChromeMenu("suggestions");
 
 type BarButtonProps = {
   label: string;
@@ -72,8 +71,40 @@ function AddressBar({
   const selectFrame = useRef(0);
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(false);
+  // Focusing the bar fills it with the page's URL; only asking once the user types keeps that
+  // URL from being sent to Google and the list from popping open on every click.
+  const [typed, setTyped] = useState(false);
+  const listId = useId();
+  const suggestions = useSuggestions(draft, editing && typed);
+  const listOpen = editing && suggestions.length > 0;
+  // The rows on screen. They follow `suggestions` while the list is open, but stay put after it closes
+  // so the fade-out has something to fade; the list empties this when the fade is done.
+  const [shown, setShown] = useState<Suggestion[]>([]);
+
+  if (listOpen && shown !== suggestions) {
+    setShown(suggestions);
+  }
+
   const url = tab?.url ?? "";
   const value = editing ? draft : url ? prettyUrl(url) : "";
+
+  // The freeze-frame goes up on the first keystroke, not when results land: capturing the page takes
+  // about as long as Google does, so doing both at once means the list can show the moment it arrives.
+  // It stays up until the fade-out ends, or the website would cover the list mid-fade.
+  // Cleanup runs when it's no longer needed and if the bar unmounts, so the overlay can't be left up.
+  const overlayNeeded = (editing && typed) || shown.length > 0;
+
+  useEffect(() => {
+    if (!overlayNeeded) return undefined;
+
+    trackSuggestionList(true);
+    return () => trackSuggestionList(false);
+  }, [overlayNeeded]);
+
+  const pick = (suggestion: Suggestion) => {
+    void window.browsie?.browser.navigate(suggestion.text);
+    inputRef.current?.blur();
+  };
 
   // Button presses blur the field and cancel a select that was just scheduled, so the bar
   // never stays in (or snaps back into) edit mode.
@@ -121,10 +152,15 @@ function AddressBar({
           spellCheck={false}
           autoComplete="off"
           value={value}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setTyped(true);
+          }}
           onFocus={(event) => {
             setDraft(url);
             setEditing(true);
+            setTyped(false);
+            void window.browsie?.browser.warmSuggestions();
             // Select after React has swapped in the full URL. Drop it if focus already left,
             // so a button press in the same moment can't be overwritten by this select.
             const input = event.currentTarget;
@@ -150,6 +186,16 @@ function AddressBar({
           }}
           className={`relative z-0 h-full w-full select-text bg-transparent px-9 text-center text-[0.8125rem] tracking-tight text-zinc-700 outline-none placeholder:text-zinc-400 focus:text-zinc-900 selection:bg-[#9572FF]/25`}
         />
+        {shown.length > 0 && (
+          <SuggestionList
+            id={listId}
+            query={draft}
+            suggestions={shown}
+            closing={!listOpen}
+            onClosed={() => setShown([])}
+            onPick={pick}
+          />
+        )}
       </div>
     </div>
   );

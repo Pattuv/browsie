@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
-import { cancelSignIn, getSession, signIn, signOut } from './auth/session';
+import { cancelSignIn, getAccountId, getSession, signIn, signOut } from './auth/session';
+import { removeWebData } from './browser/webSession';
 import { getData, updateData } from './data/localStore';
 import { getSyncStatus } from './data/syncEngine';
 import {
@@ -9,15 +10,18 @@ import {
   getBrowserState,
   goBack,
   goForward,
+  moveTab,
   navigate,
   newTab,
   reload,
   setContentBounds,
   setLockdown,
   setOverlayOpen,
+  showTabMenu,
   stop,
 } from './browser/tabs';
 import { changeSitePermission, clearSiteData, getSiteInfo, resetActiveSitePermissions } from './browser/siteInfo';
+import { getSuggestionImage, getSuggestions, warmSuggestions } from './browser/suggestions';
 import { bringToFront, getBrowserWindow, isAppUrl, openBrowser, openModePicker } from './windows';
 
 let dashboardAnimatedThisSession = false;
@@ -113,11 +117,16 @@ export const registerIpc = () => {
   handleFromBrowser('browser:new-tab', () => newTab());
   handleFromBrowser('browser:close-tab', (_event, id: unknown) => closeTab(id));
   handleFromBrowser('browser:activate-tab', (_event, id: unknown) => activateTab(id));
+  handleFromBrowser('browser:move-tab', (_event, id: unknown, index: unknown) => moveTab(id, index));
   handleFromBrowser('browser:navigate', (_event, input: unknown) => navigate(input));
+  handleFromBrowser('browser:suggest', (_event, query: unknown) => getSuggestions(query));
+  handleFromBrowser('browser:warm-suggestions', () => warmSuggestions());
+  handleFromBrowser('browser:suggestion-image', (_event, url: unknown) => getSuggestionImage(url));
   handleFromBrowser('browser:back', () => goBack());
   handleFromBrowser('browser:forward', () => goForward());
   handleFromBrowser('browser:reload', () => reload());
   handleFromBrowser('browser:stop', () => stop());
+  handleFromBrowser('browser:show-tab-menu', (_event, id: unknown) => showTabMenu(id));
   handleFromBrowser('browser:set-content-bounds', (_event, bounds: unknown) => setContentBounds(bounds));
   handleFromBrowser('browser:capture-page', () => captureActivePage());
   handleFromBrowser('browser:set-overlay-open', (_event, open: unknown) => setOverlayOpen(open === true));
@@ -135,5 +144,16 @@ export const registerIpc = () => {
     return signIn(() => requester && bringToFront(requester));
   });
   handle('auth:cancel-sign-in', () => cancelSignIn());
-  handle('auth:sign-out', () => signOut());
+  handle('auth:sign-out', async (_event, options: unknown) => {
+    const accountId = getAccountId();
+    // signOut switches the tabs off this account's web storage straight away, then waits on Google to
+    // revoke the token. Don't make the device wipe wait for the network.
+    const revoked = signOut();
+
+    if (accountId && (options as { removeDeviceData?: unknown } | null)?.removeDeviceData === true) {
+      await removeWebData(accountId);
+    }
+
+    await revoked;
+  });
 };

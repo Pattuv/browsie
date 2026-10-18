@@ -11,7 +11,7 @@ const auth: BrowsieAuthAPI = {
   getSession: () => ipcRenderer.invoke("auth:get-session"),
   signIn: () => ipcRenderer.invoke("auth:sign-in"),
   cancelSignIn: () => ipcRenderer.invoke("auth:cancel-sign-in"),
-  signOut: () => ipcRenderer.invoke("auth:sign-out"),
+  signOut: (options) => ipcRenderer.invoke("auth:sign-out", options),
   onSessionChanged: (callback) => {
     // Pass only the session through; the raw IPC event would hand the page a handle to ipcRenderer.
     const listener = (_event: IpcRendererEvent, session: AuthSession) =>
@@ -53,11 +53,16 @@ const browser: BrowsieBrowserAPI = {
   newTab: () => ipcRenderer.invoke("browser:new-tab"),
   closeTab: (id) => ipcRenderer.invoke("browser:close-tab", id),
   activateTab: (id) => ipcRenderer.invoke("browser:activate-tab", id),
+  moveTab: (id, index) => ipcRenderer.invoke("browser:move-tab", id, index),
   navigate: (input) => ipcRenderer.invoke("browser:navigate", input),
+  suggest: (query) => ipcRenderer.invoke("browser:suggest", query),
+  warmSuggestions: () => ipcRenderer.invoke("browser:warm-suggestions"),
+  suggestionImage: (url) => ipcRenderer.invoke("browser:suggestion-image", url),
   back: () => ipcRenderer.invoke("browser:back"),
   forward: () => ipcRenderer.invoke("browser:forward"),
   reload: () => ipcRenderer.invoke("browser:reload"),
   stop: () => ipcRenderer.invoke("browser:stop"),
+  showTabMenu: (id) => ipcRenderer.invoke("browser:show-tab-menu", id),
   setContentBounds: (bounds) =>
     ipcRenderer.invoke("browser:set-content-bounds", bounds),
   capturePage: () => ipcRenderer.invoke("browser:capture-page"),

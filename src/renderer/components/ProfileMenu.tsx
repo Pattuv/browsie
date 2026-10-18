@@ -1,10 +1,11 @@
-import type { KeyboardEvent, ReactNode } from 'react';
+import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ArrowUpRight, Check, Gauge, Info, Lock, LogOut, Settings, Users } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useLockdownStore } from '../stores/browserStore';
 import { playClick } from '../sounds';
 import DropdownMenu, { MenuDivider, MenuGroup, MenuItem } from './DropdownMenu';
 import PrimaryButton from './PrimaryButton';
+import SignOutDialog from './SignOutDialog';
 
 const changeMode = (close: () => void) => {
   close();
@@ -218,90 +219,99 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
   const pictureDataUrl = useAuthStore((state) => state.pictureDataUrl);
   // Lockdown only exists in the chrome; there it locks billing, Change mode and Quit.
   const locked = useLockdownStore((state) => state.enabled) && Boolean(quit);
+  // Outside the menu, so the dialog stays up after the menu closes.
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
+
   return (
-    <DropdownMenu
-      panelTarget={panelTarget}
-      onOpenChange={onOpenChange}
-      trigger={({ open, toggle }) => (
-        <button
-          type="button"
-          title="Profile"
-          aria-label="Account"
-          aria-haspopup="menu"
-          aria-expanded={open}
-          onClick={toggle}
-          className={`app-region-no-drag flex cursor-pointer items-center justify-center rounded-full transition-[background-color,transform] duration-150 ease-out active:scale-85 ${triggerClassName}`}
-        >
-          <Avatar pictureDataUrl={pictureDataUrl} className="h-full w-full" />
-        </button>
-      )}
-    >
-      {(close) => (
-        <>
-          <div className="flex items-center gap-3 px-2 py-1">
-            <Avatar
-              pictureDataUrl={pictureDataUrl}
-              className="h-10 w-10 shrink-0"
-            />
-            <div className="min-w-0">
-              <p className="bric truncate text-xl font-medium leading-tight tracking-tight">
-                {firstName}
-              </p>
-              <p className="truncate text-sm tracking-tight text-zinc-600">
-                {email}
-              </p>
+    <>
+      <SignOutDialog open={confirmingSignOut} onClose={() => setConfirmingSignOut(false)} />
+      <DropdownMenu
+        panelTarget={panelTarget}
+        onOpenChange={onOpenChange}
+        trigger={({ open, toggle }) => (
+          <button
+            type="button"
+            title="Profile"
+            aria-label="Account"
+            aria-haspopup="menu"
+            aria-expanded={open}
+            onClick={toggle}
+            className={`app-region-no-drag flex cursor-pointer items-center justify-center rounded-full transition-[background-color,transform] duration-150 ease-out active:scale-85 ${triggerClassName}`}
+          >
+            <Avatar pictureDataUrl={pictureDataUrl} className="h-full w-full" />
+          </button>
+        )}
+      >
+        {(close) => (
+          <>
+            <div className="flex items-center gap-3 px-2 py-1">
+              <Avatar
+                pictureDataUrl={pictureDataUrl}
+                className="h-10 w-10 shrink-0"
+              />
+              <div className="min-w-0">
+                <p className="bric truncate text-xl font-medium leading-tight tracking-tight">
+                  {firstName}
+                </p>
+                <p className="truncate text-sm tracking-tight text-zinc-600">
+                  {email}
+                </p>
+              </div>
             </div>
-          </div>
 
-          <UsageCard />
-          <MenuItem
-            icon={Gauge}
-            label="Check OpenRouter billing"
-            disabled={locked}
-            onClick={() => {
-              close();
-              window.browsie?.openExternal(OPENROUTER_BILLING_URL);
-            }}
-            trailing={<ArrowUpRight size={16} strokeWidth={1.75} className="text-zinc-600" aria-hidden="true" />}
-          />
-          <MenuDivider />
+            <UsageCard />
+            <MenuItem
+              icon={Gauge}
+              label="Check OpenRouter billing"
+              disabled={locked}
+              onClick={() => {
+                close();
+                window.browsie?.openExternal(OPENROUTER_BILLING_URL);
+              }}
+              trailing={<ArrowUpRight size={16} strokeWidth={1.75} className="text-zinc-600" aria-hidden="true" />}
+            />
+            <MenuDivider />
 
-          {quit ? (
-            <>
-              <LockdownRow />
-              <MenuDivider />
-              <MenuGroup>
-                <MenuItem icon={Users} label="Change mode" disabled={locked} onClick={() => changeMode(close)} />
-                <MenuItem
-                  icon={LogOut}
-                  label={quit.label ?? 'Quit'}
-                  disabled={locked}
-                  danger
+            {quit ? (
+              <>
+                <LockdownRow />
+                <MenuDivider />
+                <MenuGroup>
+                  <MenuItem icon={Users} label="Change mode" disabled={locked} onClick={() => changeMode(close)} />
+                  <MenuItem
+                    icon={LogOut}
+                    label={quit.label ?? 'Quit'}
+                    disabled={locked}
+                    danger
+                    onClick={() => {
+                      close();
+                      quit.onClick();
+                    }}
+                  />
+                </MenuGroup>
+              </>
+            ) : (
+              <>
+                <MenuGroup>
+                  <MenuItem icon={Users} label="Change mode" onClick={() => changeMode(close)} />
+                  <MenuItem icon={Settings} label="Settings" />
+                </MenuGroup>
+                {/* Asks first; the dialog does the actual sign-out. */}
+                <PrimaryButton
                   onClick={() => {
                     close();
-                    quit.onClick();
+                    setConfirmingSignOut(true);
                   }}
-                />
-              </MenuGroup>
-            </>
-          ) : (
-            <>
-              <MenuGroup>
-                <MenuItem icon={Users} label="Change mode" onClick={() => changeMode(close)} />
-                <MenuItem icon={Settings} label="Settings" />
-              </MenuGroup>
-              {/* Main wipes the vault and pushes SIGNED_OUT; the OnboardingLayer gate then swaps Dashboard for Auth. */}
-              <PrimaryButton
-                onClick={() => window.browsie?.auth.signOut()}
-                className="smooth h-10! w-full rounded-[18px]!"
-              >
-                Log out
-              </PrimaryButton>
-            </>
-          )}
-        </>
-      )}
-    </DropdownMenu>
+                  className="smooth h-10! w-full rounded-[18px]!"
+                >
+                  Log out
+                </PrimaryButton>
+              </>
+            )}
+          </>
+        )}
+      </DropdownMenu>
+    </>
   );
 }
 

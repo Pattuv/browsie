@@ -1,6 +1,6 @@
-import { session, type Cookie, type WebContents } from 'electron';
+import { type Cookie, type WebContents } from 'electron';
 import { activeContents, getActiveWebUrl, reload } from './tabs';
-import { WEB_PARTITION, getCertificate } from './webSession';
+import { webSession, getCertificate } from './webSession';
 import { getSitePermissions, isSitePermissionKind, resetSitePermissions, setSitePermission } from './sitePermissions';
 
 // Our own script world inside the page, so the page's scripts can't tamper with what we read.
@@ -46,7 +46,7 @@ export const getSiteInfo = async (): Promise<SiteInfo | null> => {
   const { protocol, hostname, origin } = new URL(url);
   const certificate = getCertificate(hostname);
   const [cookies, storageBytes] = await Promise.all([
-    session.fromPartition(WEB_PARTITION).cookies.get({ url }),
+    webSession().cookies.get({ url }),
     getStorageUsage(contents),
   ]);
 
@@ -70,7 +70,7 @@ export const clearSiteData = async () => {
     return;
   }
 
-  const web = session.fromPartition(WEB_PARTITION);
+  const web = webSession();
   const cookies = await web.cookies.get({ url });
 
   await Promise.all(cookies.map((cookie) => web.cookies.remove(cookieUrl(cookie), cookie.name)));
