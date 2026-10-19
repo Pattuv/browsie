@@ -1,13 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Volume2, VolumeX } from "lucide-react";
-import mascot from "../../assets/mascot.svg";
-import cloudGraphic from "../../assets/cloudgraphic.png";
-import browserIllustration from "../../assets/paint-icons/browser.png";
-import {
-  fadeOutSetupSoundtrack,
-  getSetupSoundtrack,
-  playSetupSoundtrack,
-} from "../setupSoundtrack";
+import mascot from "../../../assets/mascot.svg";
+import browserIllustration from "../../../assets/paint-icons/browser.png";
+import { fadeOutSetupSoundtrack } from "../../setupSoundtrack";
 
 const WHITE_HOLD_MS = 1000;
 const BLUR_MS = 1000;
@@ -28,7 +22,7 @@ const HELLO_LETTER_STAGGER_MS = 38;
 // Matches .exit-blur in index.css.
 const WELCOME_EXIT_MS = 550;
 
-type Phase = "white" | "hello" | "hello-out" | "mascot" | "lift";
+export type Phase = "white" | "hello" | "hello-out" | "mascot" | "lift";
 // welcome → (click) welcome-out → browser; back to welcome if the attempt is cancelled or fails.
 type SignInView = "welcome" | "welcome-out" | "browser";
 
@@ -36,17 +30,17 @@ type AuthProps = {
   // true: first-time install (white → hello → mascot → welcome, with the soundtrack).
   // false: this install has signed in before, so go straight to the welcome screen in silence.
   playIntro: boolean;
+  phase: Phase;
+  onPhase: (phase: Phase) => void;
 };
 
-function Auth({ playIntro }: AuthProps) {
-  const [phase, setPhase] = useState<Phase>(playIntro ? "white" : "lift");
+function Auth({ playIntro, phase, onPhase }: AuthProps) {
   const [signInView, setSignInView] = useState<SignInView>("welcome");
   const [hasTriedSignIn, setHasTriedSignIn] = useState(false);
   const [signInFailed, setSignInFailed] = useState(false);
   const stackRef = useRef<HTMLDivElement>(null);
   const stackStartTop = useRef<number | null>(null);
   const welcomeExitTimer = useRef<number | undefined>(undefined);
-  const [soundtrackMuted, setSoundtrackMuted] = useState(false);
 
   const handleSignInClick = async () => {
     setSignInFailed(false);
@@ -67,7 +61,7 @@ function Auth({ playIntro }: AuthProps) {
     }
 
     if (signedIn) {
-      // Start the fade before Auth unmounts so cleanup isn't the only chance to stop it.
+      // Start the fade before Setup unmounts so cleanup isn't the only chance to stop it.
       fadeOutSetupSoundtrack();
     } else {
       window.clearTimeout(welcomeExitTimer.current);
@@ -82,23 +76,11 @@ function Auth({ playIntro }: AuthProps) {
       return undefined;
     }
 
-    playSetupSoundtrack();
-
-    return () => {
-      fadeOutSetupSoundtrack();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!playIntro) {
-      return undefined;
-    }
-
     const timers = [
-      window.setTimeout(() => setPhase("hello"), HELLO_IN_AT),
-      window.setTimeout(() => setPhase("hello-out"), HELLO_OUT_AT),
+      window.setTimeout(() => onPhase("hello"), HELLO_IN_AT),
+      window.setTimeout(() => onPhase("hello-out"), HELLO_OUT_AT),
       // Mascot + welcome lift together: "mascot" is only a one-frame measure for the FLIP.
-      window.setTimeout(() => setPhase("mascot"), MASCOT_IN_AT),
+      window.setTimeout(() => onPhase("mascot"), MASCOT_IN_AT),
     ];
 
     return () => timers.forEach(clearTimeout);
@@ -109,7 +91,7 @@ function Auth({ playIntro }: AuthProps) {
       if (stackRef.current) {
         stackStartTop.current = stackRef.current.getBoundingClientRect().top;
       }
-      setPhase("lift");
+      onPhase("lift");
       return;
     }
 
@@ -135,85 +117,15 @@ function Auth({ playIntro }: AuthProps) {
       el.style.transition = `transform ${MASCOT_MOVE_MS}ms ${MASCOT_MOVE_EASING}`;
       el.style.transform = "translate3d(0, 0, 0)";
     });
-  }, [phase]);
-
-  const toggleSoundtrack = () => {
-    const audio = getSetupSoundtrack();
-
-    if (!audio) {
-      return;
-    }
-
-    audio.muted = !audio.muted;
-    setSoundtrackMuted(audio.muted);
-  };
+  }, [onPhase, phase]);
 
   const showHello = phase === "hello" || phase === "hello-out";
   const showMascot = phase === "mascot" || phase === "lift";
   const showScene = phase === "lift";
-  const SoundtrackIcon = soundtrackMuted ? VolumeX : Volume2;
 
   return (
-    <div className="relative h-full min-h-full overflow-hidden bg-white">
-      {playIntro && (
-        <button
-          type="button"
-          aria-label={soundtrackMuted ? "Unmute soundtrack" : "Mute soundtrack"}
-          aria-pressed={soundtrackMuted}
-          onClick={toggleSoundtrack}
-          className="smooth app-region-no-drag absolute top-4 left-5 z-20 flex size-11 cursor-pointer items-center justify-center rounded-2xl border border-[#cccccc] bg-transparent text-[#243746] transition-transform duration-300 ease-out hover:scale-105 active:scale-95"
-        >
-          <SoundtrackIcon size={20} strokeWidth={2} aria-hidden="true" />
-        </button>
-      )}
-
-      {showScene && (
-        <>
-          <img
-            src={cloudGraphic}
-            alt=""
-            className={`pointer-events-none absolute inset-x-0 bottom-0 z-0 w-full ${playIntro ? "slide-in-up-slow" : ""}`}
-          />
-          <svg
-            className={`pointer-events-none absolute inset-x-0 top-0 z-[1] h-[46%] w-full overflow-visible ${playIntro ? "slide-in-down-slow" : ""}`}
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          >
-            <defs>
-              <filter
-                id="auth-triangle-blur"
-                x="-35%"
-                y="-35%"
-                width="170%"
-                height="170%"
-              >
-                <feGaussianBlur stdDeviation="7" />
-              </filter>
-            </defs>
-            <polygon
-              points="10,0 90,0 50,58"
-              fill="#D7CBFF"
-              opacity="0.55"
-              filter="url(#auth-triangle-blur)"
-            />
-            <polygon
-              points="22,0 78,0 50,40"
-              fill="#D7CBFF"
-              opacity="0.32"
-              filter="url(#auth-triangle-blur)"
-            />
-            <polygon
-              points="34,0 66,0 50,24"
-              fill="#D7CBFF"
-              opacity="0.2"
-              filter="url(#auth-triangle-blur)"
-            />
-          </svg>
-        </>
-      )}
-
-      <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 ">
+    <div className="relative z-10 h-full min-h-full">
+      <div className="flex h-full flex-col items-center justify-center px-6">
         {showHello && (
           <p className="bric flex justify-center text-6xl font-medium tracking-tighter">
             {HELLO_TEXT.split("").map((char, index) => (
@@ -238,7 +150,7 @@ function Auth({ playIntro }: AuthProps) {
               <br />
               existing browser.
             </h1>
-            <p className="mt-5 font-medium text-center text-lg tracking-tight text-zinc-600">
+            <p className="mt-5 text-center text-lg font-medium tracking-tight text-zinc-600">
               This page will refresh when you’re done.
             </p>
             {/* Main resolves the pending signIn() as signed-out, and handleSignInClick fades the welcome view back in. */}
@@ -323,7 +235,7 @@ function Auth({ playIntro }: AuthProps) {
 
       {showScene && (
         <p
-          className={`absolute inset-x-0 bottom-5 z-10 px-6 text-center font-[500] text-sm tracking-tight text-zinc-400 ${playIntro ? "enter-fade-slow" : ""}`}
+          className={`absolute inset-x-0 bottom-5 z-10 px-6 text-center text-sm font-[500] tracking-tight text-zinc-400 ${playIntro ? "enter-fade-slow" : ""}`}
         >
           By continuing, you agree to the{" "}
           <span className="underline underline-offset-2">Terms of Service</span>{" "}

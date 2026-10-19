@@ -38,7 +38,7 @@ const hardStop = (audio: HTMLAudioElement) => {
 export const getSetupSoundtrack = () => current;
 
 export const playSetupSoundtrack = () => {
-  // Drop any leftover instance from a previous Auth visit / Strict Mode remount.
+  // Drop any leftover instance from a previous setup visit / Strict Mode remount.
   if (current) {
     hardStop(current);
   }

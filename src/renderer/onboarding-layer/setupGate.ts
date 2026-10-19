@@ -1,5 +1,5 @@
 // Full hello → mascot → soundtrack until this install has completed a sign-in at least once.
-// After that, Auth opens straight on the welcome screen (including after logout).
+// After that, setup opens straight on the welcome screen (including after logout).
 const HAS_SIGNED_IN_KEY = 'browsie-has-signed-in';
 
 export const hasCompletedSignIn = () => {
@@ -18,7 +18,7 @@ export const markSignInCompleted = () => {
   }
 };
 
-/** Clears the "has signed in" flag so the next Auth visit plays the full setup intro. */
+/** Clears the "has signed in" flag so the next setup visit plays the full intro. */
 export const clearSignInCompleted = () => {
   try {
     localStorage.removeItem(HAS_SIGNED_IN_KEY);
