@@ -91,10 +91,15 @@ interface BrowsieDataAPI {
 }
 
 // One tab as the chrome sees it. url is null while the tab shows Browsie's own New Tab page.
+// Browsie's own pages, shown in a tab instead of a website (browsie://history, browsie://bookmarks).
+type BrowsiePage = 'newtab' | 'history' | 'bookmarks';
+
 type BrowserTab = {
   id: number;
   title: string;
   url: string | null;
+  // Which Browsie page the tab shows while url is null; null on a website.
+  page: BrowsiePage | null;
   // The site's icon as a data: URL (main downloads it; the chrome never loads remote images). Null until known.
   favicon: string | null;
   loading: boolean;
@@ -208,12 +213,73 @@ interface BrowsieBrowserAPI {
   resetSitePermissions: () => Promise<SitePermission[]>;
   // Ctrl+L / F6 / Alt+D. Returns an unsubscribe function.
   onFocusAddress: (callback: () => void) => () => void;
+  // Opens browsie://history or browsie://bookmarks: an existing tab showing it, the empty New Tab, or a new tab.
+  openPage: (page: 'history' | 'bookmarks') => Promise<void>;
+}
+
+// A saved page (or, later, a folder of them), for the signed-in account.
+type Bookmark = {
+  id: string;
+  kind: 'link' | 'folder';
+  url?: string;
+  title: string;
+  // The site's icon when it was bookmarked, as a data: URL. Missing if it was too big or unknown.
+  favicon?: string;
+  // Where it's saved: 'bar' (the bookmarks bar) or null ("Other bookmarks").
+  parentId: string | null;
+  // Order within its place, lowest first.
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// When the bookmarks bar shows (settings.bookmarksBar). Missing means 'always'.
+type BookmarksBarMode = 'always' | 'never' | 'newtab';
+
+// The star and Ctrl+D: the page's bookmark, and whether it was just made (false: it was already saved).
+type BookmarkResult = { bookmark: Bookmark; created: boolean };
+
+// One visit to one page, for the signed-in account.
+type Visit = {
+  id: string;
+  url: string;
+  title: string;
+  visitedAt: string;
+};
+
+// Bookmarks and history. Browser window only, like the tab controls.
+interface BrowsieLibraryAPI {
+  // Newest first. Pass the oldest visitedAt you have as `before` to load further back.
+  listHistory: (options?: { before?: string; limit?: number }) => Promise<Visit[]>;
+  // Every word must appear in the title or address. Newest first.
+  searchHistory: (query: string) => Promise<Visit[]>;
+  removeVisit: (id: string) => Promise<void>;
+  clearHistory: () => Promise<void>;
+  // History changed (a visit, a removal, another account signed in): reload what you show.
+  // Returns an unsubscribe function.
+  onHistoryChanged: (callback: () => void) => () => void;
+  listBookmarks: () => Promise<Bookmark[]>;
+  // Bookmarks the page on screen (to the bookmarks bar), or returns its bookmark if it's already saved.
+  // Null when there's no website on screen.
+  bookmarkPage: () => Promise<BookmarkResult | null>;
+  // Rename it, or move it between the bookmarks bar ('bar') and Other bookmarks (null).
+  updateBookmark: (id: string, change: { title?: string; parentId?: string | null }) => Promise<void>;
+  // One step earlier (-1) or later (1) within where it's saved.
+  moveBookmark: (id: string, direction: -1 | 1) => Promise<void>;
+  removeBookmark: (id: string) => Promise<void>;
+  // Right-click on the bookmarks bar: on a bookmark (its id) or on the bar itself (no id).
+  showBookmarkMenu: (id?: string) => Promise<void>;
+  // Returns an unsubscribe function.
+  onBookmarksChanged: (callback: (bookmarks: Bookmark[]) => void) => () => void;
+  // Ctrl+D was pressed: open the star's panel for this bookmark. Returns an unsubscribe function.
+  onEditBookmark: (callback: (result: BookmarkResult) => void) => () => void;
 }
 
 interface BrowsieAPI {
   auth: BrowsieAuthAPI;
   data: BrowsieDataAPI;
   browser: BrowsieBrowserAPI;
+  library: BrowsieLibraryAPI;
   openModePicker: () => Promise<void>;
   openExternal: (url: string) => Promise<void>;
   shouldAnimateDashboard: () => Promise<boolean>;

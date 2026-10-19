@@ -1,7 +1,7 @@
 import { app, session, type WebContents } from 'electron';
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { accountKey } from '../auth/accountKey';
 import { forgetGoogleLogin, setGoogleLoginPartition, watchGoogleLogin } from './googleWebLogin';
 import { isAllowed } from './sitePermissions';
 
@@ -17,10 +17,8 @@ const LEGACY_PARTITION_FOLDER = 'web';
 let webPartition = GUEST_PARTITION;
 const configured = new Set<string>();
 
-// A short hash of the account's Google ID: the same account always gets the same folder, and the ID
-// itself never appears in folder names on disk.
-const partitionFor = (accountId: string) =>
-  `persist:web-${createHash('sha256').update(accountId).digest('hex').slice(0, 16)}`;
+// The same account always gets the same folder, and its Google ID never appears in folder names on disk.
+const partitionFor = (accountId: string) => `persist:web-${accountKey(accountId)}`;
 
 export const getWebPartition = () => webPartition;
 export const webSession = () => session.fromPartition(webPartition);

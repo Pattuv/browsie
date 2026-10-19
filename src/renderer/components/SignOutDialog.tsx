@@ -100,8 +100,9 @@ function SignOutDialog({ open, onClose }: SignOutDialogProps) {
               Deletes the websites you&rsquo;re signed in to in Browsie on this
               computer, like Gmail, Google Drive and school sites, along with
               their cookies and saved site data. You&rsquo;ll need to sign in to
-              them again. Your Browsie settings and site permissions are saved
-              either way.
+              them again. Your bookmarks and history are removed from this
+              computer too, but stay safe in your Google Drive with your
+              settings and site permissions, and come back when you sign in.
             </span>
           </span>
         </span>

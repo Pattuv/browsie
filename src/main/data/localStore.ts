@@ -71,6 +71,9 @@ export const loadLocalStore = () => {
 // What the renderer sees: just the app data, no bookkeeping.
 export const getData = (): AppData => ({ userMode: stored.userMode, settings: stored.settings });
 
+// This computer's id, stamped on each bookmark and visit it changes so merges break ties the same everywhere.
+export const getDeviceId = () => stored.deviceId;
+
 // Patches arrive from the renderer, so check their shape like any outside input.
 const validatePatch = (patch: unknown): AppDataPatch => {
   if (typeof patch !== 'object' || patch === null) {

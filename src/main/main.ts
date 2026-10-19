@@ -4,6 +4,8 @@ import { getAccountId, loadSession, onSessionChange } from './auth/session';
 import { migrateSitePermissions } from './browser/sitePermissions';
 import { resetTabsForAccount } from './browser/tabs';
 import { configureWebSession, setWebAccount } from './browser/webSession';
+import { setBookmarksAccount } from './data/bookmarks';
+import { flushHistory, setHistoryAccount } from './data/history';
 import { loadLocalStore } from './data/localStore';
 import { startSync } from './data/syncEngine';
 import { registerIpc } from './ipc';
@@ -28,8 +30,14 @@ app.whenReady().then(() => {
   migrateSitePermissions();
   loadSession();
   configureWebSession(getAccountId());
-  // Signed out, or a different account signed in: switch the tabs to that account's own web storage.
+  setBookmarksAccount(getAccountId());
+  setHistoryAccount(getAccountId());
+  // Signed out, or a different account signed in: switch the tabs to that account's own web storage,
+  // and the bookmarks and history to that account's own.
   onSessionChange(() => {
+    setBookmarksAccount(getAccountId());
+    setHistoryAccount(getAccountId());
+
     if (setWebAccount(getAccountId())) {
       resetTabsForAccount();
     }
@@ -39,6 +47,9 @@ app.whenReady().then(() => {
   createWindow();
   startSync();
 });
+
+// History saves a few seconds after each visit; don't lose the last few when quitting.
+app.on('will-quit', flushHistory);
 
 app.on('window-all-closed', () => {
   // Held false for the beat between the Dashboard closing and the browser opening.

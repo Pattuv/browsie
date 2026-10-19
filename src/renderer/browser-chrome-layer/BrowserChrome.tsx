@@ -2,6 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 're
 import SplashScreen from './SplashScreen';
 import TabStrip from './TabStrip';
 import Toolbar from './Toolbar';
+import BookmarksBar from './BookmarksBar';
+import BookmarksPage from './pages/BookmarksPage';
+import HistoryPage from './pages/HistoryPage';
 import NewTab from './pages/NewTab';
 import { playStartupSound, startupSoundLoaded } from '../sounds';
 import { browserStateLoaded, useActiveTab, usePageSnapshot } from '../stores/browserStore';
@@ -152,10 +155,13 @@ function BrowserChrome() {
             className="absolute inset-x-0 bottom-0 top-12 flex flex-col overflow-hidden bg-white"
           >
             <Toolbar tab={activeTab} entranceDelay={TOOLBAR_DELAY} />
-            {/* The page area: the New Tab page lives here, or a website is laid exactly over it. */}
+            <BookmarksBar style={{ animationDelay: `${TOOLBAR_DELAY + 60}ms` }} />
+            {/* The page area: Browsie's own pages live here, or a website is laid exactly over it. */}
             <div ref={viewportRef} className="relative min-h-0 flex-1">
-              {activeTab?.url === null && (
-                // Keyed by tab, so each tab gets its own page.
+              {/* Keyed by tab, so each tab gets its own page. */}
+              {activeTab?.url === null && activeTab.page === 'history' && <HistoryPage key={activeTab.id} />}
+              {activeTab?.url === null && activeTab.page === 'bookmarks' && <BookmarksPage key={activeTab.id} />}
+              {activeTab?.url === null && activeTab.page === 'newtab' && (
                 <NewTab
                   key={activeTab.id}
                   entranceDelay={newTabEntranceDelay(activeTab.id)}

@@ -10,6 +10,9 @@ import {
   type WebContents,
 } from 'electron';
 import { getSession } from '../auth/session';
+import { bookmarkPage, listBookmarks, removeBookmark } from '../data/bookmarks';
+import { getData, updateData } from '../data/localStore';
+import { recordVisit, updateVisitTitle } from '../data/history';
 import { clearFaviconCache, resolveFavicon } from './favicons';
 import { getGoogleLogin, googleSignInUrl, isGoogleAccountsUrl, onGoogleLoginChange } from './googleWebLogin';
 import { clearGoogleRejectionCookies, getWebPartition, isGoogleSignInRejection, isWebUrl } from './webSession';
@@ -35,6 +38,28 @@ type Tab = {
   // Opened on Google's sign-in page because this account's web storage had no Google login. Turns into
   // the New Tab page once sign-in finishes.
   googleSignIn: boolean;
+  // The history entry for the page on screen, so its title can be filled in when the page reports it.
+  visitId: string | null;
+  // Which of Browsie's own pages shows while showingNewTab is true: New Tab, History or Bookmarks.
+  page: BrowsiePage;
+  // Where Back goes from Browsie's own pages, newest last: an earlier Browsie page (New Tab → History),
+  // or the website this page was opened over (that site's view is still loaded behind it).
+  pageBack: PageBackEntry[];
+};
+
+type PageBackEntry =
+  | { kind: 'page'; page: BrowsiePage }
+  // `origin` is the Browsie page that site was opened from, so Back from its first entry still works.
+  | { kind: 'site'; origin: BrowsiePage };
+
+const isOverSite = (tab: Tab) => tab.pageBack.some((entry) => entry.kind === 'site');
+
+const PAGE_TITLES: Record<BrowsiePage, string> = { newtab: 'New Tab', history: 'History', bookmarks: 'Bookmarks' };
+
+// browsie://history, browsie://bookmarks, browsie://newtab (any case, optional trailing slash).
+const browsiePageFrom = (input: unknown): BrowsiePage | null => {
+  const match = typeof input === 'string' ? /^browsie:\/\/(newtab|history|bookmarks)\/?$/i.exec(input.trim()) : null;
+  return match ? (match[1].toLowerCase() as BrowsiePage) : null;
 };
 
 const SEARCH_URL = 'https://www.google.com/search?q=';
@@ -89,13 +114,16 @@ const describeTab = (tab: Tab): BrowserTab => {
   if (!view || tab.showingNewTab) {
     return {
       id,
-      title: 'New Tab',
+      title: PAGE_TITLES[tab.page],
       url: null,
+      page: tab.page,
       favicon: null,
       loading: false,
       muted: false,
-      canGoBack: false,
-      canGoForward: view !== null,
+      // Back: an earlier Browsie page, or the site this page was opened over. Forward: a site left with
+      // Back from its first page, still loaded behind (not when that site is what Back leads to).
+      canGoBack: tab.pageBack.length > 0,
+      canGoForward: view !== null && !isOverSite(tab),
     };
   }
 
@@ -106,6 +134,7 @@ const describeTab = (tab: Tab): BrowserTab => {
     id,
     title: contents.getTitle() || url,
     url,
+    page: null,
     favicon,
     loading: contents.isLoading(),
     muted: contents.isAudioMuted(),
@@ -339,6 +368,11 @@ const wirePopup = (popup: BrowserWindow, opener: WebContents) => {
   });
 };
 
+// Adds the page to history. The Google sign-in tab is skipped: sign-in steps aren't places you visited.
+const noteVisit = (tab: Tab, contents: WebContents, url: string) => {
+  tab.visitId = tab.googleSignIn ? null : recordVisit(url, contents.getTitle());
+};
+
 // The rules every website lives by. This is the security boundary, so it's all in one place.
 const wireContents = (tab: Tab, contents: WebContents) => {
   // Links (target=_blank) become tabs. Real popups, opened with a size (the way "Sign in with Google"
@@ -373,6 +407,7 @@ const wireContents = (tab: Tab, contents: WebContents) => {
     }
 
     onNavigatedForFavicon(tab, url);
+    noteVisit(tab, contents, url);
     emit();
 
     // After the event, not inside it: finishing closes this very page.
@@ -383,8 +418,22 @@ const wireContents = (tab: Tab, contents: WebContents) => {
   contents.on('page-favicon-updated', (_event, favicons) => {
     void updateFavicon(tab, contents, favicons);
   });
-  contents.on('did-navigate-in-page', emit);
-  contents.on('page-title-updated', emit);
+  // Single-page sites (YouTube, Gmail) change pages without a full load. Only the page itself counts,
+  // not an embedded frame.
+  contents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+    if (isMainFrame) {
+      noteVisit(tab, contents, url);
+    }
+
+    emit();
+  });
+  contents.on('page-title-updated', (_event, title) => {
+    if (tab.visitId) {
+      updateVisitTitle(tab.visitId, title);
+    }
+
+    emit();
+  });
   contents.on('render-process-gone', emit);
 
   contents.on('enter-html-full-screen', () => {
@@ -546,9 +595,12 @@ const destroyView = (tab: Tab) => {
 const load = (tab: Tab, url: string) => {
   // Leaving the New Tab page starts a fresh history (like Chrome, this drops anything Forward
   // could have returned to), whose Back leads to the New Tab page.
+  // Leaving History or Bookmarks works the same way, and Back returns to that page.
   if (tab.showingNewTab) {
     destroyView(tab);
     tab.showingNewTab = false;
+    // The site behind is gone, so Back can't lead to it any more. Earlier Browsie pages stay reachable.
+    tab.pageBack = tab.pageBack.filter((entry) => entry.kind === 'page');
     tab.startedFromNewTab = true;
     tab.favicon = null;
     tab.faviconRequest++;
@@ -572,6 +624,9 @@ const blankTab = (overrides: Partial<Tab> = {}): Tab => ({
   faviconRequest: 0,
   faviconOrigin: null,
   googleSignIn: false,
+  visitId: null,
+  page: 'newtab',
+  pageBack: [],
   ...overrides,
 });
 
@@ -670,17 +725,107 @@ export const navigate = (input: unknown) => {
 
   // The user chose somewhere else to go; this tab is theirs now, not the sign-in page's.
   endGoogleSignIn(tab, false);
+  const page = browsiePageFrom(input);
+
+  if (page) {
+    showPage(tab, page);
+    return;
+  }
+
   load(tab, toUrl(input));
   layout();
   emit();
 };
 
-// Back from a site's first page (when it was opened from New Tab) returns to the New Tab page;
-// the site stays loaded behind it for Forward.
+// Shows one of Browsie's own pages in this tab, remembering where Back should go: the Browsie page
+// that was showing (New Tab → History), or the website it was opened over (kept loaded behind it).
+const showPage = (tab: Tab, page: BrowsiePage) => {
+  if (tab.showingNewTab) {
+    if (tab.page === page) {
+      return;
+    }
+
+    tab.pageBack.push({ kind: 'page', page: tab.page });
+  } else if (tab.view) {
+    tab.pageBack.push({ kind: 'site', origin: tab.page });
+    tab.showingNewTab = true;
+  }
+
+  tab.page = page;
+
+  if (fullscreenTabId === tab.id) {
+    fullscreenTabId = null;
+  }
+
+  if (tab.id === activeTabId) {
+    host?.webContents.focus();
+  }
+
+  layout();
+  emit();
+};
+
+// From the ⋮ menu, Ctrl+H and Ctrl+Shift+O: switch to a tab already showing that page, use this tab if
+// it's an empty New Tab, or open it in a new tab.
+export const openBrowsiePage = (page: unknown) => {
+  if (lockdown || (page !== 'history' && page !== 'bookmarks')) {
+    return;
+  }
+
+  const open = tabs.find((tab) => tab.showingNewTab && tab.page === page);
+
+  if (open) {
+    activateTab(open.id);
+    return;
+  }
+
+  const current = activeTab();
+
+  if (current?.showingNewTab && current.page === 'newtab' && !current.view && !current.googleSignIn) {
+    showPage(current, page);
+    return;
+  }
+
+  if (!host || tabs.length >= MAX_TABS) {
+    return;
+  }
+
+  const tab = blankTab({ showingNewTab: true, page });
+  tabs.push(tab);
+  activeTabId = tab.id;
+  host.webContents.focus();
+  layout();
+  emit();
+};
+
+// Back from a site's first page (when it was opened from New Tab, History or Bookmarks) returns to
+// that page; the site stays loaded behind it for Forward. Back from one of Browsie's pages goes to the
+// page before it, or to the website it was opened over.
 const goBackIn = (tab: Tab) => {
   const contents = tab.view?.webContents;
 
-  if (tab.showingNewTab || !contents) {
+  if (tab.showingNewTab) {
+    const previous = tab.pageBack.pop();
+
+    if (!previous) {
+      return;
+    }
+
+    if (previous.kind === 'page') {
+      tab.page = previous.page;
+      host?.webContents.focus();
+    } else if (contents) {
+      tab.page = previous.origin;
+      tab.showingNewTab = false;
+      contents.focus();
+    }
+
+    layout();
+    emit();
+    return;
+  }
+
+  if (!contents) {
     return;
   }
 
@@ -708,7 +853,7 @@ export const goBack = () => {
 export const goForward = () => {
   const tab = activeTab();
 
-  if (tab?.showingNewTab && tab.view) {
+  if (tab?.showingNewTab && tab.view && !isOverSite(tab)) {
     tab.showingNewTab = false;
     tab.view.webContents.focus();
     layout();
@@ -724,6 +869,32 @@ export const getActiveWebUrl = () => {
   const contents = activeContents();
   const url = contents && (contents.getURL() || activeTab()?.pendingUrl);
   return url && isWebUrl(url) ? url : null;
+};
+
+// The star in the address bar and Ctrl+D. Main reads the page itself, so the chrome can only ever
+// bookmark what's actually on screen. Null when there's no website to bookmark.
+export const bookmarkActivePage = () => {
+  const url = getActiveWebUrl();
+
+  if (!url) {
+    return null;
+  }
+
+  return bookmarkPage(url, activeContents()?.getTitle() ?? '', activeTab()?.favicon ?? null);
+};
+
+// Ctrl+D: bookmark the page, then have the chrome open the star's panel so the user can pick where it goes.
+const bookmarkFromShortcut = () => {
+  try {
+    const result = bookmarkActivePage();
+
+    if (result && host && !host.isDestroyed()) {
+      host.webContents.focus();
+      host.webContents.send('library:edit-bookmark', result);
+    }
+  } catch {
+    // Not signed in: nowhere to save it.
+  }
 };
 
 export const reload = () => activeContents()?.reload();
@@ -787,6 +958,61 @@ export const showTabMenu = (id: unknown) => {
       click: () => toggleMuteTab(tab),
     },
   ]).popup(host ? { window: host } : undefined);
+};
+
+// When the bookmarks bar shows: always, never, or only on the New Tab page. Saved with the settings
+// (so it follows the account to other computers). Always, until the user picks otherwise.
+const BOOKMARKS_BAR_SETTING = 'bookmarksBar';
+
+const bookmarksBarMode = (): BookmarksBarMode => {
+  const value = getData().settings[BOOKMARKS_BAR_SETTING];
+  return value === 'never' || value === 'newtab' ? value : 'always';
+};
+
+const setBookmarksBarMode = (mode: BookmarksBarMode) => {
+  updateData({ settings: { [BOOKMARKS_BAR_SETTING]: mode } });
+};
+
+// Right-click on the bookmarks bar. On a bookmark: open it, open it in a new tab, or remove it. Anywhere
+// on the bar (bookmark or not): open the bookmarks manager, or choose when the bar shows.
+export const showBookmarkMenu = (id: unknown) => {
+  if (lockdown) {
+    return;
+  }
+
+  const bookmark = typeof id === 'string' ? listBookmarks().find((entry) => entry.id === id) : undefined;
+  const url = bookmark?.url;
+  const mode = bookmarksBarMode();
+  const items: MenuItemConstructorOptions[] = [];
+
+  if (bookmark && url) {
+    items.push(
+      { label: 'Open', click: () => navigate(url) },
+      { label: 'Open in new tab', click: () => newTab(url) },
+      { type: 'separator' },
+      { label: 'Remove', click: () => removeBookmark(bookmark.id) },
+      { type: 'separator' },
+    );
+  }
+
+  items.push(
+    { label: 'Open bookmarks manager', accelerator: 'CmdOrCtrl+Shift+O', click: () => openBrowsiePage('bookmarks') },
+    {
+      label: 'Bookmarks bar',
+      submenu: [
+        { label: 'Always hide', type: 'radio', checked: mode === 'never', click: () => setBookmarksBarMode('never') },
+        { label: 'Always show', type: 'radio', checked: mode === 'always', click: () => setBookmarksBarMode('always') },
+        {
+          label: 'Only show on New Tab page',
+          type: 'radio',
+          checked: mode === 'newtab',
+          click: () => setBookmarksBarMode('newtab'),
+        },
+      ],
+    },
+  );
+
+  Menu.buildFromTemplate(items).popup(host ? { window: host } : undefined);
 };
 
 // The chrome measures its page area and reports it here. It's still input from a renderer, so check it.
@@ -873,6 +1099,26 @@ export const handleShortcut = (input: Input, source: 'chrome' | 'tab') => {
       newTab();
       focusAddressBar();
     });
+  }
+
+  // Bookmark the page on screen, like the star.
+  if (ctrl && !input.shift && !input.alt && key === 'd') {
+    return once(bookmarkFromShortcut);
+  }
+
+  // History and Bookmarks pages, with Chrome's keys.
+  if (ctrl && !input.shift && !input.alt && key === 'h') {
+    return once(() => openBrowsiePage('history'));
+  }
+
+  if (ctrl && input.shift && !input.alt && key === 'o') {
+    return once(() => openBrowsiePage('bookmarks'));
+  }
+
+  // Show or hide the bookmarks bar. The way back after choosing "Always hide", since a hidden bar
+  // can't be right-clicked.
+  if (ctrl && input.shift && !input.alt && key === 'b') {
+    return once(() => setBookmarksBarMode(bookmarksBarMode() === 'never' ? 'always' : 'never'));
   }
 
   // Ctrl+1 to Ctrl+8 jump to that tab; Ctrl+9 always jumps to the last one.
@@ -973,6 +1219,8 @@ const finishGoogleSignIn = (tab: Tab) => {
   endGoogleSignIn(tab, true);
   destroyView(tab);
   tab.showingNewTab = true;
+  tab.page = 'newtab';
+  tab.pageBack = [];
   tab.startedFromNewTab = false;
   tab.pendingUrl = null;
   tab.favicon = null;
