@@ -30,8 +30,8 @@ type Phase = "white" | "hello" | "hello-out" | "mascot" | "lift";
 type SignInView = "welcome" | "welcome-out" | "browser";
 
 type AuthProps = {
-  // true: onboarding (white → hello → mascot → welcome, with the soundtrack).
-  // false: coming back after logout, so go straight to the welcome screen in silence.
+  // true: first-time install (white → hello → mascot → welcome, with the soundtrack).
+  // false: this install has signed in before, so go straight to the welcome screen in silence.
   playIntro: boolean;
 };
 

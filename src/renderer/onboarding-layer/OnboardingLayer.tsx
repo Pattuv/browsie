@@ -4,21 +4,21 @@ import { useAuthStore } from '../stores/authStore';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 
-// The hello → mascot → soundtrack plays once: the first time this install opens onto onboarding.
-// Logout, an expired session, and every later launch go straight to the sign-in screen in silence.
-const INTRO_PLAYED_KEY = 'browsie-onboarding-intro-played';
+// Full hello → mascot → soundtrack until this install has completed a sign-in at least once.
+// After that, Auth opens straight on the welcome screen (including after logout).
+const HAS_SIGNED_IN_KEY = 'browsie-has-signed-in';
 
-const hasPlayedIntro = () => {
+const hasCompletedSignIn = () => {
   try {
-    return localStorage.getItem(INTRO_PLAYED_KEY) === '1';
+    return localStorage.getItem(HAS_SIGNED_IN_KEY) === '1';
   } catch {
     return false;
   }
 };
 
-const markIntroPlayed = () => {
+const markSignInCompleted = () => {
   try {
-    localStorage.setItem(INTRO_PLAYED_KEY, '1');
+    localStorage.setItem(HAS_SIGNED_IN_KEY, '1');
   } catch {
     // A blocked store just means a future launch might play the intro again.
   }
@@ -30,7 +30,7 @@ function OnboardingLayer() {
   const playIntro = useRef<boolean | null>(null);
 
   if (playIntro.current === null && status !== 'LOADING') {
-    playIntro.current = status === 'SIGNED_OUT' && !hasPlayedIntro();
+    playIntro.current = status === 'SIGNED_OUT' && !hasCompletedSignIn();
   }
 
   if (status === 'SIGNED_IN') {
@@ -38,9 +38,8 @@ function OnboardingLayer() {
   }
 
   useEffect(() => {
-    // Signing in, or actually playing the intro, means this install is past first-open onboarding.
-    if (status === 'SIGNED_IN' || playIntro.current === true) {
-      markIntroPlayed();
+    if (status === 'SIGNED_IN') {
+      markSignInCompleted();
     }
   }, [status]);
 
