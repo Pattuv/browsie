@@ -34,7 +34,7 @@ export function MenuItem({ icon: Icon, label, disabled = false, danger = false, 
       ) : (
         <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
       )}
-      <span className="flex-1">{label}</span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
       {trailing}
     </button>
   );
@@ -62,6 +62,10 @@ type DropdownMenuProps = {
   align?: 'left' | 'right';
   /** Classes for the wrapper around the trigger, which the panel is positioned from. */
   className?: string;
+  /** A panel holding a small form (the bookmark editor) is a dialog to screen readers, not a menu. */
+  role?: 'menu' | 'dialog';
+  /** What screen readers call the panel. */
+  label?: string;
 };
 
 /** The white, smoothed-corner popover behind the profile, utility and site info menus. */
@@ -73,6 +77,8 @@ function DropdownMenu({
   panelTarget,
   align = 'right',
   className = 'relative',
+  role = 'menu',
+  label,
 }: DropdownMenuProps) {
   const [open, setOpen] = useState(false);
   // Still mounted while the blur-out plays; unmounted when that animation ends.
@@ -143,7 +149,8 @@ function DropdownMenu({
         mountPanel(
           <div
             ref={panelRef}
-            role="menu"
+            role={role}
+            aria-label={label}
             onAnimationEnd={(event) => {
               if (closing && event.target === event.currentTarget) {
                 setOpen(false);

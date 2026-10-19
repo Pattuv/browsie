@@ -2,62 +2,38 @@ import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  Bookmark,
   MessagesSquare,
   RotateCw,
   X,
-  type LucideIcon,
 } from "lucide-react";
 import IconButton from "./IconButton";
+import BookmarkMenu from "./BookmarkMenu";
 import SiteInfoMenu from "./SiteInfoMenu";
 import SuggestionList from "./SuggestionList";
 import { prettyUrl } from "./prettyUrl";
 import { useSuggestions } from "./useSuggestions";
 import { trackChromeMenu, useLockdownStore } from "../stores/browserStore";
+import { useIsBookmarked } from "../stores/libraryStore";
 
 // The suggestion list hangs down over the website, so it needs the page freeze-frame like the menus.
 const trackSuggestionList = trackChromeMenu("suggestions");
 
-type BarButtonProps = {
-  label: string;
-  icon: LucideIcon;
-  side: "left" | "right";
-  visible: boolean;
-};
+// Screen readers hear when the page on screen stops being bookmarked (Remove in the star's panel, or
+// from the Bookmarks page). Adding needs no announcement: the panel that opens says "Bookmark added".
+// Switching tabs changes the star too, but that's not news, so it stays quiet.
+function useBookmarkRemovedAnnouncement(url: string, bookmarked: boolean) {
+  const [message, setMessage] = useState("");
+  const last = useRef({ url, bookmarked });
 
-// Small icon buttons tucked inside the ends of the address bar. They fade out while you're typing,
-// so the bar is all yours. `armed` keeps the hit target up even while faded, so a press never falls
-// through to the field.
-function BarButton({
-  label,
-  icon: Icon,
-  side,
-  visible,
-  armed,
-  onMouseDown,
-}: BarButtonProps & { armed: boolean; onMouseDown: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      tabIndex={visible ? 0 : -1}
-      aria-hidden={!visible}
-      onMouseDown={(event) => {
-        // Pressing the button must not focus the field sitting underneath it.
-        event.preventDefault();
-        event.stopPropagation();
-        onMouseDown();
-      }}
-      className={`group absolute inset-y-0 z-10 flex w-9 items-center justify-center text-zinc-500 transition-opacity duration-200 ease-out ${
-        side === "left" ? "left-0" : "right-0"
-      } ${visible ? "opacity-100" : "opacity-0"} ${armed ? "" : "pointer-events-none"}`}
-    >
-      <span className="flex h-6 w-6 items-center justify-center rounded-md transition-[background-color,color,transform] duration-200 ease-out group-hover:bg-zinc-200/80 group-hover:text-zinc-900 group-active:scale-90">
-        <Icon size={15} aria-hidden="true" />
-      </span>
-    </button>
-  );
+  useEffect(() => {
+    if (last.current.url === url && last.current.bookmarked && !bookmarked) {
+      setMessage("Bookmark removed");
+    }
+
+    last.current = { url, bookmarked };
+  }, [url, bookmarked]);
+
+  return message;
 }
 
 function AddressBar({
@@ -86,7 +62,11 @@ function AddressBar({
   }
 
   const url = tab?.url ?? "";
-  const value = editing ? draft : url ? prettyUrl(url) : "";
+  // Browsie's own pages show their address too (browsie://history), except the New Tab page.
+  const pageAddress = tab?.page && tab.page !== "newtab" ? `browsie://${tab.page}` : "";
+  const value = editing ? draft : url ? prettyUrl(url) : pageAddress;
+  const bookmarked = useIsBookmarked(url);
+  const bookmarkMessage = useBookmarkRemovedAnnouncement(url, bookmarked);
 
   // The freeze-frame goes up on the first keystroke, not when results land: capturing the page takes
   // about as long as Google does, so doing both at once means the list can show the moment it arrives.
@@ -130,20 +110,21 @@ function AddressBar({
       style={style}
     >
       <div className="relative h-8 w-full max-w-[31rem] rounded-lg border border-transparent bg-zinc-100 transition-[max-width,background-color,border-color,box-shadow] duration-300 ease-out hover:bg-zinc-200/60 has-[input:focus]:max-w-[34rem] has-[input:focus]:border-[#9572FF]/40 has-[input:focus]:bg-white has-[input:focus]:shadow-[0_0_0_4px_rgba(149,114,255,0.12)] hover:has-[input:focus]:bg-white">
-        {/* On a website: site information and bookmark. The bookmark panel lands later; its button is here so the layout is final. */}
+        {/* On a website: site information, and the bookmark star (Ctrl+D does the same). */}
         <SiteInfoMenu
           visible={Boolean(url) && !editing}
           armed={Boolean(url)}
           onMouseDown={releaseField}
         />
-        <BarButton
-          label="Bookmark this page"
-          icon={Bookmark}
-          side="right"
+        <BookmarkMenu
           visible={Boolean(url) && !editing}
           armed={Boolean(url)}
+          bookmarked={bookmarked}
           onMouseDown={releaseField}
         />
+        <span role="status" className="sr-only">
+          {bookmarkMessage}
+        </span>
         <input
           ref={inputRef}
           type="text"
@@ -157,7 +138,7 @@ function AddressBar({
             setTyped(true);
           }}
           onFocus={(event) => {
-            setDraft(url);
+            setDraft(url || pageAddress);
             setEditing(true);
             setTyped(false);
             void window.browsie?.browser.warmSuggestions();
@@ -180,7 +161,7 @@ function AddressBar({
             }
 
             if (event.key === "Escape") {
-              setDraft(url);
+              setDraft(url || pageAddress);
               event.currentTarget.blur();
             }
           }}

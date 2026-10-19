@@ -79,12 +79,48 @@ const browser: BrowsieBrowserAPI = {
     ipcRenderer.on("browser:focus-address", listener);
     return () => ipcRenderer.removeListener("browser:focus-address", listener);
   },
+  openPage: (page) => ipcRenderer.invoke("browser:open-page", page),
+};
+
+// Bookmarks and history. Like the tab controls, main only answers the browser window.
+const library: BrowsieLibraryAPI = {
+  listBookmarks: () => ipcRenderer.invoke("library:list-bookmarks"),
+  bookmarkPage: () => ipcRenderer.invoke("library:bookmark-page"),
+  updateBookmark: (id, change) =>
+    ipcRenderer.invoke("library:update-bookmark", id, change),
+  moveBookmark: (id, direction) =>
+    ipcRenderer.invoke("library:move-bookmark", id, direction),
+  removeBookmark: (id) => ipcRenderer.invoke("library:remove-bookmark", id),
+  showBookmarkMenu: (id) => ipcRenderer.invoke("library:show-bookmark-menu", id),
+  onEditBookmark: (callback) => {
+    const listener = (_event: IpcRendererEvent, result: BookmarkResult) =>
+      callback(result);
+    ipcRenderer.on("library:edit-bookmark", listener);
+    return () => ipcRenderer.removeListener("library:edit-bookmark", listener);
+  },
+  listHistory: (options) => ipcRenderer.invoke("library:list-history", options),
+  searchHistory: (query) => ipcRenderer.invoke("library:search-history", query),
+  removeVisit: (id) => ipcRenderer.invoke("library:remove-visit", id),
+  clearHistory: () => ipcRenderer.invoke("library:clear-history"),
+  onHistoryChanged: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("library:history-changed", listener);
+    return () => ipcRenderer.removeListener("library:history-changed", listener);
+  },
+  onBookmarksChanged: (callback) => {
+    const listener = (_event: IpcRendererEvent, bookmarks: Bookmark[]) =>
+      callback(bookmarks);
+    ipcRenderer.on("library:bookmarks-changed", listener);
+    return () =>
+      ipcRenderer.removeListener("library:bookmarks-changed", listener);
+  },
 };
 
 contextBridge.exposeInMainWorld("browsie", {
   auth,
   data,
   browser,
+  library,
   openModePicker: () => ipcRenderer.invoke("open-mode-picker"),
   openExternal: (url: string) => ipcRenderer.invoke("open-external", url),
   shouldAnimateDashboard: () => ipcRenderer.invoke("should-animate-dashboard"),

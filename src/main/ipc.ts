@@ -2,7 +2,8 @@ import { BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from 'electron
 import { cancelSignIn, getAccountId, getSession, signIn, signOut } from './auth/session';
 import { removeWebData } from './browser/webSession';
 import { getData, updateData } from './data/localStore';
-import { getSyncStatus } from './data/syncEngine';
+import { removeLibraryData } from './data/libraryPaths';
+import { getSyncStatus, uploadBeforeRemoving } from './data/syncEngine';
 import {
   activateTab,
   captureActivePage,
@@ -17,9 +18,14 @@ import {
   setContentBounds,
   setLockdown,
   setOverlayOpen,
+  showBookmarkMenu,
   showTabMenu,
   stop,
+  bookmarkActivePage,
+  openBrowsiePage,
 } from './browser/tabs';
+import { listBookmarks, moveBookmark, removeBookmark, updateBookmark } from './data/bookmarks';
+import { clearHistory, listHistory, removeVisit, searchHistory } from './data/history';
 import { changeSitePermission, clearSiteData, getSiteInfo, resetActiveSitePermissions } from './browser/siteInfo';
 import { getSuggestionImage, getSuggestions, warmSuggestions } from './browser/suggestions';
 import { bringToFront, getBrowserWindow, isAppUrl, openBrowser, openModePicker } from './windows';
@@ -128,7 +134,19 @@ export const registerIpc = () => {
   handleFromBrowser('browser:forward', () => goForward());
   handleFromBrowser('browser:reload', () => reload());
   handleFromBrowser('browser:stop', () => stop());
+
+  handleFromBrowser('library:list-bookmarks', () => listBookmarks());
+  handleFromBrowser('library:bookmark-page', () => bookmarkActivePage());
+  handleFromBrowser('library:update-bookmark', (_event, id: unknown, patch: unknown) => updateBookmark(id, patch));
+  handleFromBrowser('library:move-bookmark', (_event, id: unknown, direction: unknown) => moveBookmark(id, direction));
+  handleFromBrowser('browser:open-page', (_event, page: unknown) => openBrowsiePage(page));
+  handleFromBrowser('library:remove-bookmark', (_event, id: unknown) => removeBookmark(id));
+  handleFromBrowser('library:list-history', (_event, options: unknown) => listHistory(options));
+  handleFromBrowser('library:search-history', (_event, query: unknown) => searchHistory(query));
+  handleFromBrowser('library:remove-visit', (_event, id: unknown) => removeVisit(id));
+  handleFromBrowser('library:clear-history', () => clearHistory());
   handleFromBrowser('browser:show-tab-menu', (_event, id: unknown) => showTabMenu(id));
+  handleFromBrowser('library:show-bookmark-menu', (_event, id: unknown) => showBookmarkMenu(id));
   handleFromBrowser('browser:set-content-bounds', (_event, bounds: unknown) => setContentBounds(bounds));
   handleFromBrowser('browser:capture-page', () => captureActivePage());
   handleFromBrowser('browser:set-overlay-open', (_event, open: unknown) => setOverlayOpen(open === true));
@@ -148,12 +166,20 @@ export const registerIpc = () => {
   handle('auth:cancel-sign-in', () => cancelSignIn());
   handle('auth:sign-out', async (_event, options: unknown) => {
     const accountId = getAccountId();
-    // signOut switches the tabs off this account's web storage straight away, then waits on Google to
-    // revoke the token. Don't make the device wipe wait for the network.
+    const removeDeviceData = (options as { removeDeviceData?: unknown } | null)?.removeDeviceData === true;
+
+    // Bookmarks and history are about to be deleted here; make sure Drive has the latest first.
+    if (accountId && removeDeviceData) {
+      await uploadBeforeRemoving();
+    }
+
+    // signOut switches the tabs, bookmarks and history off this account straight away, then waits on
+    // Google to revoke the token. Don't make the device wipe wait for the network.
     const revoked = signOut();
 
-    if (accountId && (options as { removeDeviceData?: unknown } | null)?.removeDeviceData === true) {
+    if (accountId && removeDeviceData) {
       await removeWebData(accountId);
+      removeLibraryData(accountId);
     }
 
     await revoked;

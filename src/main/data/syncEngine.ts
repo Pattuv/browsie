@@ -1,10 +1,16 @@
-import { BrowserWindow, powerMonitor } from 'electron';
+import { app, BrowserWindow, powerMonitor } from 'electron';
 import { canSync, getSession, onSessionChange } from '../auth/session';
-import { createFile, downloadFile, findFile, updateFile } from './driveClient';
+import { syncCollection, watchCollections, type CollectionKind } from './collectionSync';
+import { SETTINGS_FILE, createFile, downloadFile, findFile, updateFile } from './driveClient';
 import { applyRemote, getSyncSnapshot, markSynced, onLocalChange, resetForSignOut } from './localStore';
 
 // Local disk is the source of truth; Drive is the backup. Nothing here ever blocks the UI.
-const PUSH_DEBOUNCE_MS = 2_000;
+// How long after a change the upload waits, so a burst of changes goes up once.
+const PUSH_DELAY_MS = { settings: 2_000, bookmarks: 2_000, history: 60_000 };
+// Another device's changes show up without restarting: check Drive this often, and when the window
+// comes back to the front (at most once a minute).
+const POLL_MS = 5 * 60_000;
+const FOCUS_SYNC_MIN_GAP_MS = 60_000;
 const RETRY_FIRST_MS = 5_000;
 const RETRY_MAX_MS = 5 * 60_000;
 
@@ -12,6 +18,9 @@ let status: SyncStatus = { state: 'disabled', lastSyncedAt: null };
 let inFlight: Promise<void> | null = null;
 let runAgainAfter = false;
 let pushTimer: ReturnType<typeof setTimeout> | undefined;
+// When the pending push will run, so a quick change (a bookmark) can pull a slow one (history) forward.
+let pushAt = Infinity;
+let lastSyncStarted = 0;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 let retryDelay = RETRY_FIRST_MS;
 // Bumped on sign-out. A sync that started under an older generation throws its result away,
@@ -28,8 +37,8 @@ const setStatus = (state: SyncStatus['state']) => {
 export const getSyncStatus = () => status;
 
 // One pass: look at Drive, then download, upload, or do nothing.
-const syncOnce = async (gen: number) => {
-  const remote = await findFile();
+const syncSettings = async (gen: number) => {
+  const remote = await findFile(SETTINGS_FILE);
   const { doc, dirty, lastSyncedAt } = getSyncSnapshot();
 
   if (gen !== generation) {
@@ -52,15 +61,24 @@ const syncOnce = async (gen: number) => {
       return;
     }
 
-    await updateFile(remote.id, doc);
+    await updateFile(remote.id, doc, { updatedAt: doc.updatedAt });
   } else {
     // First backup ever, or the user deleted Browsie's hidden data in Drive settings.
-    await createFile(doc);
+    await createFile(SETTINGS_FILE, doc, { updatedAt: doc.updatedAt });
   }
 
   if (gen === generation) {
     markSynced(doc.updatedAt);
   }
+};
+
+// One pass over everything: settings (newest copy wins), then bookmarks and history (merged).
+const syncOnce = async (gen: number) => {
+  const stillCurrent = () => gen === generation;
+
+  await syncSettings(gen);
+  await syncCollection('bookmarks', stillCurrent);
+  await syncCollection('history', stillCurrent);
 };
 
 // fetch throws TypeError when there's no network; AbortSignal.timeout throws TimeoutError.
@@ -84,6 +102,7 @@ const runSync = () => {
   }
 
   const gen = generation;
+  lastSyncStarted = Date.now();
   clearTimeout(retryTimer);
   setStatus('syncing');
 
@@ -114,10 +133,21 @@ const runSync = () => {
     });
 };
 
-// Wait for typing/clicking to settle, then upload once instead of on every keystroke.
-const schedulePush = () => {
+// Upload a little after a change, so a burst of changes goes up once. The timer only ever moves
+// earlier: steady browsing can't keep pushing history's upload back forever.
+const schedulePush = (kind: CollectionKind | 'settings') => {
+  const at = Date.now() + PUSH_DELAY_MS[kind];
+
+  if (at >= pushAt) {
+    return;
+  }
+
   clearTimeout(pushTimer);
-  pushTimer = setTimeout(runSync, PUSH_DEBOUNCE_MS);
+  pushAt = at;
+  pushTimer = setTimeout(() => {
+    pushAt = Infinity;
+    runSync();
+  }, at - Date.now());
 };
 
 const handleSessionChange = () => {
@@ -128,6 +158,7 @@ const handleSessionChange = () => {
 
   generation += 1;
   clearTimeout(pushTimer);
+  pushAt = Infinity;
   clearTimeout(retryTimer);
   setStatus('disabled');
 
@@ -136,14 +167,41 @@ const handleSessionChange = () => {
   }
 };
 
+// Before "Remove my data from this device": give changes Drive hasn't seen yet one quick chance to go
+// up, so a bookmark made a minute ago isn't lost with the local copy. Never waits longer than the timeout.
+export const uploadBeforeRemoving = async (timeoutMs = 8_000) => {
+  if (!canSync()) {
+    return;
+  }
+
+  clearTimeout(pushTimer);
+  pushAt = Infinity;
+
+  const attempt = (async () => {
+    await inFlight;
+    runSync();
+    await inFlight;
+  })();
+
+  await Promise.race([attempt, new Promise((resolve) => setTimeout(resolve, timeoutMs))]);
+};
+
 // Called once at startup, after the local store and session are loaded.
 export const startSync = () => {
   onSessionChange(handleSessionChange);
-  onLocalChange(schedulePush);
+  onLocalChange(() => schedulePush('settings'));
+  watchCollections(schedulePush);
   // Laptop woke up: the network may be back, so don't wait out a long retry delay.
   powerMonitor.on('resume', () => {
     retryDelay = RETRY_FIRST_MS;
     runSync();
+  });
+  // Pick up what other devices changed while this one sat open.
+  setInterval(runSync, POLL_MS);
+  app.on('browser-window-focus', () => {
+    if (Date.now() - lastSyncStarted >= FOCUS_SYNC_MIN_GAP_MS) {
+      runSync();
+    }
   });
 
   // Boot never waits on this: the app already showed local data. Offline just means 'offline' + retry.
