@@ -3,38 +3,18 @@ import TitleBar from '../components/TitleBar';
 import { useAuthStore } from '../stores/authStore';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
-
-// Full hello → mascot → soundtrack until this install has completed a sign-in at least once.
-// After that, Auth opens straight on the welcome screen (including after logout).
-const HAS_SIGNED_IN_KEY = 'browsie-has-signed-in';
-
-const hasCompletedSignIn = () => {
-  try {
-    return localStorage.getItem(HAS_SIGNED_IN_KEY) === '1';
-  } catch {
-    return false;
-  }
-};
-
-const markSignInCompleted = () => {
-  try {
-    localStorage.setItem(HAS_SIGNED_IN_KEY, '1');
-  } catch {
-    // A blocked store just means a future launch might play the intro again.
-  }
-};
+import { hasCompletedSignIn, markSignInCompleted } from './setupGate';
 
 function OnboardingLayer() {
   const status = useAuthStore((state) => state.status);
-  // Null until the session is known. Stays true for the whole intro so a re-render can't cut it off.
+  // Null until the session is known. Once true for an Auth visit, stays true so a re-render can't cut it off.
   const playIntro = useRef<boolean | null>(null);
-
-  if (playIntro.current === null && status !== 'LOADING') {
-    playIntro.current = status === 'SIGNED_OUT' && !hasCompletedSignIn();
-  }
 
   if (status === 'SIGNED_IN') {
     playIntro.current = false;
+  } else if (status === 'SIGNED_OUT' && playIntro.current !== true) {
+    // Re-read on every Auth entry (logout, factory reset) until this visit commits to playing the intro.
+    playIntro.current = !hasCompletedSignIn();
   }
 
   useEffect(() => {

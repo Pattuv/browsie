@@ -242,7 +242,7 @@
   }
 
   .enter-fade-slow {
-    animation: fade-in 1s ease-out both;
+    animation: fade-in 1.35s ease-out both;
   }
 
   @keyframes fade-out {
@@ -277,7 +277,7 @@
   }
 
   .enter-slide-fade {
-    animation: slide-fade-in 0.75s cubic-bezier(0.72, 0, 0.28, 1) both;
+    animation: slide-fade-in 1.05s cubic-bezier(0.72, 0, 0.28, 1) both;
   }
 
   @keyframes slide-in-down {
@@ -313,11 +313,11 @@
   }
 
   .slide-in-down-slow {
-    animation: slide-in-down 1.15s cubic-bezier(0.72, 0, 0.28, 1) both;
+    animation: slide-in-down 1.5s cubic-bezier(0.72, 0, 0.28, 1) both;
   }
 
   .slide-in-up-slow {
-    animation: slide-in-up 1.15s cubic-bezier(0.72, 0, 0.28, 1) both;
+    animation: slide-in-up 1.5s cubic-bezier(0.72, 0, 0.28, 1) both;
   }
 
   @keyframes notch-drop {

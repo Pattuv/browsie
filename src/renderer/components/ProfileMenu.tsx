@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowUpRight, Check, Gauge, Info, Lock, LogOut, Settings, Users } from 'lucide-react';
+import { ArrowUpRight, Check, Gauge, Info, Lock, LogOut, RotateCcw, Settings, Users } from 'lucide-react';
+import { clearSignInCompleted } from '../onboarding-layer/setupGate';
 import { useAuthStore } from '../stores/authStore';
 import { useLockdownStore } from '../stores/browserStore';
 import { playClick } from '../sounds';
@@ -306,6 +307,19 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
                 >
                   Log out
                 </PrimaryButton>
+                {/* TEMP: clear setup-complete flag and sign out so the full Auth intro plays again. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    close();
+                    clearSignInCompleted();
+                    void window.browsie?.auth.signOut();
+                  }}
+                  className="smooth mt-1.5 flex h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-[16px] border border-dashed border-zinc-300 text-xs font-medium tracking-tight text-zinc-500 transition-[background-color,transform] duration-150 ease-out hover:bg-zinc-50 active:scale-[0.98]"
+                >
+                  <RotateCcw size={13} strokeWidth={2} aria-hidden="true" />
+                  Factory reset (temp)
+                </button>
               </>
             )}
           </>
