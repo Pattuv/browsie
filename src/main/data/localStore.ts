@@ -98,12 +98,21 @@ const validatePatch = (patch: unknown): AppDataPatch => {
   };
 };
 
+// Main-process listeners told about every change, local or from Drive (the website theme).
+const dataListeners = new Set<(data: AppData) => void>();
+
+export const onDataChange = (listener: (data: AppData) => void) => {
+  dataListeners.add(listener);
+  return () => dataListeners.delete(listener);
+};
+
 // Push the current data to every window (same "bell" pattern as auth:session-changed).
 const broadcast = () => {
   const data = getData();
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send('data:changed', data);
   }
+  dataListeners.forEach((listener) => listener(data));
   return data;
 };
 

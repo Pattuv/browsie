@@ -5,9 +5,11 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
+import { SlidersHorizontal } from "lucide-react";
 import Boiler from "../../components/Boiler";
 import DashboardTip from "../../components/DashboardTip";
 import ProfileMenu from "../../components/ProfileMenu";
+import SettingsDialog from "../../components/SettingsDialog";
 import { useAuthStore } from "../../stores/authStore";
 import { useDataStore } from "../../stores/dataStore";
 import { playClick } from "../../sounds";
@@ -95,7 +97,7 @@ function notchEarStyle(side: "left" | "right") {
   return {
     width: NOTCH_EAR_SIZE,
     height: NOTCH_EAR_SIZE,
-    background: `radial-gradient(circle at ${corner}, transparent ${NOTCH_EAR_SIZE - 0.5}px, black ${NOTCH_EAR_SIZE}px)`,
+    background: `radial-gradient(circle at ${corner}, transparent ${NOTCH_EAR_SIZE - 0.5}px, var(--color-black) ${NOTCH_EAR_SIZE}px)`,
   };
 }
 
@@ -131,6 +133,7 @@ function ModeNotch({ mode, animate }: ModeNotchProps) {
 }
 
 function Dashboard() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const shouldAnimate = useRef(true);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const titleStartRect = useRef<DOMRect | null>(null);
@@ -257,10 +260,22 @@ function Dashboard() {
         <img
           src={wordmark}
           alt="Browsie"
-          className="pointer-events-none h-5 -translate-y-1"
+          className="theme-invert pointer-events-none h-5 -translate-y-1"
         />
-        <ProfileMenu />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="Settings"
+            title="Settings"
+            onClick={() => setSettingsOpen(true)}
+            className="app-region-no-drag flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl bg-zinc-100 text-black transition-[background-color,transform] duration-200 ease-out hover:bg-zinc-200 active:scale-95"
+          >
+            <SlidersHorizontal size={18} strokeWidth={2.25} aria-hidden="true" />
+          </button>
+          <ProfileMenu onOpenSettings={() => setSettingsOpen(true)} />
+        </div>
       </div>
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       {mode && showNotch && (
         <ModeNotch mode={mode} animate={shouldAnimate.current} />
@@ -273,7 +288,7 @@ function Dashboard() {
           <img
             src={mascot}
             alt="Browsie"
-            className={`h-25.5 mt-2.5 mb-1 ${revealClass(shouldAnimate.current, showMascot)}`}
+            className={`theme-invert h-25.5 mt-2.5 mb-1 ${revealClass(shouldAnimate.current, showMascot)}`}
           />
         )}
 
@@ -325,7 +340,7 @@ function Dashboard() {
                 openGuide();
               }
             }}
-            className={`relative flex w-full max-w-[30rem] min-h-42 items-center overflow-hidden rounded-[2rem] border border-zinc-300 bg-[#F7F7F7] px-8 py-8 mb-[clamp(3rem,6vh,6rem)] cursor-pointer ${revealClass(shouldAnimate.current, showCard)}`}
+            className={`relative flex w-full max-w-[30rem] min-h-42 items-center overflow-hidden rounded-[2rem] border border-zinc-300 bg-zinc-50 px-8 py-8 mb-[clamp(3rem,6vh,6rem)] cursor-pointer ${revealClass(shouldAnimate.current, showCard)}`}
           >
             <div className="relative z-10 max-w-[55%] flex flex-col gap-1.5">
               <h2 className="text-[1.375rem] tracking-tight font-medium">

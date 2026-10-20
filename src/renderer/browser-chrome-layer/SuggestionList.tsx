@@ -94,7 +94,7 @@ function SuggestionLabel({ suggestion, query }: { suggestion: Suggestion; query:
       <>
         {title && <span className="min-w-0 shrink-[4] truncate">{title}</span>}
         {title && <span className="shrink-0 text-zinc-400">–</span>}
-        <span className="min-w-0 truncate text-[#6B4CE0]">{prettyUrl(text)}</span>
+        <span className="min-w-0 truncate text-(--chrome-link)">{prettyUrl(text)}</span>
       </>
     );
   }

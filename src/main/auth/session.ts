@@ -13,6 +13,8 @@ import {
 import { SignInAborted, startLoopback } from './loopback';
 import { createPkcePair, createState } from './pkce';
 import { clearVault, readVault, writeVault, type VaultContents } from './vault';
+import { clearSetupComplete, isSetupComplete, markSetupComplete } from '../data/setupRecord';
+import { hasAiKey } from '../data/aiKey';
 
 const SIGN_IN_TIMEOUT_MS = 5 * 60_000;
 // Refresh a little early so a token can't expire mid-request.
@@ -23,7 +25,8 @@ type LiveSession = {
   vault: VaultContents;
   accessToken?: string;
   accessTokenExpiresAt?: number;
-  // False when Windows DPAPI could not save the vault: this sign-in won't survive a restart.
+  // False when this sign-in won't survive a restart: setup isn't finished yet, or Windows DPAPI
+  // could not save the vault.
   persisted: boolean;
 };
 
@@ -48,6 +51,8 @@ const toAuthSession = (live: LiveSession | null): AuthSession =>
         pictureDataUrl: live.vault.pictureDataUrl,
         syncEnabled: hasDriveAccess(live),
         rememberedOnDevice: live.persisted,
+        // Looked up here so the account ID stays in main; the renderer only learns the answer.
+        setupComplete: isSetupComplete(live.vault.sub),
       }
     : { status: 'SIGNED_OUT', ...(signedOutReason && { signedOutReason }) };
 
@@ -123,7 +128,14 @@ const runSignIn = async (onBrowserReturned?: () => void): Promise<AuthSession> =
 
     // 5. Lock the refresh token in the vault. If DPAPI cannot encrypt it we skip writing,
     //    so the session lasts for this run only.
-    live.persisted = writeVault(live.vault);
+    //    An account that hasn't finished setup here isn't saved until it does (completeSetup), so an
+    //    abandoned setup doesn't leave someone signed in on this device. Clear any older vault too,
+    //    so a restart can't bring back a different account.
+    if (isSetupComplete(live.vault.sub)) {
+      live.persisted = writeVault(live.vault);
+    } else {
+      clearVault();
+    }
 
     signedOutReason = undefined;
     setSession(live);
@@ -203,13 +215,32 @@ export const invalidateAccessToken = () => {
   }
 };
 
+// The last setup step calls this. Only now is the sign-in saved to the vault (see runSignIn).
+// Pushing the session again is what moves every window on to the Dashboard.
+// Main checks the steps' results itself; a click alone doesn't count as finishing.
+export const completeSetup = () => {
+  if (!current || !hasAiKey(current.vault.sub)) {
+    return;
+  }
+
+  markSetupComplete(current.vault.sub);
+  current.persisted = writeVault(current.vault);
+  setSession(current);
+};
+
 // Main only: which account's web storage the tabs should use. Never sent to the renderer.
 export const getAccountId = () => current?.vault.sub ?? null;
 
 // Local wipe first, so signing out works offline and the next person on a shared device sees nothing.
 // Then best-effort revoke, so the token is also dead on Google's side.
-export const signOut = async () => {
+// The account's setup record is kept, so signing back in skips setup; `resetSetup` (factory reset) clears it.
+export const signOut = async ({ resetSetup = false } = {}) => {
   const live = current;
+
+  if (live && resetSetup) {
+    clearSetupComplete(live.vault.sub);
+  }
+
   clearVault();
   signedOutReason = undefined;
   setSession(null);

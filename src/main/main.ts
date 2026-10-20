@@ -7,6 +7,7 @@ import { configureWebSession, setWebAccount } from './browser/webSession';
 import { setBookmarksAccount } from './data/bookmarks';
 import { flushHistory, setHistoryAccount } from './data/history';
 import { loadLocalStore } from './data/localStore';
+import { startWebTheme } from './browser/webTheme';
 import { startSync } from './data/syncEngine';
 import { registerIpc } from './ipc';
 import { createWindow, setAppMenu, shouldQuitOnLastWindow } from './windows';
@@ -27,6 +28,7 @@ app.on('web-contents-created', (_event, contents) => {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   loadLocalStore();
+  startWebTheme();
   migrateSitePermissions();
   loadSession();
   configureWebSession(getAccountId());

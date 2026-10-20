@@ -3,6 +3,7 @@ import BrowserChrome from './browser-chrome-layer/BrowserChrome';
 import MenuPickerLayer from './menu-picker-layer/MenuPickerLayer';
 import OnboardingLayer from './onboarding-layer/OnboardingLayer';
 import { installClickSounds } from './sounds';
+import { installTheme } from './theme';
 
 const container = document.getElementById('root');
 
@@ -15,6 +16,12 @@ installClickSounds();
 const windowKind = new URLSearchParams(window.location.search).get('window');
 // The browser window's page starts see-through (the launch splash sits on the OS-blurred wallpaper).
 document.documentElement.dataset.window = windowKind ?? 'main';
+
+// The browser always follows the appearance setting. The main window does only on the Dashboard
+// (OnboardingLayer, useThemeWhile); setup keeps its own look.
+if (windowKind === 'browser') {
+  installTheme();
+}
 
 const layers = {
   'menu-picker': MenuPickerLayer,

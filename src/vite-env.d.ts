@@ -49,8 +49,11 @@ type AuthSession = {
   pictureDataUrl?: string;
   // False when the user didn't grant Drive access on the consent screen.
   syncEnabled?: boolean;
-  // False when Windows DPAPI could not save the sign-in: it ends when the app quits.
+  // False when the sign-in isn't saved, so it ends when the app quits: setup isn't finished yet,
+  // or Windows DPAPI could not save it.
   rememberedOnDevice?: boolean;
+  // Whether this account has finished setup on this device. False sends it through the setup steps, not the Dashboard.
+  setupComplete?: boolean;
   // Set when Google ended the session (revoked, expired), not the user. Auth can say "sign in again".
   signedOutReason?: 'expired';
 };
@@ -59,8 +62,20 @@ interface BrowsieAuthAPI {
   getSession: () => Promise<AuthSession>;
   signIn: () => Promise<AuthSession>;
   cancelSignIn: () => Promise<void>;
+  // Marks the signed-in account as set up; the session push that follows swaps setup for the Dashboard.
+  completeSetup: () => Promise<void>;
+  // Hands the signed-in account's OpenRouter management key to main. Main checks it with OpenRouter, makes
+  // Browsie its own AI key with it (capped at `cap`), and stores both encrypted. Never read back.
+  // invalid: not shaped like a key. invalid-cap: cap not between $0 and $10,000. rejected: OpenRouter doesn't
+  // know the key. not-management: a regular key. unavailable: couldn't be stored (not signed in, or Windows
+  // can't encrypt it).
+  saveAiKey: (
+    key: string,
+    cap: { limit: number; reset: AiResets | null },
+  ) => Promise<'saved' | 'invalid' | 'invalid-cap' | 'rejected' | 'not-management' | 'offline' | 'unavailable'>;
   // removeDeviceData also deletes this account's web logins, cookies and site data from this computer.
-  signOut: (options?: { removeDeviceData?: boolean }) => Promise<void>;
+  // resetSetup also forgets that this account finished setup, so its next sign-in goes through setup again.
+  signOut: (options?: { removeDeviceData?: boolean; resetSetup?: boolean }) => Promise<void>;
   // Returns an unsubscribe function.
   onSessionChanged: (callback: (session: AuthSession) => void) => () => void;
 }
@@ -92,7 +107,7 @@ interface BrowsieDataAPI {
 
 // One tab as the chrome sees it. url is null while the tab shows Browsie's own New Tab page.
 // Browsie's own pages, shown in a tab instead of a website (browsie://history, browsie://bookmarks).
-type BrowsiePage = 'newtab' | 'history' | 'bookmarks';
+type BrowsiePage = 'newtab' | 'history' | 'bookmarks' | 'settings';
 
 type BrowserTab = {
   id: number;
@@ -214,7 +229,7 @@ interface BrowsieBrowserAPI {
   // Ctrl+L / F6 / Alt+D. Returns an unsubscribe function.
   onFocusAddress: (callback: () => void) => () => void;
   // Opens browsie://history or browsie://bookmarks: an existing tab showing it, the empty New Tab, or a new tab.
-  openPage: (page: 'history' | 'bookmarks') => Promise<void>;
+  openPage: (page: 'history' | 'bookmarks' | 'settings') => Promise<void>;
 }
 
 // A saved page (or, later, a folder of them), for the signed-in account.
@@ -275,6 +290,27 @@ interface BrowsieLibraryAPI {
   onEditBookmark: (callback: (result: BookmarkResult) => void) => () => void;
 }
 
+type AiResets = 'daily' | 'weekly' | 'monthly';
+
+// What the profile menu's usage card shows, in US dollars. Never a key.
+type AiUsage =
+  | {
+      state: 'ok';
+      // What can actually be spent now: the smaller of what's left under the cap and the credit balance.
+      available: number;
+      // Credits bought minus credits used, across the whole OpenRouter account.
+      balance: number;
+      totalCredits: number;
+      // The Browsie key's spending cap; null when it has none.
+      limit: number | null;
+      // What's left under the cap; null when there's no cap.
+      capRemaining: number | null;
+      // Spend counted against the cap: this period's when the cap resets, all-time otherwise.
+      usedThisPeriod: number;
+      resets: AiResets | null;
+    }
+  | { state: 'no-key' | 'invalid-key' | 'offline' };
+
 interface BrowsieAPI {
   auth: BrowsieAuthAPI;
   data: BrowsieDataAPI;
@@ -282,6 +318,8 @@ interface BrowsieAPI {
   library: BrowsieLibraryAPI;
   openModePicker: () => Promise<void>;
   openExternal: (url: string) => Promise<void>;
+  // Asks OpenRouter at most once a minute; the menu can call it every time it opens.
+  getAiUsage: () => Promise<AiUsage>;
   shouldAnimateDashboard: () => Promise<boolean>;
   markDashboardPlayed: () => Promise<void>;
   minimizeWindow: () => Promise<void>;

@@ -1,7 +1,9 @@
 import { BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
-import { cancelSignIn, getAccountId, getSession, signIn, signOut } from './auth/session';
+import { cancelSignIn, completeSetup, getAccountId, getSession, signIn, signOut } from './auth/session';
 import { removeWebData } from './browser/webSession';
 import { getData, updateData } from './data/localStore';
+import { removeAiKey, saveAiKey } from './data/aiKey';
+import { clearAiUsageCache, getAiUsage } from './data/openRouterUsage';
 import { removeLibraryData } from './data/libraryPaths';
 import { getSyncStatus, uploadBeforeRemoving } from './data/syncEngine';
 import {
@@ -164,9 +166,24 @@ export const registerIpc = () => {
     return signIn(() => requester && bringToFront(requester));
   });
   handle('auth:cancel-sign-in', () => cancelSignIn());
+  handle('auth:complete-setup', () => completeSetup());
+  handle('auth:save-ai-key', async (_event, key: unknown, cap: unknown) => {
+    const accountId = getAccountId();
+    const result = accountId ? await saveAiKey(accountId, key, cap) : 'unavailable';
+
+    // A replaced key shows its own usage straight away, not the old key's cached figures.
+    if (result === 'saved') {
+      clearAiUsageCache();
+    }
+
+    return result;
+  });
+  // Any of our windows: the profile menu (and its usage card) is on the Dashboard and in the browser.
+  handle('ai:get-usage', () => getAiUsage());
   handle('auth:sign-out', async (_event, options: unknown) => {
     const accountId = getAccountId();
     const removeDeviceData = (options as { removeDeviceData?: unknown } | null)?.removeDeviceData === true;
+    const resetSetup = (options as { resetSetup?: unknown } | null)?.resetSetup === true;
 
     // Bookmarks and history are about to be deleted here; make sure Drive has the latest first.
     if (accountId && removeDeviceData) {
@@ -175,11 +192,16 @@ export const registerIpc = () => {
 
     // signOut switches the tabs, bookmarks and history off this account straight away, then waits on
     // Google to revoke the token. Don't make the device wipe wait for the network.
-    const revoked = signOut();
+    const revoked = signOut({ resetSetup });
 
     if (accountId && removeDeviceData) {
       await removeWebData(accountId);
       removeLibraryData(accountId);
+    }
+
+    // The OpenRouter key spends the user's money, so it goes with any wipe, factory reset included.
+    if (accountId && (removeDeviceData || resetSetup)) {
+      removeAiKey(accountId);
     }
 
     await revoked;

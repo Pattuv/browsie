@@ -11,6 +11,8 @@ const auth: BrowsieAuthAPI = {
   getSession: () => ipcRenderer.invoke("auth:get-session"),
   signIn: () => ipcRenderer.invoke("auth:sign-in"),
   cancelSignIn: () => ipcRenderer.invoke("auth:cancel-sign-in"),
+  completeSetup: () => ipcRenderer.invoke("auth:complete-setup"),
+  saveAiKey: (key, cap) => ipcRenderer.invoke("auth:save-ai-key", key, cap),
   signOut: (options) => ipcRenderer.invoke("auth:sign-out", options),
   onSessionChanged: (callback) => {
     // Pass only the session through; the raw IPC event would hand the page a handle to ipcRenderer.
@@ -123,6 +125,7 @@ contextBridge.exposeInMainWorld("browsie", {
   library,
   openModePicker: () => ipcRenderer.invoke("open-mode-picker"),
   openExternal: (url: string) => ipcRenderer.invoke("open-external", url),
+  getAiUsage: () => ipcRenderer.invoke("ai:get-usage"),
   shouldAnimateDashboard: () => ipcRenderer.invoke("should-animate-dashboard"),
   markDashboardPlayed: () => ipcRenderer.invoke("mark-dashboard-played"),
   minimizeWindow: () => ipcRenderer.invoke("window-minimize"),
