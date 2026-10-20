@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import mascot from "../../../assets/mascot.svg";
 import browserIllustration from "../../../assets/paint-icons/browser.png";
-import { fadeOutSetupSoundtrack } from "../../setupSoundtrack";
 
 const WHITE_HOLD_MS = 1000;
 const BLUR_MS = 1000;
@@ -19,8 +18,9 @@ const MASCOT_IN_AT = HELLO_OUT_AT + BLUR_MS + HELLO_TO_MASCOT_GAP_MS;
 const HELLO_TEXT = "hello there";
 const HELLO_LETTER_STAGGER_MS = 38;
 
-// Matches .exit-blur in index.css.
+// Match .exit-blur and .enter-blur in index.css.
 const WELCOME_EXIT_MS = 550;
+const BROWSER_VIEW_ENTER_MS = 550;
 
 export type Phase = "white" | "hello" | "hello-out" | "mascot" | "lift";
 // welcome → (click) welcome-out → browser; back to welcome if the attempt is cancelled or fails.
@@ -28,7 +28,7 @@ type SignInView = "welcome" | "welcome-out" | "browser";
 
 type AuthProps = {
   // true: first-time install (white → hello → mascot → welcome, with the soundtrack).
-  // false: this install has signed in before, so go straight to the welcome screen in silence.
+  // false: the last account here finished setup, so go straight to the welcome screen in silence.
   playIntro: boolean;
   phase: Phase;
   onPhase: (phase: Phase) => void;
@@ -41,8 +41,28 @@ function Auth({ playIntro, phase, onPhase }: AuthProps) {
   const stackRef = useRef<HTMLDivElement>(null);
   const stackStartTop = useRef<number | null>(null);
   const welcomeExitTimer = useRef<number | undefined>(undefined);
+  // Set from the click until the browser actually opens.
+  const launchTimer = useRef<number | undefined>(undefined);
 
-  const handleSignInClick = async () => {
+  const startSignIn = async () => {
+    launchTimer.current = undefined;
+
+    let signedIn = false;
+    try {
+      const session = await window.browsie?.auth.signIn();
+      // On success main pushes SIGNED_IN to the auth store. This view stays up until the user is back
+      // in the app; then the gate swaps it for the setup steps, or the Dashboard if this account is set up.
+      signedIn = session?.status === "SIGNED_IN";
+    } catch {
+      setSignInFailed(true);
+    }
+
+    if (!signedIn) {
+      setSignInView("welcome");
+    }
+  };
+
+  const handleSignInClick = () => {
     setSignInFailed(false);
     setHasTriedSignIn(true);
     setSignInView("welcome-out");
@@ -50,26 +70,34 @@ function Auth({ playIntro, phase, onPhase }: AuthProps) {
       () => setSignInView("browser"),
       WELCOME_EXIT_MS,
     );
-
-    let signedIn = false;
-    try {
-      const session = await window.browsie?.auth.signIn();
-      // On success main pushes SIGNED_IN to the auth store, and the gate swaps this page for Dashboard.
-      signedIn = session?.status === "SIGNED_IN";
-    } catch {
-      setSignInFailed(true);
-    }
-
-    if (signedIn) {
-      // Start the fade before Setup unmounts so cleanup isn't the only chance to stop it.
-      fadeOutSetupSoundtrack();
-    } else {
-      window.clearTimeout(welcomeExitTimer.current);
-      setSignInView("welcome");
-    }
+    // Open the user's browser only once "Finish signing in from your browser" is on screen,
+    // so they've read why it opened.
+    launchTimer.current = window.setTimeout(
+      () => void startSignIn(),
+      WELCOME_EXIT_MS + BROWSER_VIEW_ENTER_MS,
+    );
   };
 
-  useEffect(() => () => window.clearTimeout(welcomeExitTimer.current), []);
+  const handleCancel = () => {
+    if (launchTimer.current !== undefined) {
+      // The browser hasn't opened yet, so there's nothing in main to cancel.
+      window.clearTimeout(launchTimer.current);
+      launchTimer.current = undefined;
+      setSignInView("welcome");
+      return;
+    }
+
+    // Main resolves the pending signIn() as signed-out, and startSignIn fades the welcome view back in.
+    void window.browsie?.auth.cancelSignIn();
+  };
+
+  useEffect(
+    () => () => {
+      window.clearTimeout(welcomeExitTimer.current);
+      window.clearTimeout(launchTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!playIntro) {
@@ -153,10 +181,9 @@ function Auth({ playIntro, phase, onPhase }: AuthProps) {
             <p className="mt-5 text-center text-lg font-medium tracking-tight text-zinc-600">
               This page will refresh when you’re done.
             </p>
-            {/* Main resolves the pending signIn() as signed-out, and handleSignInClick fades the welcome view back in. */}
             <button
               type="button"
-              onClick={() => window.browsie?.auth.cancelSignIn()}
+              onClick={handleCancel}
               className="smooth app-region-no-drag mt-6 h-10 w-28 cursor-pointer rounded-[14px] border-[1.5px] border-black bg-black text-sm font-medium tracking-tight text-white transition-transform duration-300 ease-out hover:scale-105 active:scale-95"
             >
               Cancel

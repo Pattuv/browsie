@@ -1,6 +1,6 @@
-import { useState, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowUpRight, Check, Gauge, Info, Lock, LogOut, RotateCcw, Settings, Users } from 'lucide-react';
-import { clearSignInCompleted } from '../onboarding-layer/setupGate';
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { AlertCircle, ArrowUpRight, Check, Gauge, Info, Lock, LogOut, RotateCcw, Settings, Users } from 'lucide-react';
+import { clearSetupCompleted } from '../onboarding-layer/setupGate';
 import { useAuthStore } from '../stores/authStore';
 import { useLockdownStore } from '../stores/browserStore';
 import { playClick } from '../sounds';
@@ -14,9 +14,8 @@ const changeMode = (close: () => void) => {
 };
 
 const OPENROUTER_BILLING_URL = 'https://openrouter.ai/settings/credits';
-
-// Placeholder usage figures until billing is wired up.
-const USAGE = { available: '6.20', used: '$3.80', cap: '$10.00', balance: '$14.50', percentUsed: 38 };
+// Where the user edits their key's spending cap.
+const OPENROUTER_KEYS_URL = 'https://openrouter.ai/settings/keys';
 
 // The Google profile photo main downloaded at sign-in (a data: URL), or a grey placeholder.
 function Avatar({
@@ -85,48 +84,130 @@ function InfoTip({ side, iconSize, children, action }: InfoTipProps) {
   );
 }
 
+const dollars = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+// The big amount has its own "$", so just the number.
+const amount = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const USAGE_MESSAGES = {
+  'no-key': 'No AI key on this device.',
+  'invalid-key': 'Your OpenRouter key isn’t working. Check it on OpenRouter.',
+  offline: 'Couldn’t reach OpenRouter.',
+};
+
+const BADGES = {
+  plenty: { label: 'Plenty left', Icon: Check, className: 'bg-[#DDF0E2] text-[#1F8A3B]' },
+  low: { label: 'Running low', Icon: AlertCircle, className: 'bg-[#FDF0D5] text-[#A15C00]' },
+  out: { label: 'Used up', Icon: AlertCircle, className: 'bg-[#FBE0DE] text-[#C2352B]' },
+};
+
+// Main asks OpenRouter with the account's management key (at most once a minute) and sends back only the
+// figures. Undefined while that's on its way: the layout stays the same with dashes, so nothing jumps.
 function UsageCard() {
+  const [usage, setUsage] = useState<AiUsage>();
+
+  useEffect(() => {
+    let current = true;
+    const request = window.browsie?.getAiUsage() ?? Promise.resolve<AiUsage>({ state: 'offline' });
+
+    request
+      .catch((): AiUsage => ({ state: 'offline' }))
+      .then((result) => {
+        if (current) {
+          setUsage(result);
+        }
+      });
+
+    return () => {
+      current = false;
+    };
+  }, []);
+
+  const ok = usage?.state === 'ok' ? usage : null;
+  // Whichever runs out first sets the scale: the cap if what's left under it is the smaller, else the credits.
+  const capIsTighter = ok !== null && ok.capRemaining !== null && ok.capRemaining <= ok.balance;
+  const scale = ok ? (capIsTighter ? (ok.limit ?? 0) : ok.totalCredits) : 0;
+  const percentUsed = ok ? (scale > 0 ? Math.min(100, (1 - ok.available / scale) * 100) : 100) : 0;
+  const badge = !ok
+    ? null
+    : ok.available <= 0
+      ? BADGES.out
+      : ok.available <= scale * 0.25
+        ? BADGES.low
+        : BADGES.plenty;
+
+  let headline: ReactNode;
+  if (usage && usage.state !== 'ok') {
+    headline = <span className="text-sm font-medium leading-7 tracking-tight">{USAGE_MESSAGES[usage.state]}</span>;
+  } else {
+    headline = (
+      <>
+        <span className="text-lg text-zinc-600">$</span>
+        <span className="bric text-[28px] font-semibold leading-none tracking-tight">
+          {ok ? amount.format(ok.available) : '—'}
+        </span>
+        {/* Reset note sits under "available now", so the cap row below stays on one line. */}
+        <span className="flex flex-col gap-0.5 self-center">
+          <span className="text-sm font-medium leading-none tracking-tight">available now</span>
+          {ok?.limit !== null && ok?.resets && (
+            <span className="text-[11px] leading-none tracking-tight text-zinc-400">
+              Spending cap resets {ok.resets}
+            </span>
+          )}
+        </span>
+      </>
+    );
+  }
+
+  let capText = '—';
+  if (ok && ok.limit !== null) {
+    capText = `${dollars.format(ok.usedThisPeriod)} of ${dollars.format(ok.limit)} used`;
+  } else if (ok) {
+    capText = 'No cap';
+  }
+
   return (
     <div className="smooth rounded-[22px] bg-zinc-100 px-3.5 pb-3 pt-3">
       <div className="flex items-center justify-between">
         <p className="text-sm tracking-tight text-zinc-600">AI usage</p>
-        <span className="smooth flex items-center gap-1 rounded-lg bg-[#DDF0E2] px-2 py-0.5 text-[10px] font-medium text-[#1F8A3B]">
-          <Check size={10} strokeWidth={2.5} aria-hidden="true" />
-          Plenty left
-        </span>
+        {badge && (
+          <span className={`smooth flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-medium ${badge.className}`}>
+            <badge.Icon size={10} strokeWidth={2.5} aria-hidden="true" />
+            {badge.label}
+          </span>
+        )}
       </div>
 
       {/* Equal space above (to AI usage) and below (to the bar), so the amount sits centered between them. */}
-      <p className="mt-2.5 flex items-baseline gap-1 leading-none">
-        <span className="text-lg text-zinc-600">$</span>
-        <span className="bric text-[28px] font-semibold leading-none tracking-tight">
-          {USAGE.available}
-        </span>
-        <span className="text-sm font-medium tracking-tight">available now</span>
-      </p>
+      <p className="mt-2.5 flex items-baseline gap-1 leading-none">{headline}</p>
 
       <div className="mx-0.5 mt-2.5 h-1.5 overflow-hidden rounded-full bg-zinc-300">
-        <div className="h-full rounded-full bg-[#9572FF]" style={{ width: `${USAGE.percentUsed}%` }} />
+        <div className="h-full rounded-full bg-[#9572FF]" style={{ width: `${percentUsed}%` }} />
       </div>
 
       <dl className="mt-2.5 flex flex-col gap-1.5 text-sm tracking-tight">
-        <div className="flex items-center justify-between">
-          <dt className="flex items-center gap-1 text-zinc-400">
-            {/* Configuring the cap lands with billing; the button is here so the layout is final. */}
-            <InfoTip side="left" iconSize={13} action={{ label: 'Configure spending cap' }}>
+        {/* The label never wraps; a long amount wraps inside its own column instead of pushing the card wider. */}
+        <div className="flex items-center justify-between gap-2">
+          <dt className="flex shrink-0 items-center gap-1 whitespace-nowrap text-zinc-400">
+            {/* The cap lives on the Browsie key in their OpenRouter dashboard. */}
+            <InfoTip
+              side="left"
+              iconSize={13}
+              action={{
+                label: 'Configure spending cap',
+                onClick: () => window.browsie?.openExternal(OPENROUTER_KEYS_URL),
+              }}
+            >
               Your spending cap is the most Browsie&rsquo;s AI can spend from your OpenRouter credit balance. Once
               it&rsquo;s used up, the AI stops until you raise it, or until it resets if you&rsquo;ve set it to
               reset on a schedule.
             </InfoTip>
             Spending cap
           </dt>
-          <dd className="text-zinc-800">
-            {USAGE.used} of {USAGE.cap} used
-          </dd>
+          <dd className="min-w-0 text-right text-zinc-800">{capText}</dd>
         </div>
         <div className="flex items-center justify-between">
           <dt className="text-zinc-400">Credit balance</dt>
-          <dd className="text-zinc-800">{USAGE.balance}</dd>
+          <dd className="text-zinc-800">{ok ? dollars.format(ok.balance) : '—'}</dd>
         </div>
       </dl>
     </div>
@@ -307,13 +388,13 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
                 >
                   Log out
                 </PrimaryButton>
-                {/* TEMP: clear setup-complete flag and sign out so the full Auth intro plays again. */}
+                {/* TEMP: clear the device flag and this account's setup record, then sign out, so the full intro and setup play again. */}
                 <button
                   type="button"
                   onClick={() => {
                     close();
-                    clearSignInCompleted();
-                    void window.browsie?.auth.signOut();
+                    clearSetupCompleted();
+                    void window.browsie?.auth.signOut({ resetSetup: true });
                   }}
                   className="smooth mt-1.5 flex h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-[16px] border border-dashed border-zinc-300 text-xs font-medium tracking-tight text-zinc-500 transition-[background-color,transform] duration-150 ease-out hover:bg-zinc-50 active:scale-[0.98]"
                 >

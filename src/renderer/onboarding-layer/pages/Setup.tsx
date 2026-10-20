@@ -7,16 +7,30 @@ import {
   playSetupSoundtrack,
 } from "../setupSoundtrack";
 import Auth, { type Phase } from "./setup-pages/Auth";
+import KeySetup from "./setup-pages/KeySetup";
+import SetupGuide from "./setup-pages/SetupGuide";
+
+// What the gate wants: signed out is always Auth; signed in but not set up runs the setup steps.
+export type SetupStep = "auth" | "setup";
+// The steps after Auth, in order. Setup walks these itself; the gate only knows "not set up yet".
+type SetupPage = "guide" | "key";
 
 type SetupProps = {
   // true: first-time install (white → hello → mascot → welcome, with the soundtrack).
-  // false: this install has signed in before, so go straight to the welcome screen in silence.
+  // false: the last account here finished setup, so go straight to the welcome screen in silence.
   playIntro: boolean;
+  step: SetupStep;
 };
 
-function Setup({ playIntro }: SetupProps) {
+function Setup({ playIntro, step }: SetupProps) {
   const [phase, setPhase] = useState<Phase>(playIntro ? "white" : "lift");
+  const [page, setPage] = useState<SetupPage>("guide");
   const [soundtrackMuted, setSoundtrackMuted] = useState(false);
+
+  // Signed out partway through: the next sign-in starts the steps from the top.
+  if (step === "auth" && page !== "guide") {
+    setPage("guide");
+  }
   const showScene = phase === "lift";
   const SoundtrackIcon = soundtrackMuted ? VolumeX : Volume2;
 
@@ -103,7 +117,13 @@ function Setup({ playIntro }: SetupProps) {
         </>
       )}
 
-      <Auth playIntro={playIntro} phase={phase} onPhase={setPhase} />
+      {step === "auth" && (
+        <Auth playIntro={playIntro} phase={phase} onPhase={setPhase} />
+      )}
+      {step === "setup" && page === "guide" && (
+        <SetupGuide onContinue={() => setPage("key")} />
+      )}
+      {step === "setup" && page === "key" && <KeySetup />}
     </div>
   );
 }
