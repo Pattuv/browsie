@@ -40,11 +40,11 @@ function TabEar({ side }: { side: "left" | "right" }) {
       // start exactly on that border line or the two meet with a kink.
       className={`pointer-events-none absolute bottom-0 ${side === "left" ? "-left-[9px]" : "-right-[9px] scale-x-[-1]"}`}
     >
-      <path d="M8.5 0 A8.5 7.5 0 0 1 0 7.5 L0 8 L9 8 L9 0 Z" fill="#ffffff" />
+      <path d="M8.5 0 A8.5 7.5 0 0 1 0 7.5 L0 8 L9 8 L9 0 Z" className="fill-white" />
       <path
         d="M8.5 0 A8.5 7.5 0 0 1 0 7.5"
         fill="none"
-        stroke="#D6CCF8"
+        className="stroke-(--chrome-border)"
         strokeWidth="1"
       />
     </svg>
@@ -184,10 +184,10 @@ function TabPill({
       className={`${entering ? "tab-in" : ""} group relative flex min-w-0 max-w-56 flex-1 basis-56 cursor-default touch-none items-center gap-2 pl-3 pr-1.5 text-[0.8125rem] tracking-tight select-none transition-[background-color,color] duration-200 ease-out ${
         active
           ? // Grows down into the toolbar: same white, no bottom border, covers the strip's bottom line.
-            "z-10 self-stretch rounded-t-[10px] border border-b-0 border-[#D6CCF8] bg-white text-zinc-900"
+            "z-10 self-stretch rounded-t-[10px] border border-b-0 border-(--chrome-border) bg-white text-zinc-900"
           : // A 28px pill centered on the strip itself (mb-1.5 offsets the header's pt-1.5),
             // with its title centered in it.
-            "mb-1.5 h-7 rounded-lg text-zinc-600 hover:bg-[#E2D9FF] hover:text-zinc-900"
+            "mb-1.5 h-7 rounded-lg text-zinc-600 hover:bg-(--chrome-hover) hover:text-zinc-900"
       }`}
     >
       {active && (
@@ -218,7 +218,7 @@ function TabPill({
           event.stopPropagation();
           browser?.closeTab(tab.id);
         }}
-        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-zinc-500 opacity-0 transition-[opacity,background-color,transform] duration-150 hover:bg-[#E2D9FF] hover:text-zinc-900 focus-visible:opacity-100 active:scale-90 group-hover:opacity-100"
+        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-zinc-500 opacity-0 transition-[opacity,background-color,transform] duration-150 hover:bg-(--chrome-hover) hover:text-zinc-900 focus-visible:opacity-100 active:scale-90 group-hover:opacity-100"
       >
         <X size={12} aria-hidden="true" />
       </button>
@@ -235,7 +235,7 @@ function TabDivider({ hidden }: { hidden: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className={`mb-1.5 h-4 w-px shrink-0 bg-[#C9BCF5] transition-opacity duration-150 [[role=tab]:hover+&]:opacity-0 [&:has(+[role=tab]:hover)]:opacity-0 ${
+      className={`mb-1.5 h-4 w-px shrink-0 bg-(--chrome-divider) transition-opacity duration-150 [[role=tab]:hover+&]:opacity-0 [&:has(+[role=tab]:hover)]:opacity-0 ${
         hidden ? "opacity-0" : "opacity-100"
       }`}
     />
@@ -505,13 +505,13 @@ function TabStrip({ style }: TabStripProps) {
     >
       {/* The strip's bottom edge. The active tab sits over it, so the tab reads as part of the page. */}
       <div
-        className="absolute inset-x-0 bottom-0 h-px bg-[#D6CCF8]"
+        className="absolute inset-x-0 bottom-0 h-px bg-(--chrome-border)"
         aria-hidden="true"
       />
       <img
         src={mascot}
         alt=""
-        className="mb-1.5 h-6 w-6 shrink-0 object-contain"
+        className="theme-invert mb-1.5 h-6 w-6 shrink-0 object-contain"
       />
 
       <div
@@ -570,7 +570,7 @@ function TabStrip({ style }: TabStripProps) {
         <IconButton
           label="New tab"
           onClick={() => window.browsie?.browser.newTab()}
-          className={`mb-1.5 h-7 w-7 hover:bg-[#E2D9FF]! hover:[&_svg]:rotate-90 ${locked ? "pointer-events-none" : ""}`}
+          className={`mb-1.5 h-7 w-7 hover:bg-(--chrome-hover)! hover:[&_svg]:rotate-90 ${locked ? "pointer-events-none" : ""}`}
         >
           <Plus size={16} aria-hidden="true" />
         </IconButton>
@@ -615,7 +615,7 @@ function TabStrip({ style }: TabStripProps) {
         </span>
         <UtilityMenu onOpenChange={handleUtilityOpenChange} />
         <ProfileMenu
-          triggerClassName="h-6 w-6 hover:bg-[#E2D9FF]"
+          triggerClassName="h-6 w-6 hover:bg-(--chrome-hover)"
           panelTarget="#browser-chrome-card"
           onOpenChange={handleProfileOpenChange}
           quit={{ onClick: () => void window.browsie?.browser.exit() }}

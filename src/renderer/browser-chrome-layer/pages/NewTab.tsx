@@ -215,7 +215,7 @@ function NewTab({ entranceDelay: initialDelay, launched }: NewTabProps) {
         <img
           src={mascot}
           alt=""
-          className="chrome-item mb-3 h-28 transition-transform duration-500 ease-out hover:-rotate-3 hover:scale-105"
+          className="theme-invert chrome-item mb-3 h-28 transition-transform duration-500 ease-out hover:-rotate-3 hover:scale-105"
           style={delay(80)}
         />
         <h1
@@ -252,7 +252,7 @@ function NewTab({ entranceDelay: initialDelay, launched }: NewTabProps) {
       {/* The tutorial lands later; the button is here so the layout is final. */}
       <button
         type="button"
-        className="chrome-item absolute bottom-3 right-3 flex h-10 items-center gap-2 rounded-xl bg-[#F1EDFF] px-4 text-[0.9375rem] tracking-tight text-[#9572FF] transition-[background-color,transform,box-shadow] duration-200 ease-out hover:-translate-y-px hover:bg-[#E9E2FF] hover:shadow-[0_6px_16px_rgba(149,114,255,0.18)] active:translate-y-0 active:scale-[0.98]"
+        className="chrome-item absolute bottom-3 right-3 flex h-10 items-center gap-2 rounded-xl bg-(--chrome-tint) px-4 text-[0.9375rem] tracking-tight text-[#9572FF] transition-[background-color,transform,box-shadow] duration-200 ease-out hover:-translate-y-px hover:bg-(--chrome-tint-hover) hover:shadow-[0_6px_16px_rgba(149,114,255,0.18)] active:translate-y-0 active:scale-[0.98]"
         style={delay(440)}
       >
         <HeartHandshake size={17} aria-hidden="true" />

@@ -3,6 +3,7 @@ import SplashScreen from './SplashScreen';
 import TabStrip from './TabStrip';
 import Toolbar from './Toolbar';
 import BookmarksBar from './BookmarksBar';
+import SettingsPage from './pages/SettingsPage';
 import BookmarksPage from './pages/BookmarksPage';
 import HistoryPage from './pages/HistoryPage';
 import NewTab from './pages/NewTab';
@@ -148,7 +149,7 @@ function BrowserChrome() {
     // chrome-waiting freezes every entrance inside it until the glass starts clearing.
     <div className={`browser-chrome relative h-screen overflow-hidden ${phase === 'loaded' ? 'chrome-waiting' : ''}`}>
       {showChrome && (
-        <div className="chrome-materialize absolute inset-0 bg-[#EDE7FF]">
+        <div className="chrome-materialize absolute inset-0 bg-(--chrome-bar)">
           <TabStrip style={{ animationDelay: `${STRIP_DELAY}ms` }} />
           <main
             id="browser-chrome-card"
@@ -161,6 +162,7 @@ function BrowserChrome() {
               {/* Keyed by tab, so each tab gets its own page. */}
               {activeTab?.url === null && activeTab.page === 'history' && <HistoryPage key={activeTab.id} />}
               {activeTab?.url === null && activeTab.page === 'bookmarks' && <BookmarksPage key={activeTab.id} />}
+              {activeTab?.url === null && activeTab.page === 'settings' && <SettingsPage key={activeTab.id} />}
               {activeTab?.url === null && activeTab.page === 'newtab' && (
                 <NewTab
                   key={activeTab.id}

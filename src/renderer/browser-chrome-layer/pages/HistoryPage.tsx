@@ -185,7 +185,7 @@ function HistoryPage() {
               type="button"
               disabled={!visits?.length}
               onClick={() => setConfirmingClear(true)}
-              className="h-9 shrink-0 cursor-pointer rounded-full border border-[#9572FF]/50 px-4 text-[14px] font-[500] tracking-tight text-[#6B4CE0] transition-[background-color,transform] duration-150 ease-out enabled:hover:bg-[#9572FF]/10 enabled:active:scale-95 disabled:cursor-default disabled:opacity-40"
+              className="h-9 shrink-0 cursor-pointer rounded-full border border-[#9572FF]/50 px-4 text-[14px] font-[500] tracking-tight text-(--chrome-link) transition-[background-color,transform] duration-150 ease-out enabled:hover:bg-[#9572FF]/10 enabled:active:scale-95 disabled:cursor-default disabled:opacity-40"
             >
               Clear all history
             </button>

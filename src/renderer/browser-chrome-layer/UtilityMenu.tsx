@@ -210,8 +210,8 @@ function UtilityMenu({ onOpenChange }: UtilityMenuProps) {
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={toggle}
-          className={`app-region-no-drag flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-zinc-600 transition-[background-color,color,transform] duration-150 ease-out hover:bg-[#E2D9FF] hover:text-zinc-900 active:scale-90 ${
-            open ? 'bg-[#E2D9FF] text-zinc-900' : ''
+          className={`app-region-no-drag flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-zinc-600 transition-[background-color,color,transform] duration-150 ease-out hover:bg-(--chrome-hover) hover:text-zinc-900 active:scale-90 ${
+            open ? 'bg-(--chrome-hover) text-zinc-900' : ''
           }`}
         >
           <EllipsisVertical size={16} aria-hidden="true" />
@@ -228,7 +228,7 @@ function UtilityMenu({ onOpenChange }: UtilityMenuProps) {
           close();
           void browser?.navigate(url);
         };
-        const openPage = (page: 'history' | 'bookmarks') => () => {
+        const openPage = (page: 'history' | 'bookmarks' | 'settings') => () => {
           close();
           void browser?.openPage(page);
         };
@@ -246,7 +246,7 @@ function UtilityMenu({ onOpenChange }: UtilityMenuProps) {
             <MenuDivider />
             <MenuGroup>
               <MenuItem icon={Info} label="Browsie Help Center" disabled={locked} onClick={newTab(GUIDE_URL)} />
-              <MenuItem icon={Settings} label="Settings" disabled={locked} />
+              <MenuItem icon={Settings} label="Settings" disabled={locked} onClick={openPage('settings')} />
             </MenuGroup>
             <MenuDivider />
             <MenuGroup>

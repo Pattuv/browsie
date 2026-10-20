@@ -75,7 +75,7 @@ function OutlineButton({ children, disabled, onClick }: { children: ReactNode; d
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="h-8 shrink-0 cursor-pointer rounded-full border border-[#9572FF]/50 px-3.5 text-[13px] font-[500] tracking-tight text-[#6B4CE0] transition-[background-color,transform] duration-150 ease-out enabled:hover:bg-[#9572FF]/10 enabled:active:scale-95 disabled:cursor-default disabled:opacity-40"
+      className="h-8 shrink-0 cursor-pointer rounded-full border border-[#9572FF]/50 px-3.5 text-[13px] font-[500] tracking-tight text-(--chrome-link) transition-[background-color,transform] duration-150 ease-out enabled:hover:bg-[#9572FF]/10 enabled:active:scale-95 disabled:cursor-default disabled:opacity-40"
     >
       {children}
     </button>

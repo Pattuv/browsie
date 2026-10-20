@@ -1,6 +1,5 @@
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { AlertCircle, ArrowUpRight, Check, Gauge, Info, Lock, LogOut, RotateCcw, Settings, Users } from 'lucide-react';
-import { clearSetupCompleted } from '../onboarding-layer/setupGate';
+import { AlertCircle, ArrowUpRight, Check, Gauge, Info, Lock, LogOut, Settings, Users } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useLockdownStore } from '../stores/browserStore';
 import { playClick } from '../sounds';
@@ -293,9 +292,11 @@ type ProfileMenuProps = {
   quit?: { label?: string; onClick: () => void };
   /** CSS selector for a chrome card. The panel is portaled there, inset evenly from its top-right corner. */
   panelTarget?: string;
+  /** Dashboard: opens its Settings popup. */
+  onOpenSettings?: () => void;
 };
 
-function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTarget }: ProfileMenuProps) {
+function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTarget, onOpenSettings }: ProfileMenuProps) {
   const firstName = useAuthStore((state) => state.firstName);
   const email = useAuthStore((state) => state.email);
   const pictureDataUrl = useAuthStore((state) => state.pictureDataUrl);
@@ -376,7 +377,14 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
               <>
                 <MenuGroup>
                   <MenuItem icon={Users} label="Change mode" onClick={() => changeMode(close)} />
-                  <MenuItem icon={Settings} label="Settings" />
+                  <MenuItem
+                    icon={Settings}
+                    label="Settings"
+                    onClick={() => {
+                      close();
+                      onOpenSettings?.();
+                    }}
+                  />
                 </MenuGroup>
                 {/* Asks first; the dialog does the actual sign-out. */}
                 <PrimaryButton
@@ -388,19 +396,6 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
                 >
                   Log out
                 </PrimaryButton>
-                {/* TEMP: clear the device flag and this account's setup record, then sign out, so the full intro and setup play again. */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    close();
-                    clearSetupCompleted();
-                    void window.browsie?.auth.signOut({ resetSetup: true });
-                  }}
-                  className="smooth mt-1.5 flex h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-[16px] border border-dashed border-zinc-300 text-xs font-medium tracking-tight text-zinc-500 transition-[background-color,transform] duration-150 ease-out hover:bg-zinc-50 active:scale-[0.98]"
-                >
-                  <RotateCcw size={13} strokeWidth={2} aria-hidden="true" />
-                  Factory reset (temp)
-                </button>
               </>
             )}
           </>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import TitleBar from "../components/TitleBar";
 import { useAuthStore } from "../stores/authStore";
+import { useThemeWhile } from "../theme";
 import Dashboard from "./pages/Dashboard";
 import Setup from "./pages/Setup";
 import {
@@ -60,6 +61,7 @@ function OnboardingLayer() {
 
   const routedStatus = awaitingReturn ? "SIGNED_OUT" : status;
   const showDashboard = routedStatus === "SIGNED_IN" && setupComplete;
+  useThemeWhile(showDashboard);
 
   if (showDashboard) {
     playIntro.current = false;

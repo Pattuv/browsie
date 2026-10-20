@@ -54,11 +54,16 @@ type PageBackEntry =
 
 const isOverSite = (tab: Tab) => tab.pageBack.some((entry) => entry.kind === 'site');
 
-const PAGE_TITLES: Record<BrowsiePage, string> = { newtab: 'New Tab', history: 'History', bookmarks: 'Bookmarks' };
+const PAGE_TITLES: Record<BrowsiePage, string> = {
+  newtab: 'New Tab',
+  history: 'History',
+  bookmarks: 'Bookmarks',
+  settings: 'Settings',
+};
 
-// browsie://history, browsie://bookmarks, browsie://newtab (any case, optional trailing slash).
+// browsie://history, browsie://bookmarks, browsie://settings, browsie://newtab (any case, optional trailing slash).
 const browsiePageFrom = (input: unknown): BrowsiePage | null => {
-  const match = typeof input === 'string' ? /^browsie:\/\/(newtab|history|bookmarks)\/?$/i.exec(input.trim()) : null;
+  const match = typeof input === 'string' ? /^browsie:\/\/(newtab|history|bookmarks|settings)\/?$/i.exec(input.trim()) : null;
   return match ? (match[1].toLowerCase() as BrowsiePage) : null;
 };
 
@@ -768,7 +773,7 @@ const showPage = (tab: Tab, page: BrowsiePage) => {
 // From the ⋮ menu, Ctrl+H and Ctrl+Shift+O: switch to a tab already showing that page, use this tab if
 // it's an empty New Tab, or open it in a new tab.
 export const openBrowsiePage = (page: unknown) => {
-  if (lockdown || (page !== 'history' && page !== 'bookmarks')) {
+  if (lockdown || (page !== 'history' && page !== 'bookmarks' && page !== 'settings')) {
     return;
   }
 

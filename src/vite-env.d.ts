@@ -107,7 +107,7 @@ interface BrowsieDataAPI {
 
 // One tab as the chrome sees it. url is null while the tab shows Browsie's own New Tab page.
 // Browsie's own pages, shown in a tab instead of a website (browsie://history, browsie://bookmarks).
-type BrowsiePage = 'newtab' | 'history' | 'bookmarks';
+type BrowsiePage = 'newtab' | 'history' | 'bookmarks' | 'settings';
 
 type BrowserTab = {
   id: number;
@@ -229,7 +229,7 @@ interface BrowsieBrowserAPI {
   // Ctrl+L / F6 / Alt+D. Returns an unsubscribe function.
   onFocusAddress: (callback: () => void) => () => void;
   // Opens browsie://history or browsie://bookmarks: an existing tab showing it, the empty New Tab, or a new tab.
-  openPage: (page: 'history' | 'bookmarks') => Promise<void>;
+  openPage: (page: 'history' | 'bookmarks' | 'settings') => Promise<void>;
 }
 
 // A saved page (or, later, a folder of them), for the signed-in account.

@@ -23,7 +23,11 @@ const RESET_OPTIONS: { value: AiResets | null; label: string; caption: string }[
   { value: null, label: "Never", caption: "in total" },
 ];
 
-function KeySetup() {
+type KeySetupProps = {
+  onContinue: () => void;
+};
+
+function KeySetup({ onContinue }: KeySetupProps) {
   const [key, setKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -58,10 +62,7 @@ function KeySetup() {
         return;
       }
 
-      // TEMP: the key is the last setup step so far, so saving it finishes setup. Main checks the keys are
-      // stored, records the account, and pushes the session; the gate swaps setup for the Dashboard.
-      // Move this to the last step once it exists.
-      await window.browsie?.auth.completeSetup();
+      onContinue();
     } catch {
       setError("failed");
     } finally {

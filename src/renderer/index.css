@@ -51,6 +51,90 @@
     background-color: #ffffff;
   }
 
+  /* Browser chrome colors that aren't from Tailwind's palette (the pastel tab bar and its accents).
+     Components use these through bg-(--chrome-*) etc., so each appearance only has to redefine them. */
+  :root {
+    --chrome-bar: #ede7ff;
+    --chrome-border: #d6ccf8;
+    --chrome-hover: #e2d9ff;
+    --chrome-divider: #c9bcf5;
+    --chrome-link: #6b4ce0;
+    --chrome-tint: #f1edff;
+    --chrome-tint-hover: #e9e2ff;
+  }
+
+  /* Appearance (Settings / setup): the browser window, and the main window while it shows the Dashboard
+     (setup keeps its own look, so data-theme is only set there then). Tailwind v4 utilities read the palette from
+     variables (bg-white is var(--color-white)), so remapping white, black and zinc here re-themes every
+     component without touching them: white is the surface, black the strongest text, zinc the steps
+     between. Set by theme.ts as data-theme on <html>. */
+  html[data-theme="dark"] {
+    color-scheme: dark;
+    --color-white: #282828;
+    --color-black: #ffffff;
+    --color-zinc-50: #2e2e2e;
+    --color-zinc-100: #343434;
+    --color-zinc-200: #3e3e3e;
+    --color-zinc-300: #4c4c4c;
+    --color-zinc-400: #8f8f8f;
+    --color-zinc-500: #a3a3a3;
+    --color-zinc-600: #bdbdbd;
+    --color-zinc-700: #d2d2d2;
+    --color-zinc-800: #e3e3e3;
+    --color-zinc-900: #f0f0f0;
+    --color-zinc-950: #fafafa;
+    --chrome-bar: #564e65;
+    --chrome-border: #6c6480;
+    --chrome-hover: #6a627a;
+    --chrome-divider: #7a7290;
+    --chrome-link: #c4b4ff;
+    --chrome-tint: #3a3448;
+    --chrome-tint-hover: #453e55;
+  }
+
+  /* High contrast, built for WCAG 2.2 AA: text at least 4.5:1 (most of it far above), borders, dividers
+     and other UI boundaries at least 3:1 against black (1.4.3, 1.4.11), and a thick yellow focus ring on
+     everything that takes keyboard focus (2.4.7). Surfaces are pure black; grays never carry text. */
+  html[data-theme="high-contrast"] {
+    color-scheme: dark;
+    --color-white: #000000;
+    --color-black: #ffffff;
+    --color-zinc-50: #000000;
+    --color-zinc-100: #1f1f1f;
+    --color-zinc-200: #a0a0a0;
+    --color-zinc-300: #a0a0a0;
+    --color-zinc-400: #d0d0d0;
+    --color-zinc-500: #d8d8d8;
+    --color-zinc-600: #e4e4e4;
+    --color-zinc-700: #f0f0f0;
+    --color-zinc-800: #ffffff;
+    --color-zinc-900: #ffffff;
+    --color-zinc-950: #ffffff;
+    --chrome-bar: #000000;
+    --chrome-border: #ffffff;
+    --chrome-hover: #333333;
+    --chrome-divider: #a0a0a0;
+    --chrome-link: #c9bbff;
+    --chrome-tint: #1f1f1f;
+    --chrome-tint-hover: #333333;
+  }
+
+  html[data-theme="high-contrast"] :focus-visible {
+    outline: 3px solid #ffd400 !important;
+    outline-offset: 2px;
+  }
+
+  /* Black artwork (the wordmark, the mascot) turns white on the dark appearances. */
+  html[data-theme="dark"] .theme-invert,
+  html[data-theme="high-contrast"] .theme-invert {
+    filter: invert(1);
+  }
+
+  /* The Dashboard's window background follows the appearance. */
+  html[data-window="main"][data-theme] body {
+    background-color: var(--color-white);
+  }
+
   /* Solid. The window itself is never see-through (that flickered on a second monitor).
      The splash paints this until the chrome is in; then the overlay blurs over the chrome. */
   html[data-window="browser"],
