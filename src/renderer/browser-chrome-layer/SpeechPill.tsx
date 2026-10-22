@@ -91,7 +91,8 @@ const squirclePath = (
   ].join(" ");
 };
 
-const PILL_CLIP = `path('${squirclePath(PILL_WIDTH, PILL_HEIGHT, PILL_HEIGHT / 2, 1)}')`;
+const PILL_PATH = squirclePath(PILL_WIDTH, PILL_HEIGHT, PILL_HEIGHT / 2, 1);
+const PILL_CLIP = `path('${PILL_PATH}')`;
 
 function Avatar({ pictureDataUrl }: { pictureDataUrl?: string }) {
   if (pictureDataUrl) {
@@ -395,18 +396,26 @@ function SpeechPill() {
             : "translate-y-[100vh] duration-200 ease-[cubic-bezier(0.55,0,1,0.45)]"
         }`}
       >
-        <div
-          role="status"
-          aria-label="Listening"
-          className="flex items-center bg-black pl-1.5"
-          style={{
-            width: PILL_WIDTH,
-            height: PILL_HEIGHT,
-            clipPath: PILL_CLIP,
-          }}
-        >
-          <Avatar pictureDataUrl={pictureDataUrl} />
-          <SpeechBars live={live} />
+        <div className="relative" style={{ width: PILL_WIDTH, height: PILL_HEIGHT }}>
+          <div
+            role="status"
+            aria-label="Listening"
+            className="flex h-full items-center bg-black pl-1.5"
+            style={{ clipPath: PILL_CLIP }}
+          >
+            <Avatar pictureDataUrl={pictureDataUrl} />
+            <SpeechBars live={live} />
+          </div>
+          {/* A hairline so the black pill still reads on a black page. */}
+          <svg
+            width={PILL_WIDTH}
+            height={PILL_HEIGHT}
+            overflow="visible"
+            className="pointer-events-none absolute inset-0"
+            aria-hidden="true"
+          >
+            <path d={PILL_PATH} fill="none" stroke="#4a4a4a" strokeWidth="1" />
+          </svg>
         </div>
       </div>
     </div>

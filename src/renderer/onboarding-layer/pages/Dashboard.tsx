@@ -13,7 +13,7 @@ import SettingsDialog from "../../components/SettingsDialog";
 import { useAuthStore } from "../../stores/authStore";
 import { useDataStore } from "../../stores/dataStore";
 import { playClick } from "../../sounds";
-import mascot from "../../assets/mascot.svg";
+import Mascot from "../../components/Mascot";
 import wordmark from "../../assets/wordmark.svg";
 import book from "../../assets/paint-icons/book.png";
 
@@ -285,10 +285,9 @@ function Dashboard() {
           Vertical gaps are clamp(current size, vh, cap): unchanged at ~800px tall, roomier on taller windows. */}
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center p-5 gap-[clamp(0.5rem,1vh,1rem)]">
         {showRestLayout && (
-          <img
-            src={mascot}
+          <Mascot
             alt="Browsie"
-            className={`theme-invert h-25.5 mt-2.5 mb-1 ${revealClass(shouldAnimate.current, showMascot)}`}
+            className={`h-25.5 mt-2.5 mb-1 ${revealClass(shouldAnimate.current, showMascot)}`}
           />
         )}
 

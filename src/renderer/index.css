@@ -124,7 +124,9 @@
     outline-offset: 2px;
   }
 
-  /* Black artwork (the wordmark, the mascot) turns white on the dark appearances. */
+  /* The wordmark is a black image, so it can't follow text color. Invert it on the dark appearances.
+     The mascot is inline artwork (currentColor): text-black already tracks --color-black, and an invert
+     here would be wiped out by the entrance animations, which set filter themselves. */
   html[data-theme="dark"] .theme-invert,
   html[data-theme="high-contrast"] .theme-invert {
     filter: invert(1);
@@ -312,8 +314,10 @@
     }
   }
 
+  /* backwards, not both: the blur is only for the entrance. Leaving it on clips anything that
+     hangs out of the menu, including the spending cap tip, which opens past the panel's edge. */
   .enter-blur-fast {
-    animation: menu-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: menu-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
 
   .exit-blur-fast {

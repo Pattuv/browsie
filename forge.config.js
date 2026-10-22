@@ -31,6 +31,12 @@ module.exports = {
             target: 'main',
           },
           {
+            // The agent utilityProcess: its own bundle, forked by src/main/agent/host.ts.
+            entry: 'src/agent/worker.ts',
+            config: 'vite.main.config.mjs',
+            target: 'main',
+          },
+          {
             entry: 'src/preload.ts',
             config: 'vite.preload.config.mjs',
             target: 'preload',

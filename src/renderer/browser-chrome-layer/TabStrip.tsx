@@ -4,7 +4,7 @@ import IconButton from "./IconButton";
 import ProfileMenu from "../components/ProfileMenu";
 import UtilityMenu from "./UtilityMenu";
 import { trackChromeMenu, useBrowserStore, useLockdownStore } from "../stores/browserStore";
-import mascot from "../assets/mascot.svg";
+import Mascot from "../components/Mascot";
 
 // The site's icon, or the globe until one arrives (or if it won't decode).
 function TabIcon({ favicon }: { favicon: string | null }) {
@@ -508,11 +508,7 @@ function TabStrip({ style }: TabStripProps) {
         className="absolute inset-x-0 bottom-0 h-px bg-(--chrome-border)"
         aria-hidden="true"
       />
-      <img
-        src={mascot}
-        alt=""
-        className="theme-invert mb-1.5 h-6 w-6 shrink-0 object-contain"
-      />
+      <Mascot className="mb-1.5 h-6 w-6 shrink-0" />
 
       <div
         ref={listRef}

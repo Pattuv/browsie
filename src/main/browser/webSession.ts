@@ -4,6 +4,7 @@ import path from 'node:path';
 import { accountKey } from '../auth/accountKey';
 import { forgetGoogleLogin, setGoogleLoginPartition, watchGoogleLogin } from './googleWebLogin';
 import { isAllowed } from './sitePermissions';
+import { handleDownloads } from '../web/files';
 
 // Websites get their own storage partition: cookies, cache and logins for the web live there,
 // completely apart from the default session that Browsie's own pages use. Each Browsie account has its
@@ -88,15 +89,7 @@ const rememberCertificate = (hostname: string, entry: SiteCertificate | 'invalid
 // Undefined when the host was never checked this run (e.g. its connection was shared with another host).
 export const getCertificate = (hostname: string) => certificates.get(hostname);
 
-// Only real web addresses. Blocks file://, javascript:, other apps' custom schemes and our own pages.
-export const isWebUrl = (rawUrl: string) => {
-  try {
-    const { protocol } = new URL(rawUrl);
-    return protocol === 'https:' || protocol === 'http:';
-  } catch {
-    return false;
-  }
-};
+export { isWebUrl } from '../../shared/web/url';
 
 // Electron puts our app name between "(KHTML, like Gecko)" and "Chrome/". Drop only that.
 // Keep "Electron/…": Google sends an honest Electron browser to its simpler sign-in page, while one
@@ -172,9 +165,30 @@ const configurePartition = (partition: string) => {
     callback(-3);
   });
 
-  // No downloads until there's a download UI that can ask first.
-  web.on('will-download', (event) => event.preventDefault());
+  // People can't download until there's a download UI that can ask first. The agent can, on the tab it's
+  // working on: files go to this account's Browsie Downloads folder, and executables are refused.
+  handleDownloads(web, () => downloadsFolderFor(partition), (contents) => downloadPolicy.allow(contents), (contents, fileName) =>
+    downloadPolicy.onStarted(contents, fileName),
+  );
 };
+
+type DownloadPolicy = {
+  allow: (contents: WebContents | undefined) => boolean;
+  onStarted: (contents: WebContents | undefined, fileName: string) => void;
+};
+
+// Nothing may download until the agent sets this up.
+let downloadPolicy: DownloadPolicy = { allow: () => false, onStarted: () => undefined };
+
+export const setDownloadPolicy = (policy: DownloadPolicy) => {
+  downloadPolicy = policy;
+};
+
+// userData/Browsie Downloads/<account key>, or …/guest while nobody is signed in.
+const downloadsFolderFor = (partition: string) =>
+  path.join(app.getPath('userData'), 'Browsie Downloads', partition.startsWith('persist:web-') ? partition.slice('persist:web-'.length) : 'guest');
+
+export const getDownloadsFolder = () => downloadsFolderFor(webPartition);
 
 // Points websites at this account's storage (null = signed out). Returns true if that changed, so the
 // caller can close tabs still attached to the previous account's storage.

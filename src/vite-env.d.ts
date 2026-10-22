@@ -122,6 +122,8 @@ type BrowserTab = {
   muted: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
+  // The agent is working on this tab.
+  agent: boolean;
 };
 
 // Main owns the tabs; this snapshot is everything the chrome is told about them.

@@ -29,7 +29,7 @@ export function MenuItem({ icon: Icon, label, disabled = false, danger = false, 
     >
       {typeof Icon === 'string' ? (
         <span className="flex h-5 w-5 shrink-0 items-center justify-center" aria-hidden="true">
-          <img src={Icon} alt="" className="max-h-4 max-w-4" />
+          <img src={Icon} alt="" className="theme-invert max-h-4 max-w-4" />
         </span>
       ) : (
         <Icon size={20} strokeWidth={1.75} aria-hidden="true" />

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Flights</title><link rel="stylesheet" href="/shared.css"><script src="/shared.js"></script></head>
+<body>
+  <main>
+    <h1>Flights to Lisbon</h1>
+    <div id="app"><p>Loading flights…</p></div>
+  </main>
+  <script>
+    const app = document.getElementById('app');
+    const show = (flights) => {
+      app.innerHTML = `<ul>${flights
+        .map(
+          (f) =>
+            `<li>${f.code} at ${f.time}, $${f.price} <button type="button" data-code="${f.code}" aria-label="Select flight ${f.code}">Select</button></li>`,
+        )
+        .join('')}</ul><p class="status" role="status" id="status"></p>`;
+      app.querySelectorAll('[data-code]').forEach((button) =>
+        button.addEventListener('click', async () => {
+          const code = button.dataset.code;
+          // A client-side route change: the URL changes without a page load.
+          history.pushState({}, '', `/spa/flight/${code.replace(' ', '')}`);
+          await report('select', { flight: code });
+          document.getElementById('status').textContent = `Selected flight ${code}`;
+        }),
+      );
+    };
+    // Slow on purpose: the agent has to wait for the list instead of acting on "Loading…".
+    fetch('/api/slow?ms=1500')
+      .then((response) => response.json())
+      .then(show);
+  </script>
+</body>
+</html>

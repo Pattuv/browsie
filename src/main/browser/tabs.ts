@@ -47,6 +47,8 @@ type Tab = {
   // Where Back goes from Browsie's own pages, newest last: an earlier Browsie page (New Tab → History),
   // or the website this page was opened over (that site's view is still loaded behind it).
   pageBack: PageBackEntry[];
+  // The agent task working on this tab's website, if any. Only one tab is leased at a time.
+  agentTaskId: string | null;
 };
 
 type PageBackEntry =
@@ -102,8 +104,10 @@ let lockdownNotice = 0;
 let talking = false;
 // The first tab of a window or account, while we're still waiting to hear whether Google is logged in.
 let startTabId: number | null = null;
-const lockdownCssKey = new Map<number, string>();
-const LOCKDOWN_CSS = 'html { pointer-events: none !important; }';
+// Lockdown's mouse block: a transparent view stacked over the page that takes every click, scroll and
+// hover. Input the agent sends through the debugger goes straight to the page underneath, so the agent
+// keeps working while a person can't. Sits above the page views and below the speech pill.
+let glassView: WebContentsView | null = null;
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
@@ -133,6 +137,7 @@ const describeTab = (tab: Tab): BrowserTab => {
       // Back from its first page, still loaded behind (not when that site is what Back leads to).
       canGoBack: tab.pageBack.length > 0,
       canGoForward: view !== null && !isOverSite(tab),
+      agent: tab.agentTaskId !== null,
     };
   }
 
@@ -149,6 +154,7 @@ const describeTab = (tab: Tab): BrowserTab => {
     muted: contents.isAudioMuted(),
     canGoBack: canGoBackFrom(tab, contents),
     canGoForward: contents.navigationHistory.canGoForward(),
+    agent: tab.agentTaskId !== null,
   };
 };
 
@@ -309,6 +315,32 @@ export const attachSpeechOverlay = (view: WebContentsView) => {
   placeSpeechPill();
 };
 
+const createGlass = () => {
+  const view = new WebContentsView({
+    webPreferences: { partition: 'browsie-glass', sandbox: true, contextIsolation: true, nodeIntegration: false, webviewTag: false },
+  });
+  view.setBackgroundColor('#00000000');
+  view.setVisible(false);
+  view.webContents.loadURL('data:text/html,<html><body style="margin:0;background:transparent"></body></html>').catch(() => undefined);
+  // Clicking the glass focuses it, so keys land here: only space (push-to-talk) does anything.
+  view.webContents.on('before-input-event', (event, input) => {
+    handleTalkKey(input);
+    event.preventDefault();
+  });
+  view.webContents.on('context-menu', (event) => event.preventDefault());
+  view.webContents.on('will-navigate', (event) => event.preventDefault());
+  return view;
+};
+
+// Page views are added after the glass, so it's raised again over each one, with the pill above it.
+const raiseGlass = () => {
+  if (host && !host.isDestroyed() && glassView) {
+    host.contentView.addChildView(glassView);
+  }
+
+  raiseSpeechPill();
+};
+
 const emit = () => {
   if (host && !host.isDestroyed()) {
     host.webContents.send('browser:state-changed', getBrowserState());
@@ -344,6 +376,15 @@ const layout = () => {
     }
 
     tab.view.setBounds(contentBounds);
+  }
+
+  // The glass covers exactly the page on screen, and only while lockdown is on.
+  const shown = activeTab();
+  const pageVisible = Boolean(shown?.view?.getVisible());
+  glassView?.setVisible(lockdown && pageVisible);
+
+  if (lockdown && pageVisible && shown?.view) {
+    glassView?.setBounds(shown.view.getBounds());
   }
 
   placeSpeechPill();
@@ -625,40 +666,6 @@ const wireContents = (tab: Tab, contents: WebContents) => {
 
     showContextMenu(tab, contents, params);
   });
-  contents.on('did-finish-load', () => {
-    if (lockdown) {
-      void applyLockdownCss(contents);
-    }
-  });
-};
-
-const applyLockdownCss = async (contents: WebContents) => {
-  if (!lockdown || contents.isDestroyed()) {
-    return;
-  }
-
-  const key = await contents.insertCSS(LOCKDOWN_CSS);
-
-  if (!lockdown || contents.isDestroyed()) {
-    await contents.removeInsertedCSS(key).catch(() => undefined);
-    return;
-  }
-
-  const previous = lockdownCssKey.get(contents.id);
-  lockdownCssKey.set(contents.id, key);
-
-  if (previous) {
-    await contents.removeInsertedCSS(previous).catch(() => undefined);
-  }
-};
-
-const clearLockdownCss = async (contents: WebContents) => {
-  const key = lockdownCssKey.get(contents.id);
-  lockdownCssKey.delete(contents.id);
-
-  if (key && !contents.isDestroyed()) {
-    await contents.removeInsertedCSS(key).catch(() => undefined);
-  }
 };
 
 const applyLockdown = (enabled: boolean) => {
@@ -668,19 +675,7 @@ const applyLockdown = (enabled: boolean) => {
     setTalking(false);
   }
 
-  for (const tab of tabs) {
-    const contents = tab.view?.webContents;
-
-    if (!contents) {
-      continue;
-    }
-
-    if (enabled) {
-      void applyLockdownCss(contents);
-    } else {
-      void clearLockdownCss(contents);
-    }
-  }
+  layout();
 };
 
 // The user's own choice, from the chrome. It replaces any pending re-lock after sign-in.
@@ -739,7 +734,7 @@ const createView = (tab: Tab) => {
   view.setBorderRadius(0);
   view.setVisible(false);
   host?.contentView.addChildView(view);
-  raiseSpeechPill();
+  raiseGlass();
   tab.view = view;
   wireContents(tab, view.webContents);
 
@@ -794,6 +789,7 @@ const blankTab = (overrides: Partial<Tab> = {}): Tab => ({
   visitId: null,
   page: 'newtab',
   pageBack: [],
+  agentTaskId: null,
   ...overrides,
 });
 
@@ -1479,6 +1475,8 @@ export const attachTabs = (window: BrowserWindow) => {
   lockdown = true;
   relockAfterGoogleSignIn = false;
   talkReadyAt = Infinity;
+  glassView = createGlass();
+  window.contentView.addChildView(glassView);
   openStartTab();
 
   window.on('resize', layout);
@@ -1492,9 +1490,50 @@ export const attachTabs = (window: BrowserWindow) => {
     tabs = [];
     speechGeneration += 1;
     speechView = null;
+    glassView?.webContents.close();
+    glassView = null;
     host = null;
   });
 };
+
+// The agent works on the website in the active tab. One task at a time, and never on Browsie's own pages.
+export const leaseAgentTab = (taskId: string) => {
+  const tab = activeTab();
+
+  if (!tab?.view || tab.showingNewTab || tabs.some((entry) => entry.agentTaskId !== null)) {
+    return undefined;
+  }
+
+  tab.agentTaskId = taskId;
+  emit();
+  return tab.id;
+};
+
+export const releaseAgentTab = (taskId: string) => {
+  for (const tab of tabs) {
+    if (tab.agentTaskId === taskId) {
+      tab.agentTaskId = null;
+    }
+  }
+
+  emit();
+};
+
+// The only way the executor reaches a page: a leased tab's own website view. Never the chrome, a popup or
+// one of Browsie's pages.
+export const agentTabContents = (tabId: number) => {
+  const tab = tabs.find((entry) => entry.id === tabId);
+
+  if (!tab?.view || tab.agentTaskId === null || tab.showingNewTab || tab.view.webContents.isDestroyed()) {
+    return undefined;
+  }
+
+  return tab.view.webContents;
+};
+
+// Whether this page is the website of a tab the agent is working on (for downloads).
+export const isAgentContents = (contents: WebContents | undefined) =>
+  contents !== undefined && tabs.some((tab) => tab.agentTaskId !== null && tab.view?.webContents === contents);
 
 // A different account (or nobody) is signed in now. Every open page belongs to the previous account's
 // web storage, so close them all and start over with one tab in the new account's storage.

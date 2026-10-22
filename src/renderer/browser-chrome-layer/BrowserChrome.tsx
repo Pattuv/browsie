@@ -9,7 +9,6 @@ import HistoryPage from './pages/HistoryPage';
 import NewTab from './pages/NewTab';
 import { playStartupSound, startupSoundLoaded } from '../sounds';
 import { browserStateLoaded, useActiveTab, usePageSnapshot } from '../stores/browserStore';
-import mascot from '../assets/mascot.svg';
 
 // The splash stays up at least this long, even if everything loads instantly.
 const MIN_SPLASH_MS = 5000;
@@ -31,19 +30,12 @@ type Phase = 'splash' | 'loaded' | 'reveal' | 'ready';
 
 const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
-const loadImage = (src: string) => {
-  const image = new Image();
-  image.src = src;
-  return image.decode();
-};
-
 // Everything the chrome's first frame needs, so nothing pops in after the splash lifts.
 // allSettled: a font or sound that fails to load must never strand the user on the splash.
 const loadChrome = () =>
   Promise.allSettled([
     browserStateLoaded,
     startupSoundLoaded,
-    loadImage(mascot),
     document.fonts.load('400 16px Inter'),
     document.fonts.load('400 16px "Bricolage Grotesque"'),
   ]);

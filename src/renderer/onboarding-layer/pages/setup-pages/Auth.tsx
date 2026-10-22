@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import mascot from "../../../assets/mascot.svg";
+import Mascot from "../../../components/Mascot";
 import browserIllustration from "../../../assets/paint-icons/browser.png";
 
 const WHITE_HOLD_MS = 1000;
@@ -202,9 +202,7 @@ function Auth({ playIntro, phase, onPhase }: AuthProps) {
                   : ""
             }`}
           >
-            <img
-              src={mascot}
-              alt=""
+            <Mascot
               className={`h-38.5 mt-[15px] mb-[23px] w-auto ${playIntro && showMascot ? "enter-slide-fade" : ""}`}
             />
 
