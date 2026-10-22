@@ -20,7 +20,8 @@ export type UiTask = { taskId: string; goal: string; sources: Source[] };
 
 const MAX_ROUNDS = 8;
 const ESCALATE_AFTER = 2;
-const MAX_REPLY_TOKENS = 1_000;
+// Thinking counts against this too, so leave plenty: it's only billed for what's used.
+const MAX_REPLY_TOKENS = 6_000;
 
 const COMMANDS = [
   'tabs.list', 'tabs.open', 'tabs.switch', 'tabs.close', 'tabs.move', 'tabs.mute', 'tabs.duplicate',

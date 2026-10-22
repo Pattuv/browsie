@@ -30,3 +30,6 @@ await build({ ...common, entryPoints: ['test/web/harness.ts'], outfile: '.vite/h
 
 // Runs the agent eval with the key Browsie saved for the signed-in account.
 await build({ ...common, entryPoints: ['test/web/withAppKey.ts'], outfile: '.vite/harness/withAppKey.cjs' });
+
+// Prints the real classifier's raw replies (run with --script through withAppKey).
+await build({ ...common, entryPoints: ['test/web/classifyProbe.ts'], outfile: '.vite/harness/classifyProbe.cjs' });

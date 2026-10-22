@@ -39,7 +39,8 @@ const ESCALATE_AFTER = 2;
 const ASK_AFTER = 4;
 // Times the loop may ask the user for help when stuck before giving up.
 const MAX_STUCK_ASKS = 1;
-const MAX_REPLY_TOKENS = 2_000;
+// Thinking counts against this too, so leave plenty: it's only billed for what's used.
+const MAX_REPLY_TOKENS = 8_000;
 
 class Stopped extends Error {}
 

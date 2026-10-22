@@ -13,8 +13,8 @@ import type { SpeechApi, SpeechErrorCode } from './speechApi';
 //                                                   ▼  │
 //                                                awaiting
 //
-// In working, pressing Space stops the task at once (and doesn't open the mic). In awaiting, Space is
-// hold-to-talk so the user can answer; "stop" or "cancel" there stops the task.
+// In working, pressing Space stops the task at once and says nothing (no pill, no cue). In awaiting,
+// Space is hold-to-talk so the user can answer; "stop" or "cancel" there stops the task and says so.
 
 export type VoiceMode = 'idle' | 'working' | 'awaiting';
 
@@ -93,8 +93,11 @@ export const createConductor = (deps: ConductorDeps) => {
   const describeError = (error: unknown) => (error instanceof Error ? error.message : String(error));
   let mode: VoiceMode = 'idle';
   let turnId: string | undefined;
-  // A stopped turn may still say what it got done.
+  // A stopped turn may still say what it got done, unless the stop was Space (that stays silent).
   let stoppingTurnId: string | undefined;
+  let quietStop = false;
+  // Bumped on stop so speech that was already being made doesn't play afterwards.
+  let playGen = 0;
   let pending: { taskId: string; kind: 'confirm' | 'ask' | 'help'; prompt: string } | undefined;
   let lastSaid: { text?: string; clip?: FallbackId } | undefined;
   let lastNarrationAt = 0;
@@ -107,18 +110,22 @@ export const createConductor = (deps: ConductorDeps) => {
   };
 
   const playText = async (text: string, droppable = false) => {
+    const gen = playGen;
     log(`say${droppable ? ' (narration)' : ''}: ${JSON.stringify(text)}`);
     try {
       const data = await deps.speech.speak(text);
+      if (gen !== playGen) return;
       log(`  speech ok, ${data.byteLength} bytes`);
       deps.audio.play({ kind: 'mp3', data, droppable });
     } catch (error) {
+      if (gen !== playGen) return;
       log(`  speech FAILED: ${describeError(error)}${droppable ? '' : ' (falling back to the system voice)'}`);
       if (!droppable) deps.audio.play({ kind: 'system', text });
     }
   };
 
   const playClip = async (id: FallbackId) => {
+    const gen = playGen;
     lastSaid = { clip: id };
     log(`clip ${id}: ${JSON.stringify(FALLBACKS[id])}${deps.hasClip(id) ? ' (recording)' : ''}`);
     if (deps.hasClip(id)) {
@@ -126,8 +133,11 @@ export const createConductor = (deps: ConductorDeps) => {
       return;
     }
     try {
-      deps.audio.play({ kind: 'clip', id, data: await deps.speech.speak(FALLBACKS[id]) });
+      const data = await deps.speech.speak(FALLBACKS[id]);
+      if (gen !== playGen) return;
+      deps.audio.play({ kind: 'clip', id, data });
     } catch (error) {
+      if (gen !== playGen) return;
       log(`  speech FAILED: ${describeError(error)} (falling back to the system voice)`);
       deps.audio.play({ kind: 'system', text: FALLBACKS[id] });
     }
@@ -138,16 +148,18 @@ export const createConductor = (deps: ConductorDeps) => {
     return playText(text);
   };
 
-  const stop = () => {
+  const stop = (quiet = false) => {
+    playGen += 1;
     deps.audio.stop();
     pending = undefined;
+    quietStop = quiet;
     if (turnId) {
       stoppingTurnId = turnId;
       deps.host.abortTurn(turnId);
     }
     turnId = undefined;
     setMode('idle');
-    void playClip('stopped');
+    if (!quiet) void playClip('stopped');
   };
 
   const handleControl = async (command: NonNullable<ReturnType<typeof matchControl>>) => {
@@ -210,11 +222,16 @@ export const createConductor = (deps: ConductorDeps) => {
     if (event.type === 'done') log(`turn done (${event.ok ? 'ok' : 'failed'})`);
 
     if (event.type === 'say') {
+      // Space already cancelled it. The turn's wrap-up ("I stopped…") stays unsaid.
+      if (stopping && quietStop) return;
       if (event.clip) void playClip(event.clip);
       else if (event.text) void say(event.text);
     }
     if (event.type === 'done') {
-      if (stopping) stoppingTurnId = undefined;
+      if (stopping) {
+        stoppingTurnId = undefined;
+        quietStop = false;
+      }
       if (mine) {
         turnId = undefined;
         pending = undefined;
@@ -255,7 +272,7 @@ export const createConductor = (deps: ConductorDeps) => {
     // Space pressed (a fresh press, not a repeat). True means it was used to stop, so don't open the mic.
     onSpacePress() {
       if (mode === 'working') {
-        stop();
+        stop(true);
         return true;
       }
       // Talking over Browsie cuts it off.

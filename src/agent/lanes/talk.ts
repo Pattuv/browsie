@@ -12,7 +12,8 @@ const ask = async (llm: Llm, prompt: string, tier: 'fast' | 'main', transcript: 
   const recent = history.slice(-HISTORY_TURNS);
   const reply = await llm({
     tier,
-    maxTokens: 300,
+    // Room for thinking as well as the short spoken answer.
+    maxTokens: 3_000,
     messages: [
       { role: 'system', content: [{ type: 'text', text: prompt, cache_control: { type: 'ephemeral' } }] },
       {

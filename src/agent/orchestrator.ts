@@ -9,7 +9,7 @@ import SYSTEM_PROMPT from './prompts/orchestrator.md?raw';
 export const planTasks = async (llm: Llm, transcript: string, context: TurnContext): Promise<PlannedTask[] | undefined> => {
   const reply = await llm({
     tier: 'main',
-    maxTokens: 400,
+    maxTokens: 4_000,
     messages: [
       { role: 'system', content: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }] },
       {

@@ -220,8 +220,10 @@ let talkReadyAt = Infinity;
 // Asked on each fresh Space press while lockdown is on. True means the press was used (to stop a task), so
 // it doesn't open the mic. Set by the voice layer.
 let spaceGate: (() => boolean) | null = null;
-// A press the gate used: its repeats and its release are swallowed too.
+// A press the gate used: its repeats and its release are swallowed too, and so is a second copy of the
+// same keydown. Cleared on release, or shortly after, in case blocking the keydown drops the keyup.
 let spaceUsed = false;
+let spaceUsedTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const setSpaceGate = (gate: (() => boolean) | null) => {
   spaceGate = gate;
@@ -1302,6 +1304,12 @@ export const handleTalkKey = (input: Input) => {
   }
 
   if (input.type === 'keyDown') {
+    // This press already cancelled a request. Chrome and the page can both see the same key, and the
+    // second copy arrives after the request is already idle, which would open the pill and play the cue.
+    if (spaceUsed) {
+      return true;
+    }
+
     // Only a fresh press starts talking. A key held through the cooldown (or the launch wait) only
     // sends repeats, so it stays ignored until it's let go and pressed again.
     if (!talking && (input.isAutoRepeat || Date.now() < Math.max(talkCooldownUntil, talkReadyAt))) {
@@ -1310,6 +1318,16 @@ export const handleTalkKey = (input: Input) => {
 
     if (!talking && spaceGate?.()) {
       spaceUsed = true;
+
+      if (spaceUsedTimer) {
+        clearTimeout(spaceUsedTimer);
+      }
+
+      spaceUsedTimer = setTimeout(() => {
+        spaceUsed = false;
+        spaceUsedTimer = null;
+      }, 50);
+
       return true;
     }
 
@@ -1331,6 +1349,12 @@ export const handleTalkKey = (input: Input) => {
   if (input.type === 'keyUp') {
     if (spaceUsed) {
       spaceUsed = false;
+
+      if (spaceUsedTimer) {
+        clearTimeout(spaceUsedTimer);
+        spaceUsedTimer = null;
+      }
+
       return true;
     }
 

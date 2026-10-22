@@ -38,7 +38,8 @@ export const classify = async (llm: Llm, transcript: string, context: TurnContex
   const recent = history.slice(-HISTORY_TURNS);
   const reply = await llm({
     tier: 'fast',
-    maxTokens: 100,
+    // Haiku thinks before answering, and the thinking counts against this. 100 left nothing for the answer.
+    maxTokens: 2_000,
     messages: [
       { role: 'system', content: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }] },
       {

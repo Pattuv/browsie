@@ -92,10 +92,10 @@ describe('conductor', () => {
     expect(t.audio.stop).toHaveBeenCalled();
     expect(t.host.abortTurn).toHaveBeenCalledWith('turn1');
     await flush();
-    // The shipped "Stopped." recording, then what the stopped turn says it got done.
+    // Space only cancels. No "Stopped." cue, and the turn's wrap-up stays unsaid.
     t.turn({ type: 'say', text: "I stopped. I'd clicked \"Add to cart\"." });
     await flush();
-    expect(t.spoken()).toEqual(['[stopped]', "I stopped. I'd clicked \"Add to cart\"."]);
+    expect(t.spoken()).toEqual([]);
     expect(t.conductor.mode()).toBe('idle');
     // The next press talks.
     expect(t.conductor.onSpacePress()).toBe(false);

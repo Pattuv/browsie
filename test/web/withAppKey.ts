@@ -30,9 +30,14 @@ app.whenReady().then(() => {
   }
   if (!key) return fail('The saved key file has no AI key.');
 
-  const child = spawn(process.execPath, [path.resolve('.vite/harness/harness.cjs'), '--agent', ...process.argv.slice(2).filter((arg) => arg.startsWith('--'))], {
+  // --script=<file> runs another bundled script with the key instead of the agent eval.
+  const script = process.argv.find((arg) => arg.startsWith('--script='))?.slice('--script='.length);
+  const args = script
+    ? [path.resolve(script)]
+    : [path.resolve('.vite/harness/harness.cjs'), '--agent', ...process.argv.slice(2).filter((arg) => arg.startsWith('--'))];
+  const child = spawn(process.execPath, args, {
     stdio: 'inherit',
-    env: { ...process.env, OPENROUTER_API_KEY: key },
+    env: { ...process.env, OPENROUTER_API_KEY: key, ...(script && { ELECTRON_RUN_AS_NODE: '1' }) },
   });
   child.on('exit', (code) => app.exit(code ?? 1));
 });
