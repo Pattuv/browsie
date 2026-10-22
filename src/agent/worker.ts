@@ -1,7 +1,9 @@
 import type { MessagePortMain } from 'electron';
-import type { AgentLane, AgentMessage, HostMessage, RpcMethod, RpcParams, RpcResults, TaskEventBody } from '../shared/agent/protocol';
+import type { AgentLane, AgentMessage, HostMessage, RpcMethod, RpcParams, RpcResults, TaskEventBody, TurnContext } from '../shared/agent/protocol';
 import { type Answer, runWebTask } from './web/loop';
 import { runUiTask } from './ui/lane';
+import { createSessionStore } from './sessionStore';
+import { runTurn } from './turn';
 
 // The agent utilityProcess. It runs every model-facing step and holds no keys and no Electron APIs: all it
 // has is the MessagePort main hands it, and every request on it is checked again in main.
@@ -16,6 +18,9 @@ let port: MessagePortMain | undefined;
 let nextId = 1;
 const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
 const tasks = new Map<string, RunningTask>();
+const turns = new Map<string, AbortController>();
+// This conversation's memory. It lasts as long as the agent process (a restart after a stuck stop clears it).
+const session = createSessionStore();
 
 const post = (message: AgentMessage) => port?.postMessage(message);
 
@@ -70,6 +75,18 @@ const start = (lane: AgentLane, taskId: string, turnId: string, goal: string, so
   void (lane === 'UI' ? runUi() : runWeb()).finally(() => tasks.delete(taskId));
 };
 
+const startTurn = (turnId: string, transcript: string, context: TurnContext) => {
+  const controller = new AbortController();
+  turns.set(turnId, controller);
+  void runTurn(turnId, transcript, context, {
+    signal: controller.signal,
+    session,
+    llm: (request) => call('llm.complete', { taskId: turnId, ...request }),
+    runTask: (lane, goal) => call('turn.run_task', { taskId: turnId, lane, goal }),
+    emit: (body) => post({ kind: 'turn_event', event: { ...body, turnId } as never }),
+  }).finally(() => turns.delete(turnId));
+};
+
 const onHostMessage = (message: HostMessage) => {
   switch (message.kind) {
     case 'rpc-result': {
@@ -92,6 +109,12 @@ const onHostMessage = (message: HostMessage) => {
       else task.answers.push(answer);
       return;
     }
+    case 'turn':
+      startTurn(message.turnId, message.transcript, message.context);
+      return;
+    case 'abort_turn':
+      turns.get(message.turnId)?.abort();
+      return;
     case 'abort': {
       const task = tasks.get(message.taskId);
       if (!task) return;

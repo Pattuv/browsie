@@ -159,4 +159,30 @@ contextBridge.exposeInMainWorld("browsie", {
     ipcRenderer.on("speech:held", listener);
     return () => ipcRenderer.removeListener("speech:held", listener);
   },
+  // The speech view only: main refuses these from anywhere else.
+  voice: {
+    sendAudio: (wav: ArrayBuffer, durationMs: number) => ipcRenderer.invoke("voice:audio", wav, durationMs),
+    reportClips: (ids: string[]) => ipcRenderer.invoke("voice:clips", ids),
+    log: (message: string) => ipcRenderer.invoke("voice:log", message),
+    onPlay: (callback: (item: VoicePlayItem) => void) => {
+      const listener = (_event: IpcRendererEvent, item: VoicePlayItem) => callback(item);
+      ipcRenderer.on("voice:play", listener);
+      return () => ipcRenderer.removeListener("voice:play", listener);
+    },
+    onStop: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on("voice:stop", listener);
+      return () => ipcRenderer.removeListener("voice:stop", listener);
+    },
+    onStyle: (callback: (style: { volume: number; rate: number }) => void) => {
+      const listener = (_event: IpcRendererEvent, style: { volume: number; rate: number }) => callback(style);
+      ipcRenderer.on("voice:style", listener);
+      return () => ipcRenderer.removeListener("voice:style", listener);
+    },
+    onStatus: (callback: (mode: VoiceMode) => void) => {
+      const listener = (_event: IpcRendererEvent, mode: VoiceMode) => callback(mode);
+      ipcRenderer.on("voice:status", listener);
+      return () => ipcRenderer.removeListener("voice:status", listener);
+    },
+  },
 });

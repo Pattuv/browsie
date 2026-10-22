@@ -27,3 +27,6 @@ const common = {
 await build({ ...common, entryPoints: ['src/agent/worker.ts'], outfile: '.vite/harness/worker.cjs' });
 
 await build({ ...common, entryPoints: ['test/web/harness.ts'], outfile: '.vite/harness/harness.cjs' });
+
+// Runs the agent eval with the key Browsie saved for the signed-in account.
+await build({ ...common, entryPoints: ['test/web/withAppKey.ts'], outfile: '.vite/harness/withAppKey.cjs' });

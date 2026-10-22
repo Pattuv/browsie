@@ -1,5 +1,5 @@
 import { MessageChannelMain, type MessagePortMain, utilityProcess, type UtilityProcess, type WebContents } from 'electron';
-import { RPC, type ActResponse, type AgentLane, type AgentMessage, type ChromeResponse, type HostMessage, type Observation, type RpcMethod, type TaskEvent, type TaskResult } from '../../shared/agent/protocol';
+import { RPC, type ActResponse, type AgentLane, type AgentMessage, type ChromeResponse, type HostMessage, type TurnContext, type TurnEvent, type Observation, type RpcMethod, type TaskEvent, type TaskResult } from '../../shared/agent/protocol';
 import { describe as describeChrome, parseChromeAction } from '../../shared/chrome/actions';
 import { addressOf, checkNavigation } from '../../shared/chrome/policy';
 import { textForModel, type Snapshot } from '../web/snapshot';
@@ -53,6 +53,13 @@ type HostTask = {
   watchdog?: ReturnType<typeof setTimeout>;
 };
 
+// One thing the user said, while the agent works out the reply. Its tasks run as ordinary tasks.
+type HostTurn = {
+  id: string;
+  controller: AbortController;
+  taskIds: Set<string>;
+};
+
 // After Space or "stop", the agent has this long to say it stopped before it's killed and started again.
 const STOP_WATCHDOG_MS = 2_000;
 const MAX_NAMES = 400;
@@ -64,6 +71,8 @@ let taskCounter = 0;
 export const createAgentHost = (deps: HostDeps) => {
   const tasks = new Map<string, HostTask>();
   const listeners = new Set<(event: TaskEvent) => void>();
+  const turns = new Map<string, HostTurn>();
+  const turnListeners = new Set<(event: TurnEvent) => void>();
   const capUsd = deps.capUsd ?? TASK_SPEND_CAP_USD;
   let worker: UtilityProcess | undefined;
   let port: MessagePortMain | undefined;
@@ -91,6 +100,11 @@ export const createAgentHost = (deps: HostDeps) => {
   };
 
   const failAll = (reason: string) => {
+    for (const turn of [...turns.values()]) {
+      turns.delete(turn.id);
+      turnListeners.forEach((listener) => listener({ turnId: turn.id, type: 'say', clip: 'error' }));
+      turnListeners.forEach((listener) => listener({ turnId: turn.id, type: 'done', ok: false }));
+    }
     for (const task of [...tasks.values()]) {
       const result: TaskResult = { taskId: task.id, lane: task.lane, ok: false, facts: [], untrusted: true, error: reason };
       finishTask(task, { type: 'failed', taskId: task.id, turnId: task.turnId, result });
@@ -258,9 +272,56 @@ export const createAgentHost = (deps: HostDeps) => {
       return { ok: true };
     },
     'chrome.execute': (task, params) => chromeCommand(task, params.action),
+    // Only turns call this (handled above).
+    'turn.run_task': async () => {
+      throw new Error('No such turn.');
+    },
   };
 
+  // Runs one task for a turn and waits for it to end, however it ends.
+  const runTaskForTurn = async (turn: HostTurn, lane: 'WEB' | 'UI', goal: string): Promise<TaskResult> => {
+    const failed = (error: string): TaskResult => ({ taskId: '', lane, ok: false, facts: [], untrusted: false, error });
+    if (turn.controller.signal.aborted) return failed('stopped');
+
+    let taskId: string;
+    try {
+      taskId = lane === 'WEB' ? await api.startWebTask({ goal, turnId: turn.id }) : api.startUiTask({ goal, turnId: turn.id });
+    } catch (error) {
+      return failed(error instanceof Error ? error.message : String(error));
+    }
+    turn.taskIds.add(taskId);
+    // Stopped while the task was starting.
+    if (turn.controller.signal.aborted) api.abortTask(taskId);
+
+    return new Promise<TaskResult>((resolve) => {
+      const off = api.onEvent((event) => {
+        if (event.taskId !== taskId) return;
+        if (event.type === 'finished' || event.type === 'failed' || event.type === 'stopped') {
+          off();
+          turn.taskIds.delete(taskId);
+          resolve(event.result);
+        }
+      });
+    });
+  };
+
+  const turnHandlers = {
+    'llm.complete': async (turn: HostTurn, params: any) => {
+      if (turn.controller.signal.aborted) throw new Error('Stopped.');
+      if (deps.broker.spentFor(turn.id) >= capUsd) throw new Error('This turn reached its spending limit.');
+      return deps.broker.complete(params, turn.controller.signal);
+    },
+    'turn.run_task': (turn: HostTurn, params: any) => runTaskForTurn(turn, params.lane, params.goal),
+  } as const;
+
   const onAgentMessage = async (message: AgentMessage) => {
+    if (message.kind === 'turn_event') {
+      if (!turns.has(message.event.turnId)) return;
+      if (message.event.type === 'done') turns.delete(message.event.turnId);
+      turnListeners.forEach((listener) => listener(message.event));
+      return;
+    }
+
     if (message.kind === 'event') {
       const task = tasks.get(message.event.taskId);
       if (!task) return;
@@ -277,6 +338,13 @@ export const createAgentHost = (deps: HostDeps) => {
       const schema = RPC[message.method];
       if (!schema) throw new Error(`Unknown method ${String(message.method)}.`);
       const params = schema.parse(message.params) as { taskId: string };
+      const turn = turns.get(params.taskId);
+      if (turn) {
+        if (message.method !== 'llm.complete' && message.method !== 'turn.run_task') throw new Error('Turns can only call models and run tasks.');
+        reply({ ok: true, value: await turnHandlers[message.method](turn, params) });
+        return;
+      }
+      if (message.method === 'turn.run_task') throw new Error('No such turn.');
       const task = tasks.get(params.taskId);
       if (!task || task.done) throw new Error('No such task.');
       if (task.controller.signal.aborted) throw new Error('Stopped.');
@@ -304,6 +372,11 @@ export const createAgentHost = (deps: HostDeps) => {
   };
 
   const restartWorker = () => {
+    // Turns die with the process. Main already said "Stopped", so they just end.
+    for (const turn of [...turns.values()]) {
+      turns.delete(turn.id);
+      turnListeners.forEach((listener) => listener({ turnId: turn.id, type: 'done', ok: false }));
+    }
     const old = worker;
     worker = undefined;
     port?.close();
@@ -334,7 +407,30 @@ export const createAgentHost = (deps: HostDeps) => {
     return id;
   };
 
-  return {
+  const api = {
+    // Something the user said, for the agent to classify and act on. Returns the turn's id.
+    startTurn(transcript: string, context: TurnContext) {
+      ensureWorker();
+      const id = `turn${++taskCounter}-${Date.now().toString(36)}`;
+      turns.set(id, { id, controller: new AbortController(), taskIds: new Set() });
+      post({ kind: 'turn', turnId: id, transcript, context });
+      return id;
+    },
+
+    // Stops a turn and whatever task it's running. The agent still reports what got done.
+    abortTurn(turnId: string) {
+      const turn = turns.get(turnId);
+      if (!turn) return;
+      turn.controller.abort();
+      turn.taskIds.forEach((taskId) => api.abortTask(taskId));
+      post({ kind: 'abort_turn', turnId });
+    },
+
+    onTurnEvent(listener: (event: TurnEvent) => void) {
+      turnListeners.add(listener);
+      return () => turnListeners.delete(listener);
+    },
+
     // Starts a WEB task on the leased tab. `facts` are extra things the user has confirmed (f1, f2…); the
     // goal itself is always u1.
     async startWebTask({ goal, facts = [], turnId }: { goal: string; facts?: string[]; turnId?: string }) {
@@ -411,10 +507,13 @@ export const createAgentHost = (deps: HostDeps) => {
     activeTasks: () => [...tasks.keys()],
 
     stop() {
-      for (const id of [...tasks.keys()]) this.abortTask(id);
+      for (const id of [...turns.keys()]) api.abortTurn(id);
+      for (const id of [...tasks.keys()]) api.abortTask(id);
       restartWorker();
     },
   };
+
+  return api;
 };
 
 export type AgentHost = ReturnType<typeof createAgentHost>;

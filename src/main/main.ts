@@ -11,6 +11,7 @@ import { startWebTheme } from './browser/webTheme';
 import { startSync } from './data/syncEngine';
 import { registerIpc } from './ipc';
 import { startSystemVolume, stopSystemVolume } from './systemVolume';
+import { startVoice } from './voice';
 import { createWindow, setAppMenu, shouldQuitOnLastWindow } from './windows';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -46,6 +47,7 @@ app.whenReady().then(() => {
     }
   });
   registerIpc();
+  startVoice();
   setAppMenu();
   createWindow();
   startSync();

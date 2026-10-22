@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuthStore } from "../stores/authStore";
 import { holdAudioAwake, playDictationSound, soundContext } from "../sounds";
+import { useRecorder } from "../voice-layer/useRecorder";
+import { useVoicePlayer } from "../voice-layer/useVoicePlayer";
 
 const BAR_COUNT = 7;
 // Bar heights in px. Quiet bars sit as short stubs, so the pill doesn't look empty before anyone speaks.
@@ -335,6 +337,9 @@ function SpeechBars({ live }: { live: boolean }) {
 function SpeechPill() {
   const pictureDataUrl = useAuthStore((state) => state.pictureDataUrl);
   const [live, setLive] = useState(false);
+  // This view also records what's said while Space is held, and plays Browsie's voice.
+  useRecorder(live);
+  useVoicePlayer();
 
   useEffect(() => {
     let current = true;

@@ -347,6 +347,31 @@ interface BrowsieAPI {
   // deviceVolumeDb is how far the system volume turns sound down, in dB (0 at full), when space
   // was pressed or let go.
   onSpeechHeld: (callback: (held: boolean, deviceVolumeDb: number) => void) => () => void;
+  voice: BrowsieVoiceAPI;
+}
+
+// What the voice layer is doing: working on a request (Space stops it), or waiting for an answer.
+type VoiceMode = 'idle' | 'working' | 'awaiting';
+
+// Something for the speech view to play: synthesized speech, a fixed line (its shipped recording if there
+// is one, else the audio given), or text for the system voice when synthesis failed.
+type VoicePlayItem =
+  | { kind: 'mp3'; data: Uint8Array; droppable?: boolean }
+  | { kind: 'clip'; id: string; data?: Uint8Array }
+  | { kind: 'system'; text: string };
+
+interface BrowsieVoiceAPI {
+  // The speech view: what was recorded while Space was held, as 16 kHz mono WAV.
+  sendAudio: (wav: ArrayBuffer, durationMs: number) => Promise<void>;
+  // Which fixed lines have shipped recordings.
+  reportClips: (ids: string[]) => Promise<void>;
+  // Development diagnostics: what happened to each thing it was asked to play.
+  log: (message: string) => Promise<void>;
+  onPlay: (callback: (item: VoicePlayItem) => void) => () => void;
+  onStop: (callback: () => void) => () => void;
+  onStyle: (callback: (style: { volume: number; rate: number }) => void) => () => void;
+  // The chrome: for the "Working… press Space to stop" status.
+  onStatus: (callback: (mode: VoiceMode) => void) => () => void;
 }
 
 interface Window {

@@ -28,7 +28,12 @@ export const TASK_SPEND_CAP_USD = 0.75;
 // A model call slower than this is given up on. OpenRouter's usual 8s timeout is far too short for an agent step.
 export const LLM_TIMEOUT_MS = 90_000;
 
-// Speech: set up in the voice phase.
-export const TRANSCRIBE_MODEL = '';
-export const TTS_MODEL = '';
-export const TTS_VOICE = 'Eric';
+// Speech, through OpenRouter's audio endpoints with the same key.
+export const OPENROUTER_TRANSCRIBE_URL = 'https://openrouter.ai/api/v1/audio/transcriptions';
+export const OPENROUTER_SPEECH_URL = 'https://openrouter.ai/api/v1/audio/speech';
+export const TRANSCRIBE_MODEL = 'elevenlabs/scribe-v2';
+export const TTS_MODEL = 'elevenlabs/eleven-v4-turbo';
+// ElevenLabs' premade voice "Eric", by voice id (OpenRouter only knows a few premade voices by name).
+// Check it against the ElevenLabs voice library if the voice ever sounds wrong.
+export const TTS_VOICE = 'cjVigY5qzO86Huf0OWal';
+export const AUDIO_TIMEOUT_MS = 30_000;

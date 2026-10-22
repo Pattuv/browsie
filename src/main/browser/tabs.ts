@@ -217,6 +217,15 @@ let talkCooldownUntil = 0;
 // Space does nothing until the chrome's launch animation has finished, and for this long after.
 const TALK_AFTER_LAUNCH_MS = 500;
 let talkReadyAt = Infinity;
+// Asked on each fresh Space press while lockdown is on. True means the press was used (to stop a task), so
+// it doesn't open the mic. Set by the voice layer.
+let spaceGate: (() => boolean) | null = null;
+// A press the gate used: its repeats and its release are swallowed too.
+let spaceUsed = false;
+
+export const setSpaceGate = (gate: (() => boolean) | null) => {
+  spaceGate = gate;
+};
 
 // The chrome finished its launch animation.
 export const markChromeReady = () => {
@@ -1299,6 +1308,11 @@ export const handleTalkKey = (input: Input) => {
       return true;
     }
 
+    if (!talking && spaceGate?.()) {
+      spaceUsed = true;
+      return true;
+    }
+
     // Repeats while talking keep the watchdog from firing.
     setTalking(true);
 
@@ -1315,6 +1329,11 @@ export const handleTalkKey = (input: Input) => {
   }
 
   if (input.type === 'keyUp') {
+    if (spaceUsed) {
+      spaceUsed = false;
+      return true;
+    }
+
     setTalking(false);
     return true;
   }
@@ -1540,6 +1559,23 @@ export const attachTabs = (window: BrowserWindow) => {
     host = null;
   });
 };
+
+// Messages for the speech view (audio to play) and the chrome (what the voice layer is doing).
+export const sendToSpeechView = (channel: string, ...args: unknown[]) => {
+  const contents = speechView?.webContents;
+
+  if (contents && !contents.isDestroyed()) {
+    contents.send(channel, ...args);
+  }
+};
+
+export const sendToChrome = (channel: string, ...args: unknown[]) => {
+  if (host && !host.isDestroyed()) {
+    host.webContents.send(channel, ...args);
+  }
+};
+
+export const isSpeechViewContents = (contents: WebContents) => speechView?.webContents === contents;
 
 // Tells the chrome which control the agent just used, so it can pulse it for anyone watching.
 export const emitAgentActivity = (activity: AgentUiActivity) => {

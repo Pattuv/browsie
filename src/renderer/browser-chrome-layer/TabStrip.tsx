@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { Globe, LockOpen, Plus, VolumeX, X } from "lucide-react";
 import IconButton from "./IconButton";
+import VoiceStatus from "./VoiceStatus";
 import ProfileMenu from "../components/ProfileMenu";
 import UtilityMenu from "./UtilityMenu";
 import { trackChromeMenu, useBrowserStore, useLockdownStore } from "../stores/browserStore";
@@ -573,6 +574,7 @@ function TabStrip({ style }: TabStripProps) {
       </div>
 
       <div className="mb-1.5 mr-2 flex items-center gap-1">
+        <VoiceStatus />
         <span
           aria-label={locked ? "Lockdown on" : "Lockdown off"}
           title={locked ? "Lockdown on" : "Lockdown off"}
