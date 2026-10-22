@@ -5,6 +5,8 @@ import { agentTabContents, isAgentContents, leaseAgentTab, releaseAgentTab } fro
 import { getDownloadsFolder, setDownloadPolicy } from '../browser/webSession';
 import { readAiKey } from '../data/aiKey';
 import { createBroker } from './broker';
+import { createChromeApi } from './chromeApi';
+import { chromeOperations } from './chromeOperations';
 import { type AgentHost, createAgentHost } from './host';
 
 // The app's one agent host, wired to the real tabs, the account's OpenRouter key and its downloads folder.
@@ -31,6 +33,7 @@ export const getAgentHost = () => {
     leaseTab: leaseAgentTab,
     releaseTab: releaseAgentTab,
     downloadsFolder: getDownloadsFolder,
+    chrome: createChromeApi(chromeOperations),
   });
 
   // Only the tab the agent is working on may download, and the task hears about it.

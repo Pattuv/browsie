@@ -1,11 +1,15 @@
 import { MessageChannelMain, type MessagePortMain, utilityProcess, type UtilityProcess, type WebContents } from 'electron';
-import { RPC, type ActResponse, type AgentMessage, type HostMessage, type Observation, type RpcMethod, type TaskEvent, type TaskResult } from '../../shared/agent/protocol';
+import { RPC, type ActResponse, type AgentLane, type AgentMessage, type ChromeResponse, type HostMessage, type Observation, type RpcMethod, type TaskEvent, type TaskResult } from '../../shared/agent/protocol';
+import { describe as describeChrome, parseChromeAction } from '../../shared/chrome/actions';
+import { addressOf, checkNavigation } from '../../shared/chrome/policy';
 import { textForModel, type Snapshot } from '../web/snapshot';
 import { checkLimits, evaluate, evaluateBatch, grantFor, type ConfirmGrant, type PolicyContext } from '../web/policy';
 import { ElectronCdpExecutor, type Executor, type TabResolver } from '../web/executor';
 import { listUploadable, resolveUploadable } from '../web/files';
 import { TASK_SPEND_CAP_USD } from './config';
 import type { Broker } from './broker';
+import type { ChromeApi } from './chromeApi';
+import { viewForAgent } from './chromeView';
 import { serializeSnapshot, summarizeBatch, type TraceEvent } from './traceEvents';
 
 // Runs the agent utilityProcess and is the only place its requests enter main. The agent has no keys and no
@@ -22,6 +26,8 @@ export type HostDeps = {
   leaseTab: (taskId: string) => number | undefined;
   releaseTab: (taskId: string) => void;
   downloadsFolder: () => string;
+  // The browser-chrome commands the UI lane may run. Without it, UI tasks can't start.
+  chrome?: ChromeApi;
   allowPrivateNetwork?: boolean;
   capUsd?: number;
   onTrace?: (taskId: string, event: TraceEvent) => void;
@@ -29,6 +35,7 @@ export type HostDeps = {
 
 type HostTask = {
   id: string;
+  lane: AgentLane;
   turnId: string;
   goal: string;
   sources: Map<string, string>;
@@ -36,7 +43,10 @@ type HostTask = {
   controller: AbortController;
   startedAt: number;
   steps: number;
-  executor: Executor;
+  // WEB tasks only: the leased tab.
+  executor?: Executor;
+  // UI tasks only: sites the agent was shown in tab, bookmark and history lists, which it may open.
+  seenHosts: Set<string>;
   grant?: ConfirmGrant;
   pendingGrant?: ConfirmGrant;
   done: boolean;
@@ -46,6 +56,8 @@ type HostTask = {
 // After Space or "stop", the agent has this long to say it stopped before it's killed and started again.
 const STOP_WATCHDOG_MS = 2_000;
 const MAX_NAMES = 400;
+// A UI request is a few commands ("open a new tab", "switch to my email"). More than this is a loop.
+const MAX_UI_STEPS = 12;
 
 let taskCounter = 0;
 
@@ -64,8 +76,8 @@ export const createAgentHost = (deps: HostDeps) => {
     if (task.done) return;
     task.done = true;
     if (task.watchdog) clearTimeout(task.watchdog);
-    task.executor.close();
-    deps.releaseTab(task.id);
+    task.executor?.close();
+    if (task.lane === 'WEB') deps.releaseTab(task.id);
     trace(task, {
       t: 'end',
       ok: event.result.ok,
@@ -80,9 +92,14 @@ export const createAgentHost = (deps: HostDeps) => {
 
   const failAll = (reason: string) => {
     for (const task of [...tasks.values()]) {
-      const result: TaskResult = { taskId: task.id, lane: 'WEB', ok: false, facts: [], untrusted: true, error: reason };
+      const result: TaskResult = { taskId: task.id, lane: task.lane, ok: false, facts: [], untrusted: true, error: reason };
       finishTask(task, { type: 'failed', taskId: task.id, turnId: task.turnId, result });
     }
+  };
+
+  const web = (task: HostTask) => {
+    if (!task.executor) throw new Error('That only works in a WEB task.');
+    return task.executor;
   };
 
   // --- Turning snapshots into what the agent sees ---
@@ -99,8 +116,8 @@ export const createAgentHost = (deps: HostDeps) => {
       full: snapshot.full,
       names,
       needsScreenshot: snapshot.needsScreenshot,
-      screenshot: screenshot ? await task.executor.screenshot() : undefined,
-      fileChooser: task.executor.fileChooserPending(),
+      screenshot: screenshot ? await web(task).screenshot() : undefined,
+      fileChooser: web(task).fileChooserPending(),
     };
   };
 
@@ -114,11 +131,11 @@ export const createAgentHost = (deps: HostDeps) => {
     full: snapshot.full,
     names: {},
     needsScreenshot: false,
-    fileChooser: task.executor.fileChooserPending(),
+    fileChooser: web(task).fileChooserPending(),
   });
 
   const takeSnapshot = async (task: HostTask) => {
-    const snapshot = await task.executor.snapshot(task.controller.signal);
+    const snapshot = await web(task).snapshot(task.controller.signal);
     trace(task, { t: 'snapshot', step: task.steps, snapshot: serializeSnapshot(snapshot) });
     return snapshot;
   };
@@ -139,7 +156,7 @@ export const createAgentHost = (deps: HostDeps) => {
   // --- The RPC methods ---
 
   const act = async (task: HostTask, actions: unknown[]): Promise<ActResponse> => {
-    const before = task.executor.current() ?? (await takeSnapshot(task));
+    const before = web(task).current() ?? (await takeSnapshot(task));
     const limit = checkLimits({
       steps: task.steps,
       startedAt: task.startedAt,
@@ -163,7 +180,7 @@ export const createAgentHost = (deps: HostDeps) => {
 
     const run = decision.run.map((entry) => entry.action);
     const usedGrant = task.grant;
-    const batch = await task.executor.runBatch(run, task.controller.signal);
+    const batch = await web(task).runBatch(run, task.controller.signal);
     task.steps += batch.ran;
     // The batch has one outcome. Recorded against each action that ran, or the one that failed.
     for (const action of run.slice(0, Math.max(batch.ran, 1))) trace(task, { t: 'result', step: task.steps, action, result: batch.result });
@@ -190,6 +207,32 @@ export const createAgentHost = (deps: HostDeps) => {
     return { ran: batch.ran, result: batch.result, stop, observation: await observation(task, batch.snapshot) };
   };
 
+  // One browser-chrome command from the UI lane: parsed again, the address checked, run, and trimmed.
+  const chromeCommand = async (task: HostTask, raw: unknown): Promise<ChromeResponse> => {
+    if (task.lane !== 'UI' || !deps.chrome) throw new Error('That only works in a UI task.');
+    if (task.steps >= MAX_UI_STEPS) return { ok: false, error: 'limit', message: `Stopped after ${MAX_UI_STEPS} commands.`, limit: true };
+
+    const parsed = parseChromeAction(raw);
+    if (!parsed.success) return { ok: false, error: 'invalid_action', message: "That isn't an allowed browser command." };
+    const action = parsed.data;
+
+    const address = addressOf(action);
+    const problem = address === undefined ? undefined : checkNavigation(address, [...task.sources.values()], task.seenHosts);
+    if (problem) {
+      trace(task, { t: 'chrome', step: task.steps, action, ok: false, error: 'blocked_by_policy' });
+      return { ok: false, error: 'blocked_by_policy', message: problem };
+    }
+
+    const result = deps.chrome.execute(action);
+    task.steps += 1;
+    trace(task, { t: 'chrome', step: task.steps, action, ok: result.ok, error: result.ok ? undefined : result.error });
+    if (!result.ok) return { ok: false, error: result.error, message: result.message };
+
+    const view = viewForAgent(action, result.value);
+    view.hosts.forEach((host) => task.seenHosts.add(host));
+    return { ok: true, phrase: describeChrome(action), data: view.data };
+  };
+
   const handlers: { [M in RpcMethod]: (task: HostTask, params: any) => Promise<unknown> } = {
     'llm.complete': async (task, params) => {
       if (deps.broker.spentFor(task.id) >= capUsd) throw new Error('This task reached its spending limit.');
@@ -200,7 +243,7 @@ export const createAgentHost = (deps: HostDeps) => {
     'web.observe': async (task, params) => observation(task, await takeSnapshot(task), params.screenshot),
     'web.act': (task, params) => act(task, params.actions),
     'web.finish': async (task, params) => {
-      const snapshot = task.executor.current() ?? (await takeSnapshot(task));
+      const snapshot = web(task).current() ?? (await takeSnapshot(task));
       const decision = evaluate({ type: 'finish', summary: params.summary, evidence: params.evidence }, policyContext(task, snapshot));
       return decision.ok ? { ok: true } : { ok: false, message: decision.message };
     },
@@ -211,9 +254,10 @@ export const createAgentHost = (deps: HostDeps) => {
       if (!said.includes(String(params.name).toLowerCase())) return { ok: false, message: "The user didn't choose that file." };
       const file = resolveUploadable(deps.downloadsFolder(), params.name);
       if (!file) return { ok: false, message: "That file isn't in the Browsie Downloads folder." };
-      await task.executor.setFiles([file]);
+      await web(task).setFiles([file]);
       return { ok: true };
     },
+    'chrome.execute': (task, params) => chromeCommand(task, params.action),
   };
 
   const onAgentMessage = async (message: AgentMessage) => {
@@ -267,12 +311,35 @@ export const createAgentHost = (deps: HostDeps) => {
     old?.kill();
   };
 
+  const newTaskId = () => `t${++taskCounter}-${Date.now().toString(36)}`;
+
+  const register = (id: string, lane: AgentLane, goal: string, facts: string[], turnId: string | undefined, executor?: Executor) => {
+    const sources = new Map<string, string>([['u1', goal], ...facts.map((fact, index) => [`f${index + 1}`, fact] as [string, string])]);
+    const task: HostTask = {
+      id,
+      lane,
+      turnId: turnId ?? id,
+      goal,
+      sources,
+      answers: 0,
+      controller: new AbortController(),
+      startedAt: Date.now(),
+      steps: 0,
+      executor,
+      seenHosts: new Set(),
+      done: false,
+    };
+    tasks.set(id, task);
+    post({ kind: 'start', lane, taskId: id, turnId: task.turnId, goal, sources: [...sources].map(([sourceId, text]) => ({ id: sourceId, text })) });
+    return id;
+  };
+
   return {
-    // Starts a WEB task on the leased tab. `sources` are extra things the user has confirmed (f1, f2…); the
+    // Starts a WEB task on the leased tab. `facts` are extra things the user has confirmed (f1, f2…); the
     // goal itself is always u1.
     async startWebTask({ goal, facts = [], turnId }: { goal: string; facts?: string[]; turnId?: string }) {
       ensureWorker();
-      const id = `t${++taskCounter}-${Date.now().toString(36)}`;
+      const id = newTaskId();
       const tabId = deps.leaseTab(id);
       if (tabId === undefined) throw new Error('There is no web page open to work on.');
 
@@ -284,22 +351,14 @@ export const createAgentHost = (deps: HostDeps) => {
         throw error;
       }
 
-      const sources = new Map<string, string>([['u1', goal], ...facts.map((fact, index) => [`f${index + 1}`, fact] as [string, string])]);
-      const task: HostTask = {
-        id,
-        turnId: turnId ?? id,
-        goal,
-        sources,
-        answers: 0,
-        controller: new AbortController(),
-        startedAt: Date.now(),
-        steps: 0,
-        executor,
-        done: false,
-      };
-      tasks.set(id, task);
-      post({ kind: 'start', taskId: id, turnId: task.turnId, goal, sources: [...sources].map(([sourceId, text]) => ({ id: sourceId, text })) });
-      return id;
+      return register(id, 'WEB', goal, facts, turnId, executor);
+    },
+
+    // Starts a UI task: browser chrome only (tabs, address bar, back, zoom, bookmarks), no page access.
+    startUiTask({ goal, facts = [], turnId }: { goal: string; facts?: string[]; turnId?: string }) {
+      if (!deps.chrome) throw new Error('Browser commands are not available.');
+      ensureWorker();
+      return register(newTaskId(), 'UI', goal, facts, turnId);
     },
 
     // The user's reply to ask_user or request_help. It becomes a source the agent can cite.
@@ -332,7 +391,7 @@ export const createAgentHost = (deps: HostDeps) => {
       task.watchdog = setTimeout(() => {
         if (task.done) return;
         restartWorker();
-        const result: TaskResult = { taskId, lane: 'WEB', ok: false, facts: [], untrusted: true, error: 'stopped' };
+        const result: TaskResult = { taskId, lane: task.lane, ok: false, facts: [], untrusted: true, error: 'stopped' };
         finishTask(task, { type: 'stopped', taskId, turnId: task.turnId, result });
       }, STOP_WATCHDOG_MS);
     },
@@ -345,7 +404,7 @@ export const createAgentHost = (deps: HostDeps) => {
     // From files.ts: a download began on some page. Tells the task working on that page, if any.
     noteDownload(contents: WebContents | undefined, fileName: string) {
       for (const task of tasks.values()) {
-        if (contents && deps.resolveTab(task.executor.tabId) === contents) task.executor.noteDownload(fileName);
+        if (contents && task.executor && deps.resolveTab(task.executor.tabId) === contents) task.executor.noteDownload(fileName);
       }
     },
 

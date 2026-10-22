@@ -392,7 +392,7 @@ const layout = () => {
 
 // Typed text → a safe web address. Real http(s) URLs pass through, things that look like a
 // domain get https:// added, and everything else (including file:, javascript:) is searched for.
-const toUrl = (input: unknown) => {
+export const toUrl = (input: unknown) => {
   if (typeof input !== 'string') {
     throw new Error('Address must be text.');
   }
@@ -874,7 +874,7 @@ export const moveTab = (id: unknown, toIndex: unknown) => {
   emit();
 };
 
-const cycleTab = (direction: 1 | -1) => {
+export const cycleTab = (direction: 1 | -1) => {
   const index = tabs.findIndex((tab) => tab.id === activeTabId);
   activateTab(tabs[(index + direction + tabs.length) % tabs.length]?.id);
 };
@@ -898,6 +898,22 @@ export const navigate = (input: unknown) => {
   load(tab, toUrl(input));
   layout();
   emit();
+};
+
+// For the agent: like navigate, but only ever to a website or a search. browsie:// addresses become a
+// search too, so the agent can't open Settings by typing its address.
+export const navigateToWeb = (input: string) => {
+  const tab = activeTab();
+
+  if (!tab) {
+    return false;
+  }
+
+  endGoogleSignIn(tab, false);
+  load(tab, toUrl(input));
+  layout();
+  emit();
+  return true;
 };
 
 // Shows one of Browsie's own pages in this tab, remembering where Back should go: the Browsie page
@@ -935,6 +951,12 @@ export const openBrowsiePage = (page: unknown) => {
     return;
   }
 
+  showBrowsiePage(page);
+};
+
+// openBrowsiePage without the lockdown check, which is there to stop people, not the agent.
+// The agent's command table only offers history and bookmarks, never settings.
+export const showBrowsiePage = (page: 'history' | 'bookmarks' | 'settings') => {
   const open = tabs.find((tab) => tab.showingNewTab && tab.page === page);
 
   if (open) {
@@ -1092,6 +1114,28 @@ const toggleMuteTab = (tab: Tab) => {
   emit();
 };
 
+// The tab menu's actions by tab id, for the agent. False when the tab is gone (or has no page to mute).
+export const duplicateTabById = (id: number) => {
+  const tab = tabs.find((entry) => entry.id === id);
+
+  if (tab) {
+    duplicateTab(tab);
+  }
+
+  return Boolean(tab);
+};
+
+export const toggleMuteTabById = (id: number) => {
+  const tab = tabs.find((entry) => entry.id === id);
+
+  if (!tab || !tabContents(tab)) {
+    return false;
+  }
+
+  toggleMuteTab(tab);
+  return true;
+};
+
 // Right-click on a tab in the chrome. Same native menu as the page context menu.
 export const showTabMenu = (id: unknown) => {
   if (typeof id !== 'number' || lockdown) {
@@ -1132,7 +1176,7 @@ const bookmarksBarMode = (): BookmarksBarMode => {
   return value === 'never' || value === 'newtab' ? value : 'always';
 };
 
-const setBookmarksBarMode = (mode: BookmarksBarMode) => {
+export const setBookmarksBarMode = (mode: BookmarksBarMode) => {
   updateData({ settings: { [BOOKMARKS_BAR_SETTING]: mode } });
 };
 
@@ -1227,15 +1271,16 @@ const focusAddressBar = () => {
   host.webContents.send('browser:focus-address');
 };
 
-const zoomActiveTab = (key: string) => {
+export const zoomActiveTab = (key: string) => {
   const contents = activeContents();
 
   if (!contents) {
-    return;
+    return false;
   }
 
   const level = key === '0' ? 0 : contents.getZoomLevel() + (key === '-' ? -ZOOM_STEP : ZOOM_STEP);
   contents.setZoomLevel(clamp(level, MIN_ZOOM, MAX_ZOOM));
+  return true;
 };
 
 // Space while lockdown is on is push-to-talk. Main sees the key whether focus is in the chrome
@@ -1494,6 +1539,13 @@ export const attachTabs = (window: BrowserWindow) => {
     glassView = null;
     host = null;
   });
+};
+
+// Tells the chrome which control the agent just used, so it can pulse it for anyone watching.
+export const emitAgentActivity = (activity: AgentUiActivity) => {
+  if (host && !host.isDestroyed()) {
+    host.webContents.send('agent:ui-activity', activity);
+  }
 };
 
 // The agent works on the website in the active tab. One task at a time, and never on Browsie's own pages.

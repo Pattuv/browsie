@@ -126,6 +126,12 @@ type BrowserTab = {
   agent: boolean;
 };
 
+// Which chrome control the agent used, so the chrome can pulse it for a caretaker watching. Cosmetic only.
+type AgentUiActivity = {
+  target: 'tab' | 'address' | 'back' | 'forward' | 'reload' | 'zoom' | 'bookmarks' | 'history';
+  label: string;
+};
+
 // Main owns the tabs; this snapshot is everything the chrome is told about them.
 type BrowserState = {
   tabs: BrowserTab[];
@@ -234,6 +240,8 @@ interface BrowsieBrowserAPI {
   resetSitePermissions: () => Promise<SitePermission[]>;
   // Ctrl+L / F6 / Alt+D. Returns an unsubscribe function.
   onFocusAddress: (callback: () => void) => () => void;
+  // The agent just used a chrome control (opened a tab, typed in the address bar…), for the highlight.
+  onAgentActivity: (callback: (activity: AgentUiActivity) => void) => () => void;
   // Opens browsie://history or browsie://bookmarks: an existing tab showing it, the empty New Tab, or a new tab.
   openPage: (page: 'history' | 'bookmarks' | 'settings') => Promise<void>;
 }

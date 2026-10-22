@@ -83,6 +83,11 @@ const browser: BrowsieBrowserAPI = {
     return () => ipcRenderer.removeListener("browser:focus-address", listener);
   },
   openPage: (page) => ipcRenderer.invoke("browser:open-page", page),
+  onAgentActivity: (callback) => {
+    const listener = (_event: IpcRendererEvent, activity: AgentUiActivity) => callback(activity);
+    ipcRenderer.on("agent:ui-activity", listener);
+    return () => ipcRenderer.removeListener("agent:ui-activity", listener);
+  },
 };
 
 // Bookmarks and history. Like the tab controls, main only answers the browser window.

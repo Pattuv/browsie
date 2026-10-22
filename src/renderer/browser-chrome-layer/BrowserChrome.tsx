@@ -3,6 +3,7 @@ import SplashScreen from './SplashScreen';
 import TabStrip from './TabStrip';
 import Toolbar from './Toolbar';
 import BookmarksBar from './BookmarksBar';
+import AgentHighlight from './AgentHighlight';
 import SettingsPage from './pages/SettingsPage';
 import BookmarksPage from './pages/BookmarksPage';
 import HistoryPage from './pages/HistoryPage';
@@ -143,6 +144,7 @@ function BrowserChrome() {
     <div className={`browser-chrome relative h-screen overflow-hidden ${phase === 'loaded' ? 'chrome-waiting' : ''}`}>
       {showChrome && (
         <div className="chrome-materialize absolute inset-0 bg-(--chrome-bar)">
+          <AgentHighlight />
           <TabStrip style={{ animationDelay: `${STRIP_DELAY}ms` }} />
           <main
             id="browser-chrome-card"

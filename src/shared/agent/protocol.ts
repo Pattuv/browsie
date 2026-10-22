@@ -10,9 +10,12 @@ import { LlmRequest, type LlmResponse } from './llm';
 // Something the user said or confirmed. Typed text must cite these by id, and main keeps its own copy.
 export type Source = { id: string; text: string };
 
+// The lanes that run in the agent process. (CHAT, HELP and INFO arrive with the voice phase.)
+export type AgentLane = 'WEB' | 'UI';
+
 export type TaskResult = {
   taskId: string;
-  lane: 'WEB';
+  lane: AgentLane;
   ok: boolean;
   // What the verbal engine can say: the finish summary, or what got done before it stopped.
   facts: string[];
@@ -70,6 +73,12 @@ export type ActResponse = {
   observation: Observation;
 };
 
+// What the UI lane gets back from a browser command. `data` holds tab titles, bookmark names and history
+// entries, which websites wrote: the lane treats it as information, never instructions.
+export type ChromeResponse =
+  | { ok: true; phrase: string; data?: unknown }
+  | { ok: false; error: string; message: string; limit?: boolean };
+
 const taskId = z.string().min(1).max(64);
 
 export const RPC = {
@@ -80,6 +89,8 @@ export const RPC = {
   'files.list': z.strictObject({ taskId }),
   // The user's answer that named the file, by source id: main checks the name really is in it.
   'files.choose': z.strictObject({ taskId, name: z.string().min(1).max(200), sourceId: z.string().min(1).max(64) }),
+  // One command from shared/chrome/actions.ts. Main parses it again.
+  'chrome.execute': z.strictObject({ taskId, action: z.unknown() }),
 } as const;
 
 export type RpcMethod = keyof typeof RPC;
@@ -91,13 +102,14 @@ export type RpcResults = {
   'web.finish': { ok: boolean; message?: string };
   'files.list': string[];
   'files.choose': { ok: boolean; message?: string };
+  'chrome.execute': ChromeResponse;
 };
 
 export type RpcParams<M extends RpcMethod> = z.infer<(typeof RPC)[M]>;
 
 // Main → agent.
 export type HostMessage =
-  | { kind: 'start'; taskId: string; turnId: string; goal: string; sources: Source[] }
+  | { kind: 'start'; lane: AgentLane; taskId: string; turnId: string; goal: string; sources: Source[] }
   // The user's reply to ask_user or request_help, or their yes/no to a confirmation.
   | { kind: 'answer'; taskId: string; text: string; sourceId?: string; confirmed?: boolean }
   | { kind: 'abort'; taskId: string }

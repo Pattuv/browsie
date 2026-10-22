@@ -40,6 +40,8 @@ export type TraceEvent =
   | { t: 'decision'; step: number; actions: unknown[]; decisions: DecisionSummary[] }
   | { t: 'confirm'; step: number; grant: ConfirmGrant; answer: 'yes' | 'no' }
   | { t: 'result'; step: number; action: unknown; result: ActionResult }
+  // A UI lane browser command and what came of it.
+  | { t: 'chrome'; step: number; action: unknown; ok: boolean; error?: string }
   | { t: 'end'; ok: boolean; steps: number; ms: number; costUsd: number; error?: string };
 
 export const serializeSnapshot = (snapshot: Snapshot): SerializedSnapshot => ({
