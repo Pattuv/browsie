@@ -8,10 +8,12 @@ import {
   type Input,
   type MenuItemConstructorOptions,
   type WebContents,
+  webContents as allContents,
 } from 'electron';
 import { getSession } from '../auth/session';
 import { bookmarkPage, listBookmarks, removeBookmark } from '../data/bookmarks';
 import { getData, updateData } from '../data/localStore';
+import { getSystemVolumeDb } from '../systemVolume';
 import { recordVisit, updateVisitTitle } from '../data/history';
 import { clearFaviconCache, resolveFavicon } from './favicons';
 import { getGoogleLogin, googleSignInUrl, isGoogleAccountsUrl, onGoogleLoginChange } from './googleWebLogin';
@@ -96,6 +98,8 @@ let lockdown = true;
 let relockAfterGoogleSignIn = false;
 // Bumped each time lockdown comes back on after Google sign-in, so the chrome shows its notice again.
 let lockdownNotice = 0;
+// Space held while lockdown is on. A view of its own draws the speech pill from this, above every page.
+let talking = false;
 // The first tab of a window or account, while we're still waiting to hear whether Google is logged in.
 let startTabId: number | null = null;
 const lockdownCssKey = new Map<number, string>();
@@ -153,7 +157,157 @@ export const getBrowserState = (): BrowserState => ({
   activeTabId,
   lockdown,
   lockdownNotice,
+  talking,
 });
+
+const setTalking = (held: boolean) => {
+  if (talking === held) {
+    return;
+  }
+
+  talking = held;
+
+  if (!held) {
+    talkCooldownUntil = Date.now() + TALK_COOLDOWN_MS;
+  }
+
+  if (held) {
+    showSpeechPill();
+  } else {
+    hideSpeechPill();
+  }
+
+  emit();
+};
+
+export const isTalking = () => talking;
+
+// The pill's own view. Web pages are views painted above the chrome, so a pill drawn in the chrome
+// either sits under them or has to shrink the page to stay visible. This view is kept above every
+// page view and only covers its own rectangle, so the page underneath does not move.
+// The view is a transparent slot that runs from the pill's resting spot down to the window's bottom
+// edge. The pill slides up and down inside it with CSS, so the view itself never moves while shown.
+const PILL_WIDTH = 104;
+const PILL_HEIGHT = 48;
+// Margin around the pill inside its view.
+const PILL_PAD = 8;
+// Gap under the pill. Clears the rotating tips at the bottom of the New Tab page.
+const PILL_BOTTOM = 64;
+// How long the pill takes to slide back down before the view is hidden. Matches SpeechPill's CSS.
+const PILL_SLIDE_OUT_MS = 200;
+// Chromium drops the keyUp that follows a keyDown main blocked, so the release would never be seen
+// where the press was. While talking, focus moves to the pill's view (which lets space through), so
+// the keyUp lands there. Focus goes back when the pill hides.
+let speechView: WebContentsView | null = null;
+let speechGeneration = 0;
+let focusBeforeTalk: WebContents | null = null;
+// Backstop if a keyUp is still missed: space held sends repeat keyDowns, so a quiet gap means let go.
+const TALK_REPEAT_TIMEOUT_MS = 1200;
+let talkWatchdog: ReturnType<typeof setTimeout> | null = null;
+// After letting go, space does nothing for this long, so the pill can't be spammed. Presses during
+// it don't extend it.
+const TALK_COOLDOWN_MS = 1000;
+let talkCooldownUntil = 0;
+// Space does nothing until the chrome's launch animation has finished, and for this long after.
+const TALK_AFTER_LAUNCH_MS = 500;
+let talkReadyAt = Infinity;
+
+// The chrome finished its launch animation.
+export const markChromeReady = () => {
+  talkReadyAt = Math.min(talkReadyAt, Date.now() + TALK_AFTER_LAUNCH_MS);
+};
+
+const placeSpeechPill = () => {
+  if (!host || host.isDestroyed() || !speechView) {
+    return;
+  }
+
+  const [width, height] = host.getContentSize();
+  const slotHeight = PILL_PAD + PILL_HEIGHT + PILL_BOTTOM;
+  speechView.setBounds({
+    x: Math.round((width - PILL_WIDTH) / 2) - PILL_PAD,
+    y: height - slotHeight,
+    width: PILL_WIDTH + PILL_PAD * 2,
+    height: slotHeight,
+  });
+};
+
+// Adding a view that is already a child moves it to the top. Page views are created after this one.
+const raiseSpeechPill = () => {
+  if (!host || host.isDestroyed() || !speechView) {
+    return;
+  }
+
+  host.contentView.addChildView(speechView);
+};
+
+const notifySpeechHeld = (held: boolean) => {
+  const contents = speechView?.webContents;
+
+  if (!contents || contents.isDestroyed()) {
+    return;
+  }
+
+  // The device volume (in dB) rides along, so the pill can make up for it in its start and end sounds.
+  contents.send('speech:held', held, getSystemVolumeDb());
+};
+
+// The view shows first, then the pill slides up inside it.
+const showSpeechPill = () => {
+  if (!host || host.isDestroyed() || !speechView) {
+    return;
+  }
+
+  speechGeneration += 1;
+  raiseSpeechPill();
+  placeSpeechPill();
+  speechView.setVisible(true);
+  notifySpeechHeld(true);
+
+  const focused = allContents.getFocusedWebContents();
+  focusBeforeTalk = focused && focused !== speechView.webContents ? focused : null;
+  speechView.webContents.focus();
+};
+
+// The pill slides down first, then the view hides. Pressing again mid-slide keeps it shown.
+const hideSpeechPill = () => {
+  const generation = ++speechGeneration;
+  notifySpeechHeld(false);
+
+  if (talkWatchdog) {
+    clearTimeout(talkWatchdog);
+    talkWatchdog = null;
+  }
+
+  if (focusBeforeTalk && !focusBeforeTalk.isDestroyed()) {
+    focusBeforeTalk.focus();
+  }
+
+  focusBeforeTalk = null;
+
+  setTimeout(() => {
+    if (generation !== speechGeneration || talking) {
+      return;
+    }
+
+    speechView?.setVisible(false);
+  }, PILL_SLIDE_OUT_MS + 40);
+};
+
+// Created with the browser window. Hidden until space is held.
+export const attachSpeechOverlay = (view: WebContentsView) => {
+  speechView = view;
+  // Transparent (ARGB), so only the pill itself shows over the page.
+  view.setBackgroundColor('#00000000');
+  view.setVisible(false);
+
+  if (!host || host.isDestroyed()) {
+    return;
+  }
+
+  host.contentView.addChildView(view);
+  placeSpeechPill();
+};
 
 const emit = () => {
   if (host && !host.isDestroyed()) {
@@ -191,6 +345,8 @@ const layout = () => {
 
     tab.view.setBounds(contentBounds);
   }
+
+  placeSpeechPill();
 };
 
 // Typed text → a safe web address. Real http(s) URLs pass through, things that look like a
@@ -452,6 +608,7 @@ const wireContents = (tab: Tab, contents: WebContents) => {
 
   contents.on('before-input-event', (event, input) => {
     if (lockdown) {
+      handleTalkKey(input);
       event.preventDefault();
       return;
     }
@@ -506,6 +663,10 @@ const clearLockdownCss = async (contents: WebContents) => {
 
 const applyLockdown = (enabled: boolean) => {
   lockdown = enabled;
+
+  if (!enabled) {
+    setTalking(false);
+  }
 
   for (const tab of tabs) {
     const contents = tab.view?.webContents;
@@ -578,6 +739,7 @@ const createView = (tab: Tab) => {
   view.setBorderRadius(0);
   view.setVisible(false);
   host?.contentView.addChildView(view);
+  raiseSpeechPill();
   tab.view = view;
   wireContents(tab, view.webContents);
 
@@ -1080,6 +1242,45 @@ const zoomActiveTab = (key: string) => {
   contents.setZoomLevel(clamp(level, MIN_ZOOM, MAX_ZOOM));
 };
 
+// Space while lockdown is on is push-to-talk. Main sees the key whether focus is in the chrome
+// or a website (the website view swallows keys during lockdown). Repeats stay held. Letting go
+// slides the pill away. Lockdown turning off drops it too. Returns true when the key
+// should not reach the page.
+export const handleTalkKey = (input: Input) => {
+  if (input.code !== 'Space' || !lockdown || input.control || input.alt || input.meta || input.shift) {
+    return false;
+  }
+
+  if (input.type === 'keyDown') {
+    // Only a fresh press starts talking. A key held through the cooldown (or the launch wait) only
+    // sends repeats, so it stays ignored until it's let go and pressed again.
+    if (!talking && (input.isAutoRepeat || Date.now() < Math.max(talkCooldownUntil, talkReadyAt))) {
+      return true;
+    }
+
+    // Repeats while talking keep the watchdog from firing.
+    setTalking(true);
+
+    if (talkWatchdog) {
+      clearTimeout(talkWatchdog);
+    }
+
+    talkWatchdog = setTimeout(() => {
+      talkWatchdog = null;
+      setTalking(false);
+    }, TALK_REPEAT_TIMEOUT_MS);
+
+    return true;
+  }
+
+  if (input.type === 'keyUp') {
+    setTalking(false);
+    return true;
+  }
+
+  return true;
+};
+
 // Browser keyboard shortcuts. Main sees keys before any page does (before-input-event), so they
 // work the same whether focus is in the chrome or inside a website. Returns true if handled.
 export const handleShortcut = (input: Input, source: 'chrome' | 'tab') => {
@@ -1277,15 +1478,20 @@ export const attachTabs = (window: BrowserWindow) => {
   fullscreenTabId = null;
   lockdown = true;
   relockAfterGoogleSignIn = false;
+  talkReadyAt = Infinity;
   openStartTab();
 
   window.on('resize', layout);
+  // Letting go of space can be missed if the window loses focus while it's held.
+  window.on('blur', () => setTalking(false));
   window.on('closed', () => {
     for (const tab of tabs) {
       tab.view?.webContents.close();
     }
 
     tabs = [];
+    speechGeneration += 1;
+    speechView = null;
     host = null;
   });
 };

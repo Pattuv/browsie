@@ -268,7 +268,7 @@ function Dashboard() {
             aria-label="Settings"
             title="Settings"
             onClick={() => setSettingsOpen(true)}
-            className="app-region-no-drag flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl bg-zinc-100 text-black transition-[background-color,transform] duration-200 ease-out hover:bg-zinc-200 active:scale-95"
+            className="app-region-no-drag flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl text-black transition-[opacity,transform] duration-200 ease-out hover:opacity-60 active:scale-95"
           >
             <SlidersHorizontal size={18} strokeWidth={2.25} aria-hidden="true" />
           </button>

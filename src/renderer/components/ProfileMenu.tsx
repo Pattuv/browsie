@@ -99,25 +99,39 @@ const BADGES = {
   out: { label: 'Used up', Icon: AlertCircle, className: 'bg-[#FBE0DE] text-[#C2352B]' },
 };
 
-// Main asks OpenRouter with the account's management key (at most once a minute) and sends back only the
-// figures. Undefined while that's on its way: the layout stays the same with dashes, so nothing jumps.
+// While the card is open it refreshes on this beat, and straight away when the window regains focus (say,
+// back from raising the cap or adding credits on OpenRouter).
+const USAGE_REFRESH_MS = 15_000;
+
+// Main asks OpenRouter with the account's management key (at most every 10 seconds) and sends back only the
+// figures. Undefined while the first read is on its way: the layout stays the same with dashes, so nothing
+// jumps. Later refreshes keep showing the last figures until new ones arrive.
 function UsageCard() {
   const [usage, setUsage] = useState<AiUsage>();
 
   useEffect(() => {
     let current = true;
-    const request = window.browsie?.getAiUsage() ?? Promise.resolve<AiUsage>({ state: 'offline' });
 
-    request
-      .catch((): AiUsage => ({ state: 'offline' }))
-      .then((result) => {
-        if (current) {
-          setUsage(result);
-        }
-      });
+    const refresh = () => {
+      const request = window.browsie?.getAiUsage() ?? Promise.resolve<AiUsage>({ state: 'offline' });
+
+      request
+        .catch((): AiUsage => ({ state: 'offline' }))
+        .then((result) => {
+          if (current) {
+            setUsage(result);
+          }
+        });
+    };
+
+    refresh();
+    const timer = window.setInterval(refresh, USAGE_REFRESH_MS);
+    window.addEventListener('focus', refresh);
 
     return () => {
       current = false;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
     };
   }, []);
 

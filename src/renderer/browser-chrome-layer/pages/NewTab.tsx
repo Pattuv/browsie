@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { HeartHandshake, X } from "lucide-react";
 import DashboardTip, { type Tip } from "../../components/DashboardTip";
-import { useLockdownNotice, useLockdownStore } from "../../stores/browserStore";
+import { useBrowserStore, useLockdownNotice, useLockdownStore } from "../../stores/browserStore";
 import GoogleAppsMenu from "../GoogleAppsMenu";
 import mascot from "../../assets/mascot.svg";
 
@@ -107,11 +107,14 @@ function LockdownNotice({
     }
   }, [noticeOpen]);
 
+  // Unlocking, or starting to talk, dismisses it right away.
+  const talking = useBrowserStore((state) => state.talking);
+
   useEffect(() => {
-    if (present && !locked) {
+    if (present && !leaving && (!locked || talking)) {
       close();
     }
-  }, [locked, present]);
+  }, [locked, talking, present, leaving]);
 
   useEffect(() => {
     if (!present || leaving || !launched) {

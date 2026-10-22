@@ -132,6 +132,8 @@ type BrowserState = {
   lockdown: boolean;
   // Goes up each time lockdown comes back on after Google sign-in, to show the lockdown notice again.
   lockdownNotice: number;
+  // Space is held while lockdown is on. Main shows the speech pill over the page.
+  talking: boolean;
 };
 
 // Where the page area sits in the window, in CSS pixels (the chrome measures it, main places the website there).
@@ -216,6 +218,8 @@ interface BrowsieBrowserAPI {
   // True while a chrome popover is open, so the website is inset and does not cover the menu.
   // A still image (data: URL) of the website on screen, or null if there isn't one.
   capturePage: () => Promise<string | null>;
+  // The launch animation finished. Push-to-talk starts working shortly after.
+  chromeReady: () => Promise<void>;
   setOverlayOpen: (open: boolean) => Promise<void>;
   // Human input on websites is ignored while this is on. Main-process loads still run.
   setLockdown: (enabled: boolean) => Promise<void>;
@@ -328,6 +332,11 @@ interface BrowsieAPI {
   isWindowMaximized: () => Promise<boolean>;
   // Returns an unsubscribe function.
   onWindowMaximizedChange: (callback: (maximized: boolean) => void) => () => void;
+  // Space is held. The speech pill asks once when it mounts, then listens.
+  isSpeechHeld: () => Promise<boolean>;
+  // deviceVolumeDb is how far the system volume turns sound down, in dB (0 at full), when space
+  // was pressed or let go.
+  onSpeechHeld: (callback: (held: boolean, deviceVolumeDb: number) => void) => () => void;
 }
 
 interface Window {

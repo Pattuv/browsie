@@ -1,10 +1,15 @@
 import clickHeavy from './assets/sounds/clickheavy.wav?inline';
 import clickLight from './assets/sounds/clicklight.wav?inline';
 import startupSound from './assets/sounds/browsiestartupsound.wav?inline';
+import dictationStart from './assets/sounds/dictationstart.mp3?inline';
+import dictationEnd from './assets/sounds/dictationend.mp3?inline';
 
 // One long-lived context with pre-decoded buffers. <audio> elements let the output device go idle,
 // so the first click after a pause lagged while it woke back up. A running context keeps it open.
 const context = new AudioContext({ latencyHint: 'interactive' });
+
+// Shared with the speech pill's mic meter, so the page only ever has one output stream.
+export const soundContext = context;
 
 // Builds inline them as data: URLs (fetch can't load file://, and the CSP blocks fetching data:).
 // The dev server ignores ?inline and hands back a normal same-origin URL, so fetch that.
@@ -66,17 +71,27 @@ const stopKeepAlive = () => {
   keepAlive = null;
 };
 
-// Full volume (no gain node), so it's always as loud as the system volume allows.
-const play = (sound: Promise<AudioBuffer | null>) => {
+// Full volume unless a gain is given, so it's as loud as the system volume allows.
+// Starts only once the context is running: a sound started while it's still waking up came out
+// garbled.
+const play = (sound: Promise<AudioBuffer | null>, gain = 1) => {
   wake();
-  void sound.then((buffer) => {
+  void Promise.all([sound, context.resume().catch(() => undefined)]).then(([buffer]) => {
     if (!buffer) {
       return;
     }
 
     const source = context.createBufferSource();
     source.buffer = buffer;
-    source.connect(context.destination);
+
+    if (gain >= 1) {
+      source.connect(context.destination);
+    } else {
+      const level = context.createGain();
+      level.gain.value = gain;
+      source.connect(level).connect(context.destination);
+    }
+
     source.start();
   });
 };
@@ -84,6 +99,47 @@ const play = (sound: Promise<AudioBuffer | null>) => {
 export const playClick = (kind: ClickSound = 'light') => play(CLICK_SOUNDS[kind]);
 
 export const playStartupSound = () => play(STARTUP_SOUND);
+
+// Push-to-talk cues: start when space goes down, end when it's let go.
+const DICTATION_SOUNDS = {
+  start: decode(dictationStart),
+  end: decode(dictationEnd),
+};
+
+// How loud the cues come out, in dB below the file's own level, with the device at full volume.
+const DICTATION_DB_AT_FULL = -26;
+
+// Constant loudness: the cue is turned up by exactly as many dB as the device's volume turns it
+// down, so it sounds the same at any device volume. It can't go above the file's own level without
+// clipping, so once the device is turned down more than 26 dB (around 15-20% on the Windows slider,
+// depending on the device) it stops keeping up.
+export const dictationGain = (deviceVolumeDb: number) =>
+  Math.min(1, Math.pow(10, (DICTATION_DB_AT_FULL - Math.min(0, deviceVolumeDb)) / 20));
+
+export const playDictationSound = (kind: keyof typeof DICTATION_SOUNDS, deviceVolumeDb: number) =>
+  play(DICTATION_SOUNDS[kind], dictationGain(deviceVolumeDb));
+
+// Keeps the output awake while the speech pill is up, and long enough after release for the end cue
+// to finish, so the cues never land on an output that's waking from sleep.
+const AWAKE_AFTER_RELEASE_MS = 3000;
+let releaseTimer: ReturnType<typeof setTimeout> | null = null;
+
+export const holdAudioAwake = (awake: boolean) => {
+  if (releaseTimer) {
+    clearTimeout(releaseTimer);
+    releaseTimer = null;
+  }
+
+  if (awake) {
+    startKeepAlive();
+    return;
+  }
+
+  releaseTimer = setTimeout(() => {
+    releaseTimer = null;
+    stopKeepAlive();
+  }, AWAKE_AFTER_RELEASE_MS);
+};
 
 const CLICKABLE = 'button, a[href], [role="button"], [role="link"]';
 

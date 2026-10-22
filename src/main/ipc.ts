@@ -11,6 +11,8 @@ import {
   captureActivePage,
   closeTab,
   getBrowserState,
+  isTalking,
+  markChromeReady,
   goBack,
   goForward,
   moveTab,
@@ -153,6 +155,7 @@ export const registerIpc = () => {
   handleFromBrowser('browser:capture-page', () => captureActivePage());
   handleFromBrowser('browser:set-overlay-open', (_event, open: unknown) => setOverlayOpen(open === true));
   handleFromBrowser('browser:set-lockdown', (_event, enabled: unknown) => setLockdown(enabled === true));
+  handleFromBrowser('browser:chrome-ready', () => markChromeReady());
   handleFromBrowser('browser:get-site-info', () => getSiteInfo());
   handleFromBrowser('browser:clear-site-data', () => clearSiteData());
   handleFromBrowser('browser:set-site-permission', (_event, kind: unknown, setting: unknown) =>
@@ -160,6 +163,7 @@ export const registerIpc = () => {
   );
   handleFromBrowser('browser:reset-site-permissions', () => resetActiveSitePermissions());
 
+  handle('speech:is-held', () => isTalking());
   handle('auth:get-session', () => getSession());
   handle('auth:sign-in', (event) => {
     const requester = BrowserWindow.fromWebContents(event.sender);

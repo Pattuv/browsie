@@ -68,6 +68,7 @@ const browser: BrowsieBrowserAPI = {
   setContentBounds: (bounds) =>
     ipcRenderer.invoke("browser:set-content-bounds", bounds),
   capturePage: () => ipcRenderer.invoke("browser:capture-page"),
+  chromeReady: () => ipcRenderer.invoke("browser:chrome-ready"),
   setOverlayOpen: (open) =>
     ipcRenderer.invoke("browser:set-overlay-open", open),
   setLockdown: (enabled) => ipcRenderer.invoke("browser:set-lockdown", enabled),
@@ -138,5 +139,19 @@ contextBridge.exposeInMainWorld("browsie", {
     ipcRenderer.on("window-maximized-changed", listener);
     return () =>
       ipcRenderer.removeListener("window-maximized-changed", listener);
+  },
+  isSpeechHeld: () => ipcRenderer.invoke("speech:is-held"),
+  onSpeechHeld: (callback: (held: boolean, deviceVolumeDb: number) => void) => {
+    const listener = (
+      _event: IpcRendererEvent,
+      held: boolean,
+      deviceVolumeDb: number,
+    ) =>
+      callback(
+        held === true,
+        typeof deviceVolumeDb === "number" ? deviceVolumeDb : -10,
+      );
+    ipcRenderer.on("speech:held", listener);
+    return () => ipcRenderer.removeListener("speech:held", listener);
   },
 });

@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import BrowserChrome from './browser-chrome-layer/BrowserChrome';
+import SpeechPill from './browser-chrome-layer/SpeechPill';
 import MenuPickerLayer from './menu-picker-layer/MenuPickerLayer';
 import OnboardingLayer from './onboarding-layer/OnboardingLayer';
 import { installClickSounds } from './sounds';
@@ -26,6 +27,7 @@ if (windowKind === 'browser') {
 const layers = {
   'menu-picker': MenuPickerLayer,
   browser: BrowserChrome,
+  speech: SpeechPill,
 };
 const Layer = layers[windowKind as keyof typeof layers] ?? OnboardingLayer;
 

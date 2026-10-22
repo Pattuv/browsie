@@ -130,6 +130,7 @@ function BrowserChrome() {
   useLayoutEffect(() => {
     if (phase === 'ready') {
       document.documentElement.dataset.chromeReady = 'true';
+      void window.browsie?.browser?.chromeReady();
     }
   }, [phase]);
 

@@ -142,6 +142,15 @@
     background-color: #111111;
   }
 
+  /* The speech pill is its own transparent view. Only the pill inside it paints. */
+  html[data-window="speech"],
+  html[data-window="speech"] body,
+  html[data-window="speech"] #root {
+    height: 100%;
+    background-color: transparent;
+    overflow: hidden;
+  }
+
   /* Hidden from the browser button until the chrome is ready. `!important` beats
      cursor-pointer on the button and the chrome controls underneath the splash. */
   html[data-cursor-hidden],

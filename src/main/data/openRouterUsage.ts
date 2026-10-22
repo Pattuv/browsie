@@ -5,8 +5,9 @@ import { openRouterFetch, readManagementAccess } from './aiKey';
 // What the profile menu's usage card shows, read with the account's management key: the credit balance
 // (/credits) and the Browsie key's cap and spend (/keys/<hash>). What can actually be spent is the smaller
 // of what's left under the cap and what's left of the credits.
-// Opening the menu over and over shouldn't hit OpenRouter every time.
-const CACHE_MS = 60_000;
+// Short, so the open card can refresh live, but opening the menu over and over (or both windows refreshing
+// at once) still doesn't hit OpenRouter every time.
+const CACHE_MS = 10_000;
 
 type KeyInfo = {
   limit: number | null;
