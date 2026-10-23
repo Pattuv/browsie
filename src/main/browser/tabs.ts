@@ -399,79 +399,66 @@ export const attachSpeechOverlay = (view: WebContentsView) => {
 // and the inline style moves it with transform only, so the fade and the glide don't fight.
 const GLASS_FRAME = `<!doctype html><html><head><meta charset="utf-8"><style>
 html,body{margin:0;height:100%;background:transparent;overflow:hidden}
-svg{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity 560ms ease}
-html.on svg{opacity:1}
-#cursor{position:fixed;left:0;top:0;width:32px;height:32px;z-index:50;pointer-events:none;opacity:0;transform:translate3d(300px,300px,0)}
-.cursor-in{animation:cursor-in 350ms ease forwards}
-.cursor-out{animation:cursor-out 350ms ease forwards}
-@keyframes cursor-in{from{opacity:0}to{opacity:1}}
-@keyframes cursor-out{from{opacity:1}to{opacity:0}}
-</style></head><body><svg width="100%" height="100%">
-<defs>
-<linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-<stop offset="0" stop-color="#f3ebff" stop-opacity="1"/>
-<stop offset=".07" stop-color="#c9b6ff" stop-opacity=".9"/>
-<stop offset=".2" stop-color="#9572ff" stop-opacity="0"/>
-<stop offset=".8" stop-color="#7c5cff" stop-opacity="0"/>
-<stop offset=".93" stop-color="#b39cff" stop-opacity=".9"/>
-<stop offset="1" stop-color="#efe6ff" stop-opacity="1"/>
-</linearGradient>
-<filter id="glow" x="-12%" y="-12%" width="124%" height="124%"><feGaussianBlur stdDeviation="2.6"/></filter>
-</defs>
-<rect class="glow" fill="none" stroke="url(#g)" stroke-width="14" filter="url(#glow)" opacity=".85"/>
-<rect class="line" fill="none" stroke="url(#g)" stroke-width="2"/>
-</svg><script>
-function fit(){
-  var w=innerWidth,h=innerHeight,inset=10,r=18;
-  document.querySelectorAll('rect').forEach(function(rect){
-    rect.setAttribute('x',inset);
-    rect.setAttribute('y',inset);
-    rect.setAttribute('width',Math.max(0,w-inset*2));
-    rect.setAttribute('height',Math.max(0,h-inset*2));
-    rect.setAttribute('rx',r);
-    rect.setAttribute('ry',r);
-  });
-}
-addEventListener('resize',fit);
-fit();
-</script>
+/* Lavender light around the page while the agent works: strong in the top-right and bottom-left with a dotted
+   texture, softer in the other corners, and a faint glow along every edge. No border. */
+#glow{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity 700ms ease}
+html.on #glow{opacity:1}
+#glow .edge{position:absolute;inset:0;box-shadow:inset 0 0 70px 6px rgba(149,114,255,.22),inset 0 0 18px rgba(149,114,255,.18)}
+#glow span.blob{position:absolute;border-radius:50%;filter:blur(60px);will-change:transform,opacity;animation:breathe 6s ease-in-out infinite}
+#glow .tr{width:60vmax;height:60vmax;right:-27vmax;top:-29vmax;background:radial-gradient(closest-side,rgba(149,114,255,.78),rgba(160,130,255,.35) 55%,rgba(149,114,255,0))}
+#glow .bl{width:62vmax;height:62vmax;left:-29vmax;bottom:-30vmax;background:radial-gradient(closest-side,rgba(149,114,255,.76),rgba(160,130,255,.33) 55%,rgba(149,114,255,0));animation-delay:-3s}
+#glow .br{width:30vmax;height:30vmax;right:-14vmax;bottom:-16vmax;background:radial-gradient(closest-side,rgba(180,156,255,.32),rgba(180,156,255,0));animation-delay:-1.5s}
+#glow .tl{width:26vmax;height:26vmax;left:-13vmax;top:-14vmax;background:radial-gradient(closest-side,rgba(180,156,255,.26),rgba(180,156,255,0));animation-delay:-4.5s}
+/* Halftone dots that fade out from the two strong corners. */
+#glow .dots{position:absolute;width:42vmax;height:42vmax;background-image:radial-gradient(circle,rgba(125,92,255,.45) 1.1px,transparent 1.7px);background-size:11px 11px}
+#glow .dots.d-tr{right:0;top:0;-webkit-mask-image:radial-gradient(circle at 100% 0,#000 0,rgba(0,0,0,.45) 24%,transparent 55%)}
+#glow .dots.d-bl{left:0;bottom:0;-webkit-mask-image:radial-gradient(circle at 0 100%,#000 0,rgba(0,0,0,.45) 24%,transparent 55%)}
+@keyframes breathe{0%,100%{opacity:.85;transform:scale(1)}50%{opacity:1;transform:scale(1.06)}}
+@media (prefers-reduced-motion: reduce){#glow span.blob{animation:none}}
+#cursor{position:fixed;left:0;top:0;width:32px;height:32px;z-index:50;pointer-events:none;opacity:0;transition:opacity 400ms ease;transform:translate3d(300px,300px,0)}
+#cursor.shown{opacity:1}
+</style></head><body><div id="glow" aria-hidden="true"><span class="blob tr"></span><span class="blob bl"></span><span class="blob br"></span><span class="blob tl"></span><span class="dots d-tr"></span><span class="dots d-bl"></span><span class="edge"></span></div>
 <img id="cursor" alt="" draggable="false" src="${cursorImage}">
 <script>
 (function () {
   var el = document.getElementById('cursor');
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var state = { x: 300, y: 300, visible: false, clicking: false, duration: 600, placed: false };
+  var state = { x: 0, y: 0, visible: false, clicking: false, duration: 600 };
+  var hideTimer = 0;
   function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
   function paint() {
-    el.style.transition = 'transform ' + state.duration + 'ms cubic-bezier(0.3, 0.7, 0.25, 1)';
-    el.style.transform = 'translate3d(' + (state.x - 8) + 'px,' + (state.y - 5) + 'px,0) scale(' + (state.clicking ? 0.8 : 1) + ')';
+    el.style.transition = 'opacity 400ms ease, transform ' + state.duration + 'ms cubic-bezier(0.45, 0, 0.2, 1)';
+    el.style.transform = 'translate3d(' + (state.x - 8) + 'px,' + (state.y - 5) + 'px,0) scale(' + (state.clicking ? 0.82 : 1) + ')';
   }
   window.browsieCursor = {
     move: function (x, y, duration) {
-      var first = !state.placed;
-      var show = !state.visible;
+      clearTimeout(hideTimer);
+      if (!state.visible) {
+        // Appear in the middle of the page, fade in, then glide to the target.
+        state.x = innerWidth / 2;
+        state.y = innerHeight * 0.55;
+        state.duration = 0;
+        state.clicking = false;
+        paint();
+        void el.offsetWidth;
+        state.visible = true;
+        el.classList.add('shown');
+      }
+      // Longer trips take a little longer, so the motion reads as one smooth sweep.
+      var distance = Math.hypot(x - state.x, y - state.y);
+      state.duration = reduce ? 0 : Math.max(duration, Math.min(1100, 350 + distance * 0.6));
       state.x = x;
       state.y = y;
-      state.duration = reduce || first ? 0 : duration;
       state.clicking = false;
-      state.visible = true;
-      state.placed = true;
       paint();
-      if (state.duration === 0) void el.offsetWidth;
-      if (show) {
-        el.classList.remove('cursor-out');
-        el.classList.remove('cursor-in');
-        void el.offsetWidth;
-        el.classList.add('cursor-in');
-      }
       return sleep(state.duration + 40);
     },
     click: function () {
       if (!state.visible || reduce) return;
       state.clicking = true;
-      state.duration = 100;
+      state.duration = 110;
       paint();
-      return sleep(160).then(function () {
+      return sleep(150).then(function () {
         if (!state.visible) return;
         state.clicking = false;
         paint();
@@ -481,12 +468,8 @@ fit();
     hide: function () {
       if (!state.visible) return;
       state.visible = false;
-      state.placed = false;
       state.clicking = false;
-      paint();
-      el.classList.remove('cursor-in');
-      void el.offsetWidth;
-      el.classList.add('cursor-out');
+      el.classList.remove('shown');
     }
   };
 })();
@@ -575,7 +558,7 @@ export const agentCursor: AgentCursor = {
   },
 };
 
-// Fades the stroke in when a web task is on screen, and back out when it leaves.
+// Fades the corner glow in when a web task is on screen, and back out (with the cursor) when it leaves.
 let agentFrameOn = false;
 const syncAgentFrame = (on: boolean) => {
   if (!glassView || glassView.webContents.isDestroyed() || on === agentFrameOn) {
@@ -590,7 +573,7 @@ const syncAgentFrame = (on: boolean) => {
 
   void glassView.webContents
     .executeJavaScript(`(() => {
-      if (!document.querySelector('svg')) throw new Error('no frame');
+      if (!document.getElementById('glow')) throw new Error('no frame');
       const root = document.documentElement;
       if (${on}) requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add('on')));
       else root.classList.remove('on');
