@@ -30,12 +30,24 @@ const setup = (heard = 'open a new tab') => {
     transcribe: vi.fn(async () => heard),
     speak: vi.fn(async (text: string) => new TextEncoder().encode(text)),
   };
+  // Behaves like the real player: counts what it finished in the current epoch, and forgets on stop.
+  const player = { epoch: 1, completed: 0, auto: true };
   const audio = {
     play: vi.fn((item: AudioItem, playedEpoch = 1) => {
       played.push(item);
-      queueMicrotask(() => conductor.noteQuiet(playedEpoch, played.length));
+      if (playedEpoch !== player.epoch) {
+        player.epoch = playedEpoch;
+        player.completed = 0;
+      }
+      if (!player.auto) return;
+      queueMicrotask(() => {
+        player.completed += 1;
+        conductor.noteQuiet(player.epoch, player.completed);
+      });
     }),
-    stop: vi.fn(),
+    stop: vi.fn(() => {
+      player.completed = 0;
+    }),
     setStyle: vi.fn(),
   };
 
@@ -58,6 +70,7 @@ const setup = (heard = 'open a new tab') => {
     speech,
     audio,
     played,
+    player,
     statuses,
     spoken,
     turn: (event: Record<string, unknown>, turnId = 'turn1') => turnListener({ ...event, turnId } as TurnEvent),
@@ -86,6 +99,44 @@ describe('conductor', () => {
     await flush();
     expect(t.spoken()).toEqual(['I opened a new tab.']);
     expect(t.statuses).toEqual(['working', 'idle']);
+  });
+
+  it('goes idle after the reply, even after Space was pressed while idle', async () => {
+    let turns = 0;
+    t.host.startTurn.mockImplementation(() => `turn${++turns}`);
+
+    await t.conductor.onAudio(wav, 1_200);
+    t.turn({ type: 'say', text: 'I took you to Google Drive.' }, 'turn1');
+    t.turn({ type: 'done', ok: true }, 'turn1');
+    await flush();
+    await flush();
+    expect(t.conductor.mode()).toBe('idle');
+
+    // Hold Space to talk while idle: the player is told to stop and forgets its count.
+    expect(t.conductor.onSpacePress()).toBe(false);
+    await t.conductor.onAudio(wav, 1_200);
+    t.task({ type: 'step_started', step: 1, phrase: 'Going back', turnId: 'turn2' });
+    t.turn({ type: 'say', text: 'I went back to the previous page.' }, 'turn2');
+    t.turn({ type: 'done', ok: true }, 'turn2');
+    await flush();
+    await flush();
+    expect(t.conductor.mode()).toBe('idle');
+  });
+
+  it('goes idle on its own if the player never reports back', async () => {
+    vi.useFakeTimers();
+    try {
+      t.player.auto = false;
+      await t.conductor.onAudio(wav, 1_200);
+      t.turn({ type: 'say', text: 'Done.' });
+      t.turn({ type: 'done', ok: true });
+      await vi.advanceTimersByTimeAsync(10);
+      expect(t.conductor.mode()).toBe('working');
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(t.conductor.mode()).toBe('idle');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('ignores slips of the key', async () => {

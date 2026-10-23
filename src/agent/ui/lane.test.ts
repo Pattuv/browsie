@@ -75,6 +75,20 @@ describe('runUiTask', () => {
     expect(String(second.messages.find((m) => m.role === 'tool')?.content)).toContain('Outlook');
   });
 
+  it('hands the page part of a request to the WEB lane instead of refusing it', async () => {
+    const t = setup(
+      [
+        ui({ commands: [{ type: 'tabs.open', url: 'ChatGPT Atlas' }] }),
+        ui({ finish: { summary: 'I opened a new tab and searched for ChatGPT Atlas.', handoff_to_page: 'Go to the Images tab' } }),
+      ],
+      [() => ok()],
+    );
+    expect(await t.run('open a new tab, search for ChatGPT Atlas and go to images')).toMatchObject({
+      ok: true,
+      handoff: { lane: 'WEB', goal: 'Go to the Images tab' },
+    });
+  });
+
   it('never sends a command outside the table to main', async () => {
     const t = setup([ui({ commands: [{ type: 'settings.open' }] }), ui({ finish: { summary: "I can't do that." } })]);
     await t.run('open settings');

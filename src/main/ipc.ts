@@ -2,7 +2,7 @@ import { BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from 'electron
 import { cancelSignIn, completeSetup, getAccountId, getSession, signIn, signOut } from './auth/session';
 import { removeWebData } from './browser/webSession';
 import { getData, updateData } from './data/localStore';
-import { removeAiKey, saveAiKey } from './data/aiKey';
+import { removeAiKey, replaceManagementKey, saveAiKey, updateAiCap } from './data/aiKey';
 import { clearAiUsageCache, getAiUsage } from './data/openRouterUsage';
 import { removeLibraryData } from './data/libraryPaths';
 import { getSyncStatus, uploadBeforeRemoving } from './data/syncEngine';
@@ -176,6 +176,26 @@ export const registerIpc = () => {
     const result = accountId ? await saveAiKey(accountId, key, cap) : 'unavailable';
 
     // A replaced key shows its own usage straight away, not the old key's cached figures.
+    if (result === 'saved') {
+      clearAiUsageCache();
+    }
+
+    return result;
+  });
+  handle('auth:update-ai-cap', async (_event, cap: unknown) => {
+    const accountId = getAccountId();
+    const result = accountId ? await updateAiCap(accountId, cap) : 'unavailable';
+
+    if (result === 'saved') {
+      clearAiUsageCache();
+    }
+
+    return result;
+  });
+  handle('auth:replace-management-key', async (_event, key: unknown, cap: unknown) => {
+    const accountId = getAccountId();
+    const result = accountId ? await replaceManagementKey(accountId, key, cap) : 'unavailable';
+
     if (result === 'saved') {
       clearAiUsageCache();
     }

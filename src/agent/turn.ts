@@ -1,6 +1,7 @@
 import type { AgentLane, TaskResult, TurnContext, TurnEvent, TurnLabel } from '../shared/agent/protocol';
 import { FALLBACKS, type FallbackId } from '../shared/agent/fallbacks';
 import type { PlannedTask } from '../shared/agent/tasks';
+import { isAdultContent } from '../shared/safety/contentPolicy';
 import { classify, type Llm } from './classifier';
 import { chat, help } from './lanes/talk';
 import { planTasks } from './orchestrator';
@@ -52,6 +53,14 @@ export const runTurn = async (turnId: string, transcript: string, context: TurnC
 
   try {
     const history = deps.session.recent(6);
+    // Refused before any model sees it. Main refuses the searches and pages too, whatever a lane tries.
+    if (isAdultContent(transcript)) {
+      label = 'RESTRICTED';
+      deps.emit({ type: 'routed', label, confidence: 1, tasks: [] });
+      sayClip('not_allowed');
+      deps.emit({ type: 'done', ok: true });
+      return;
+    }
     const classification = await classify(deps.llm, transcript, context, history);
     // There's no INFO lane yet, so email, calendar and Drive questions are done on the site itself:
     // open it if needed, then read it like any other page.

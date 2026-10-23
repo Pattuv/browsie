@@ -2,6 +2,8 @@ import { app, session, type WebContents } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { accountKey } from '../auth/accountKey';
+import { getData } from '../data/localStore';
+import { forceSafeSearch, safeSearchEnabled } from '../../shared/web/safeSearch';
 import { forgetGoogleLogin, setGoogleLoginPartition, watchGoogleLogin } from './googleWebLogin';
 import { isAllowed } from './sitePermissions';
 import { handleDownloads } from '../web/files';
@@ -23,6 +25,15 @@ const partitionFor = (accountId: string) => `persist:web-${accountKey(accountId)
 
 export const getWebPartition = () => webPartition;
 export const webSession = () => session.fromPartition(webPartition);
+
+// Read on each request, so turning the setting off takes effect without restarting.
+export const isSafeSearchOn = () => {
+  try {
+    return safeSearchEnabled(getData().settings);
+  } catch {
+    return true;
+  }
+};
 
 // Every website may use these. Fullscreen lets videos fill the screen; clipboard-sanitized-write
 // lets "copy" buttons work.
@@ -170,6 +181,28 @@ const configurePartition = (partition: string) => {
   handleDownloads(web, () => downloadsFolderFor(partition), (contents) => downloadPolicy.allow(contents), (contents, fileName) =>
     downloadPolicy.onStarted(contents, fileName),
   );
+
+  // SafeSearch is forced on the request itself, so a link, a redirect, or the agent can't drop it.
+  // Direct addresses are left alone: this only rewrites search engines' own result URLs.
+  web.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, (details, callback) => {
+    if (!isSafeSearchOn() || details.method !== 'GET') {
+      callback({});
+      return;
+    }
+
+    const redirectURL = forceSafeSearch(details.url);
+    callback(redirectURL ? { redirectURL } : {});
+  });
+  // YouTube's own lock. It applies to search and playback, which have no safe= parameter to rewrite.
+  web.webRequest.onBeforeSendHeaders({ urls: ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*'] }, (details, callback) => {
+    const requestHeaders = { ...details.requestHeaders };
+
+    if (isSafeSearchOn()) {
+      requestHeaders['YouTube-Restrict'] = 'Strict';
+    }
+
+    callback({ requestHeaders });
+  });
 };
 
 type DownloadPolicy = {

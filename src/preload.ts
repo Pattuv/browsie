@@ -13,6 +13,8 @@ const auth: BrowsieAuthAPI = {
   cancelSignIn: () => ipcRenderer.invoke("auth:cancel-sign-in"),
   completeSetup: () => ipcRenderer.invoke("auth:complete-setup"),
   saveAiKey: (key, cap) => ipcRenderer.invoke("auth:save-ai-key", key, cap),
+  updateAiCap: (cap) => ipcRenderer.invoke("auth:update-ai-cap", cap),
+  replaceManagementKey: (key, cap) => ipcRenderer.invoke("auth:replace-management-key", key, cap),
   signOut: (options) => ipcRenderer.invoke("auth:sign-out", options),
   onSessionChanged: (callback) => {
     // Pass only the session through; the raw IPC event would hand the page a handle to ipcRenderer.

@@ -11,7 +11,7 @@ Labels:
 
 When a website is open and the request could be about that page, choose WEB.
 
-Set "multi" to true when the request needs more than one step across labels or sites, for example "go to Amazon and add a blue mug to my cart" (open a site, then act on it), or when it's a WEB request but no website is open yet.
+Set "multi" to true when the request needs more than one step across labels or sites: anything that mixes browser control (new tab, go to a site, search) with doing something on the page afterwards (clicking a result, opening the Images tab, reading, filling in, buying). Examples: "go to Amazon and add a blue mug to my cart", "open a new tab, search for cats and go to images", "search for the weather and read me the forecast". Also set it when it's a WEB request but no website is open yet. For a request with several steps, label it by its last step (usually WEB).
 
 Reply with only a JSON object, nothing else: {"label": "UI", "confidence": 0.9, "multi": false}
 confidence is 0 to 1: how sure you are of the label.

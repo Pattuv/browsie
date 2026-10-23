@@ -14,16 +14,20 @@ export function useRecorder(live: boolean) {
     const chunks: Blob[] = [];
     const startedAt = performance.now();
 
+    let sent = false;
+    // Always answers main, even with nothing recorded (a quick tap), so the pill is released at once.
     const send = async () => {
+      if (sent) return;
+      sent = true;
       const durationMs = performance.now() - startedAt;
       stream?.getTracks().forEach((track) => track.stop());
-      if (chunks.length === 0) return;
+      let wav = new ArrayBuffer(0);
       try {
-        const wav = await recordingToWav(new Blob(chunks, { type: recorder?.mimeType || 'audio/webm' }));
-        await window.browsie?.voice.sendAudio(wav, durationMs);
+        if (chunks.length) wav = await recordingToWav(new Blob(chunks, { type: recorder?.mimeType || 'audio/webm' }));
       } catch {
-        // Undecodable or refused: nothing to send. Main says nothing for silence anyway.
+        // Undecodable: send nothing, which main treats as silence.
       }
+      await window.browsie?.voice.sendAudio(wav, durationMs).catch(() => undefined);
     };
 
     void navigator.mediaDevices
@@ -32,6 +36,7 @@ export function useRecorder(live: boolean) {
         stream = next;
         if (cancelled) {
           next.getTracks().forEach((track) => track.stop());
+          void send();
           return;
         }
         recorder = new MediaRecorder(next, { mimeType: 'audio/webm;codecs=opus' });
@@ -41,7 +46,8 @@ export function useRecorder(live: boolean) {
         recorder.onstop = () => void send();
         recorder.start();
       })
-      .catch(() => undefined);
+      // No mic: still tell main the press is over.
+      .catch(() => void send());
 
     return () => {
       cancelled = true;

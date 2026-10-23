@@ -127,6 +127,30 @@ describe('runTurn', () => {
     expect(parseClassification('{"label":"WEB","confidence":0.45}').label).toBe('UNCLEAR');
   });
 
+  it('runs a handed-off page step after the browser step, and says both', async () => {
+    const t = setup(
+      ['{"label":"UI","confidence":0.9,"multi":false}'],
+      [
+        result({ facts: ['I opened a new tab and searched for ChatGPT Atlas.'], handoff: { lane: 'WEB', goal: 'Go to the Images tab' } }),
+        result({ lane: 'WEB', facts: ['The Images tab is open.'] }),
+      ],
+    );
+    await t.run('open a new tab, search for ChatGPT Atlas and go to images');
+    expect((t.deps.runTask as ReturnType<typeof vi.fn>).mock.calls).toEqual([
+      ['UI', 'open a new tab, search for ChatGPT Atlas and go to images'],
+      ['WEB', 'Go to the Images tab'],
+    ]);
+    expect(t.said()).toEqual([{ type: 'say', text: 'I opened a new tab and searched for ChatGPT Atlas. The Images tab is open.' }]);
+  });
+
+  it('refuses adult requests before any model call', async () => {
+    const t = setup([]);
+    await t.run('search for naked girls');
+    expect(t.deps.llm).not.toHaveBeenCalled();
+    expect(t.deps.runTask).not.toHaveBeenCalled();
+    expect(t.said()).toEqual([{ type: 'say', clip: 'not_allowed' }]);
+  });
+
   it('names a missing key instead of a vague error', async () => {
     const t = setup([]);
     t.deps.llm = vi.fn(async () => {

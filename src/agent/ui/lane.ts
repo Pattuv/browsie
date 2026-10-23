@@ -76,7 +76,13 @@ export const UI_TOOL: ToolDef = {
         finish: {
           type: 'object',
           required: ['summary'],
-          properties: { summary: { type: 'string', description: 'One short sentence, read aloud.' } },
+          properties: {
+            summary: { type: 'string', description: 'One short sentence, read aloud.' },
+            handoff_to_page: {
+              type: 'string',
+              description: 'What still has to be done on the web page itself (click, open the Images tab, read, fill in), for the page assistant. Leave out when nothing is left.',
+            },
+          },
         },
       },
     },
@@ -86,7 +92,7 @@ export const UI_TOOL: ToolDef = {
 const Call = z.union([
   z.object({ commands: z.array(z.unknown()).min(1).max(3) }),
   z.object({ ask_user: z.object({ question: z.string().min(1).max(300), options: z.array(z.string().min(1).max(100)).min(2).max(5).optional() }) }),
-  z.object({ finish: z.object({ summary: z.string().min(1).max(500) }) }),
+  z.object({ finish: z.object({ summary: z.string().min(1).max(500), handoff_to_page: z.string().trim().min(1).max(500).optional() }) }),
 ]);
 
 class Stopped extends Error {}
@@ -162,7 +168,11 @@ export const runUiTask = async (task: UiTask, deps: UiDeps): Promise<TaskResult>
       }
 
       if ('finish' in parsed.data) {
-        return end('finished', result(true, [parsed.data.finish.summary]));
+        const { summary, handoff_to_page: pageGoal } = parsed.data.finish;
+        const finished = result(true, [summary]);
+        // The page part goes to the WEB lane next, in the same turn.
+        if (pageGoal) finished.handoff = { lane: 'WEB', goal: pageGoal };
+        return end('finished', finished);
       }
 
       if ('ask_user' in parsed.data) {

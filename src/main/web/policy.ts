@@ -1,3 +1,4 @@
+import { ADULT_REFUSAL, isAdultContent } from '../../shared/safety/contentPolicy';
 import {
   type Action,
   type ActionError,
@@ -251,6 +252,10 @@ export const evaluate = (raw: unknown, ctx: PolicyContext): PolicyDecision => {
   if (snapshot) {
     const stale = checkFresh(action, snapshot);
     if (stale) return stale;
+  }
+
+  if ((action.type === 'goto' && isAdultContent(action.url)) || (action.type === 'type' && isAdultContent(action.text))) {
+    return refuse('blocked_by_policy', ADULT_REFUSAL, action);
   }
 
   if (action.type === 'goto') {

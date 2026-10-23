@@ -188,6 +188,15 @@ const setTalking = (held: boolean) => {
     restoreTalkFocus();
     // The recording is still on its way to a request. Leave the pill up until that settles.
     talkLatch = true;
+
+    if (talkLatchTimer) {
+      clearTimeout(talkLatchTimer);
+    }
+
+    talkLatchTimer = setTimeout(() => {
+      talkLatchTimer = null;
+      settleTalkLatch();
+    }, TALK_LATCH_TIMEOUT_MS);
     syncSpeechView();
   }
 
@@ -233,8 +242,15 @@ let spaceGate: (() => boolean) | null = null;
 // same keydown. Cleared on release, or shortly after, in case blocking the keydown drops the keyup.
 let spaceUsed = false;
 let spaceUsedTimer: ReturnType<typeof setTimeout> | null = null;
-// Space was let go and the recording hasn't been settled yet. Keeps the pill from sliding away.
+// Space was let go and the recording hasn't been settled yet. Keeps the pill from sliding away, and keeps
+// Space from opening the mic again until that recording is dealt with.
 let talkLatch = false;
+// If a recording never arrives (a tap too short to record anything), don't leave the pill up for good.
+const TALK_LATCH_TIMEOUT_MS = 8000;
+let talkLatchTimer: ReturnType<typeof setTimeout> | null = null;
+// After a press stops a request, Space does nothing for this long, so mashing it can't stop and then
+// immediately reopen the mic.
+const STOP_COOLDOWN_MS = 900;
 // A request is running, or Browsie is still speaking.
 let agentVisible = false;
 let speechShown = false;
@@ -328,6 +344,11 @@ export const setAgentVisible = (on: boolean) => {
 
 // The recording that held the pill open has been dealt with.
 export const settleTalkLatch = () => {
+  if (talkLatchTimer) {
+    clearTimeout(talkLatchTimer);
+    talkLatchTimer = null;
+  }
+
   if (!talkLatch) {
     return;
   }
@@ -575,11 +596,15 @@ const syncAgentFrame = (on: boolean) => {
     .executeJavaScript(`(() => {
       if (!document.getElementById('glow')) throw new Error('no frame');
       const root = document.documentElement;
-      if (${on}) requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add('on')));
+      // The fade-in waits two frames. Remember what's wanted, so an "off" that arrives in between wins
+      // instead of the late "on" turning the glow back on with nothing left to clear it.
+      window.__glowWanted = ${on};
+      if (${on}) requestAnimationFrame(() => requestAnimationFrame(() => { if (window.__glowWanted) root.classList.add('on'); }));
       else root.classList.remove('on');
     })()`)
     .catch(() => {
-      agentFrameOn = !on;
+      // Only undo our own state: a newer call may already have changed it.
+      if (agentFrameOn === on) agentFrameOn = !on;
     });
 };
 
@@ -629,6 +654,12 @@ const layout = () => {
 
 // Typed text → a safe web address. Real http(s) URLs pass through, things that look like a
 // domain get https:// added, and everything else (including file:, javascript:) is searched for.
+// For the agent's searches: Google's SafeSearch on, so results pages filter explicit content too.
+export const toSafeUrl = (input: unknown) => {
+  const url = toUrl(input);
+  return url.startsWith(SEARCH_URL) ? `${url}&safe=active` : url;
+};
+
 export const toUrl = (input: unknown) => {
   if (typeof input !== 'string') {
     throw new Error('Address must be text.');
@@ -1152,7 +1183,7 @@ export const navigateToWeb = (input: string) => {
   }
 
   endGoogleSignIn(tab, false);
-  load(tab, toUrl(input));
+  load(tab, toSafeUrl(input));
   layout();
   emit();
   return true;
@@ -1543,8 +1574,18 @@ export const handleTalkKey = (input: Input) => {
 
     // Stop comes before the cooldown. The cooldown is only there so the pill can't be opened again
     // the instant it's let go, and that must not swallow Space while a request can still be cut off.
-    if (!talking && !input.isAutoRepeat && spaceGate?.()) {
+    if (!talking && input.isAutoRepeat) {
+      return true;
+    }
+
+    // Mashing Space: one press at a time, with a short pause after each.
+    if (!talking && Date.now() < Math.max(talkCooldownUntil, talkReadyAt)) {
+      return true;
+    }
+
+    if (!talking && spaceGate?.()) {
       spaceUsed = true;
+      talkCooldownUntil = Date.now() + STOP_COOLDOWN_MS;
 
       if (spaceUsedTimer) {
         clearTimeout(spaceUsedTimer);
@@ -1560,7 +1601,8 @@ export const handleTalkKey = (input: Input) => {
 
     // Only a fresh press starts talking. A key held through the cooldown (or the launch wait) only
     // sends repeats, so it stays ignored until it's let go and pressed again.
-    if (!talking && (input.isAutoRepeat || Date.now() < Math.max(talkCooldownUntil, talkReadyAt))) {
+    // The last recording is still being heard. Wait for it, rather than stacking a second one on top.
+    if (!talking && talkLatch) {
       return true;
     }
 

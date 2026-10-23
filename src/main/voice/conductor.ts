@@ -59,6 +59,8 @@ export type ConductorDeps = {
 export const MIN_SPEECH_MS = 350;
 // At most one step phrase this often, so narration doesn't pile up behind the page.
 export const NARRATION_GAP_MS = 4_000;
+// The turn is over but the player never said the reply finished (a crash, a lost message). Go idle anyway.
+export const REPLY_IDLE_TIMEOUT_MS = 30_000;
 
 const VOLUME = { min: 0.4, max: 1.6, step: 0.2 };
 const RATE = { min: 0.8, max: 1.25, step: 0.1 };
@@ -138,9 +140,16 @@ export const createConductor = (deps: ConductorDeps) => {
     deps.pill?.(mode === 'working' || speaking() || transcribing);
   };
 
+  let deferTimer: ReturnType<typeof setTimeout> | undefined;
+  const clearDeferTimer = () => {
+    if (deferTimer) clearTimeout(deferTimer);
+    deferTimer = undefined;
+  };
+
   const maybeIdle = () => {
     if (deferIdle && mode === 'working' && !speaking()) {
       deferIdle = false;
+      clearDeferTimer();
       setMode('idle');
     }
   };
@@ -209,6 +218,16 @@ export const createConductor = (deps: ConductorDeps) => {
     }
   };
 
+  // Every stop of the player starts a new epoch here too. The player forgets what it was playing when it
+  // stops, so counting on from the old epoch would leave Browsie waiting on a reply that never ends.
+  const silence = () => {
+    playGen += 1;
+    cutSpeech();
+    deps.audio.stop();
+    syncPill();
+    maybeIdle();
+  };
+
   const say = (text: string) => {
     lastSaid = { text };
     return playText(text);
@@ -235,7 +254,7 @@ export const createConductor = (deps: ConductorDeps) => {
   const handleControl = async (command: NonNullable<ReturnType<typeof matchControl>>) => {
     switch (command) {
       case 'stop':
-        if (mode === 'idle') deps.audio.stop();
+        if (mode === 'idle') silence();
         else stop();
         return;
       case 'repeat':
@@ -307,8 +326,17 @@ export const createConductor = (deps: ConductorDeps) => {
         pending = undefined;
         // The reply is usually still being synthesized or played. Stay working until it's over,
         // so a Space press here cancels instead of bringing the pill back.
-        if (mode === 'working' && speaking()) deferIdle = true;
-        else if (mode === 'working') setMode('idle');
+        if (mode === 'working' && speaking()) {
+          deferIdle = true;
+          clearDeferTimer();
+          deferTimer = setTimeout(() => {
+            deferTimer = undefined;
+            if (!deferIdle || mode !== 'working') return;
+            log('reply never reported finished; going idle');
+            deferIdle = false;
+            setMode('idle');
+          }, REPLY_IDLE_TIMEOUT_MS);
+        } else if (mode === 'working') setMode('idle');
       }
     }
   });
@@ -357,7 +385,7 @@ export const createConductor = (deps: ConductorDeps) => {
         return true;
       }
       // Talking over Browsie cuts it off. In awaiting, that press is the answer, so the mic opens.
-      deps.audio.stop();
+      silence();
       return false;
     },
 
@@ -366,7 +394,8 @@ export const createConductor = (deps: ConductorDeps) => {
       const mine = ++listenGen;
       try {
         log(`recording ${Math.round(durationMs)}ms, ${wav.byteLength} bytes`);
-        if (durationMs < MIN_SPEECH_MS) return;
+        // A slip of the key, or nothing recorded.
+        if (durationMs < MIN_SPEECH_MS || wav.byteLength === 0) return;
 
         transcribing = true;
         syncPill();

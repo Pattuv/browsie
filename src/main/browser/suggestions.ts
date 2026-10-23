@@ -1,5 +1,5 @@
 import { session } from 'electron';
-import { webSession, isWebUrl } from './webSession';
+import { isSafeSearchOn, isWebUrl, webSession } from './webSession';
 
 // The same request Chrome's own address bar makes, so we get site titles and entity details too.
 const ENDPOINT = 'https://suggestqueries.google.com/complete/search?client=chrome-omni&gs_ri=chrome-ext-ansg&q=';
@@ -230,7 +230,8 @@ export const getSuggestions = async (input: unknown): Promise<Suggestion[]> => {
   }
 
   try {
-    const response = await suggestSession().fetch(ENDPOINT + encodeURIComponent(query), {
+    const safe = isSafeSearchOn() ? '&safe=active' : '';
+    const response = await suggestSession().fetch(ENDPOINT + encodeURIComponent(query) + safe, {
       credentials: 'omit',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });

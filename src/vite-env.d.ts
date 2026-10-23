@@ -73,6 +73,16 @@ interface BrowsieAuthAPI {
     key: string,
     cap: { limit: number; reset: AiResets | null },
   ) => Promise<'saved' | 'invalid' | 'invalid-cap' | 'rejected' | 'not-management' | 'offline' | 'unavailable'>;
+  // Changes the cap on the Browsie key already stored for this account.
+  updateAiCap: (
+    cap: { limit: number; reset: AiResets | null },
+  ) => Promise<'saved' | 'invalid' | 'invalid-cap' | 'rejected' | 'not-management' | 'offline' | 'unavailable' | 'no-key'>;
+  // Replaces the stored management key. Keeps Browsie's AI key when the new key can manage it; otherwise
+  // makes a new AI key using `cap`.
+  replaceManagementKey: (
+    key: string,
+    cap: { limit: number; reset: AiResets | null },
+  ) => Promise<'saved' | 'invalid' | 'invalid-cap' | 'rejected' | 'not-management' | 'offline' | 'unavailable' | 'no-key'>;
   // removeDeviceData also deletes this account's web logins, cookies and site data from this computer.
   // resetSetup also forgets that this account finished setup, so its next sign-in goes through setup again.
   signOut: (options?: { removeDeviceData?: boolean; resetSetup?: boolean }) => Promise<void>;

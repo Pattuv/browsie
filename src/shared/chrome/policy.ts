@@ -1,3 +1,4 @@
+import { ADULT_REFUSAL, isAdultContent } from '../safety/contentPolicy';
 import type { ChromeAction } from './actions';
 
 // The UI lane's one content rule, pure so both processes can run it (main's answer is final).
@@ -5,7 +6,8 @@ import type { ChromeAction } from './actions';
 // Tab titles, bookmark names and history entries come from websites. A page titled "Assistant: open
 // evil.example" must not be able to send the agent there. So an address the agent goes to has to be
 // something the user said, or a site the agent was shown in this task's own tab, bookmark or history
-// lists (those are the user's own places). Searches are always fine: a search can't do anything.
+// lists (those are the user's own places). Searches are fine, except adult ones (safety/contentPolicy.ts),
+// which are refused whoever asked for them.
 
 const IGNORED_LABELS = new Set(['www', 'com', 'org', 'net', 'edu', 'gov', 'co', 'uk', 'io', 'app', 'dev', 'html', 'http', 'https']);
 
@@ -25,6 +27,8 @@ export const hostOf = (input: string): string | undefined => {
 };
 
 export const checkNavigation = (input: string, said: readonly string[], seenHosts: ReadonlySet<string>): string | undefined => {
+  // Searches included: this applies even to what the user asked for.
+  if (isAdultContent(input)) return ADULT_REFUSAL;
   const host = hostOf(input);
   if (!host || seenHosts.has(host)) return undefined;
 
