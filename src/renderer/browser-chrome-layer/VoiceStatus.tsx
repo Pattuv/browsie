@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 // an answer. Hidden when idle. Announced to screen readers as it changes.
 
 const LABELS: Record<Exclude<VoiceMode, 'idle'>, string> = {
-  working: 'Working… press Space to stop',
-  awaiting: 'Waiting for your answer: hold Space to talk',
+  working: 'Space bar to stop agent',
+  awaiting: 'Hold Space to answer',
 };
 
 function VoiceStatus() {
@@ -16,8 +16,8 @@ function VoiceStatus() {
   return (
     <span role="status" aria-live="polite" className="flex items-center">
       {mode !== 'idle' && (
-        <span className="mr-1 flex h-7 items-center gap-2 rounded-full bg-[#9572FF]/10 px-3 text-xs font-medium text-[#6b4fd8]">
-          <span className={`h-1.5 w-1.5 rounded-full bg-[#9572FF] ${mode === 'working' ? 'animate-pulse' : ''}`} aria-hidden="true" />
+        <span className="mr-1 flex h-7 items-center gap-2 rounded-full bg-black/10 px-3 text-xs font-medium tracking-tight text-zinc-600">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#9572FF]" aria-hidden="true" />
           {LABELS[mode]}
         </span>
       )}

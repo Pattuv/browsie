@@ -30,7 +30,14 @@ const setup = (heard = 'open a new tab') => {
     transcribe: vi.fn(async () => heard),
     speak: vi.fn(async (text: string) => new TextEncoder().encode(text)),
   };
-  const audio = { play: vi.fn((item: AudioItem) => played.push(item)), stop: vi.fn(), setStyle: vi.fn() };
+  const audio = {
+    play: vi.fn((item: AudioItem, playedEpoch = 1) => {
+      played.push(item);
+      queueMicrotask(() => conductor.noteQuiet(playedEpoch, played.length));
+    }),
+    stop: vi.fn(),
+    setStyle: vi.fn(),
+  };
 
   const conductor = createConductor({
     host,
@@ -98,6 +105,20 @@ describe('conductor', () => {
     expect(t.spoken()).toEqual([]);
     expect(t.conductor.mode()).toBe('idle');
     // The next press talks.
+    expect(t.conductor.onSpacePress()).toBe(false);
+  });
+
+  it('keeps Space from opening the mic while a reply is still being said', async () => {
+    await t.conductor.onAudio(wav, 1_200);
+    t.turn({ type: 'say', text: 'I opened Gmail in a new tab.' });
+    t.turn({ type: 'done', ok: true });
+    // The turn is over, but the reply has not finished. Space only stops it.
+    expect(t.conductor.mode()).toBe('working');
+    expect(t.conductor.onSpacePress()).toBe(true);
+    expect(t.audio.stop).toHaveBeenCalled();
+    expect(t.conductor.mode()).toBe('idle');
+    await flush();
+    expect(t.spoken()).toEqual([]);
     expect(t.conductor.onSpacePress()).toBe(false);
   });
 

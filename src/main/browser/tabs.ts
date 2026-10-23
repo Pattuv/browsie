@@ -10,6 +10,8 @@ import {
   type WebContents,
   webContents as allContents,
 } from 'electron';
+import type { AgentCursor } from '../web/executor';
+import cursorImage from '../../renderer/assets/cursor.png?inline';
 import { getSession } from '../auth/session';
 import { bookmarkPage, listBookmarks, removeBookmark } from '../data/bookmarks';
 import { getData, updateData } from '../data/localStore';
@@ -178,9 +180,15 @@ const setTalking = (held: boolean) => {
   }
 
   if (held) {
-    showSpeechPill();
+    talkLatch = false;
+    revealSpeechView(true);
+    notifySpeechHeld(true);
   } else {
-    hideSpeechPill();
+    notifySpeechHeld(false);
+    restoreTalkFocus();
+    // The recording is still on its way to a request. Leave the pill up until that settles.
+    talkLatch = true;
+    syncSpeechView();
   }
 
   emit();
@@ -193,7 +201,8 @@ export const isTalking = () => talking;
 // page view and only covers its own rectangle, so the page underneath does not move.
 // The view is a transparent slot that runs from the pill's resting spot down to the window's bottom
 // edge. The pill slides up and down inside it with CSS, so the view itself never moves while shown.
-const PILL_WIDTH = 104;
+// The pill grows while it says "Working…", so the view is the wide size and the pill centers inside it.
+const PILL_SLOT_WIDTH = 240;
 const PILL_HEIGHT = 48;
 // Margin around the pill inside its view.
 const PILL_PAD = 8;
@@ -224,6 +233,11 @@ let spaceGate: (() => boolean) | null = null;
 // same keydown. Cleared on release, or shortly after, in case blocking the keydown drops the keyup.
 let spaceUsed = false;
 let spaceUsedTimer: ReturnType<typeof setTimeout> | null = null;
+// Space was let go and the recording hasn't been settled yet. Keeps the pill from sliding away.
+let talkLatch = false;
+// A request is running, or Browsie is still speaking.
+let agentVisible = false;
+let speechShown = false;
 
 export const setSpaceGate = (gate: (() => boolean) | null) => {
   spaceGate = gate;
@@ -242,11 +256,84 @@ const placeSpeechPill = () => {
   const [width, height] = host.getContentSize();
   const slotHeight = PILL_PAD + PILL_HEIGHT + PILL_BOTTOM;
   speechView.setBounds({
-    x: Math.round((width - PILL_WIDTH) / 2) - PILL_PAD,
+    x: Math.round((width - PILL_SLOT_WIDTH) / 2),
     y: height - slotHeight,
-    width: PILL_WIDTH + PILL_PAD * 2,
+    width: PILL_SLOT_WIDTH,
     height: slotHeight,
   });
+};
+
+const speechOpen = () => talking || talkLatch || agentVisible;
+
+const publishSpeechPill = () => {
+  const contents = speechView?.webContents;
+
+  if (!contents || contents.isDestroyed()) {
+    return;
+  }
+
+  contents.send('voice:pill', speechOpen());
+};
+
+const restoreTalkFocus = () => {
+  if (focusBeforeTalk && !focusBeforeTalk.isDestroyed()) {
+    focusBeforeTalk.focus();
+  }
+
+  focusBeforeTalk = null;
+};
+
+// Shows the view. Focus moves to it only for a hold, so the keyup isn't lost. An agent pill leaves
+// focus where it was: Space still stops the request, and the page stays usable.
+const revealSpeechView = (focus: boolean) => {
+  if (!host || host.isDestroyed() || !speechView) {
+    return;
+  }
+
+  speechShown = true;
+  speechGeneration += 1;
+  raiseSpeechPill();
+  placeSpeechPill();
+  speechView.setVisible(true);
+  publishSpeechPill();
+
+  if (!focus) {
+    return;
+  }
+
+  const focused = allContents.getFocusedWebContents();
+  focusBeforeTalk = focused && focused !== speechView.webContents ? focused : focusBeforeTalk;
+  speechView.webContents.focus();
+};
+
+const syncSpeechView = () => {
+  if (speechOpen()) {
+    revealSpeechView(false);
+    return;
+  }
+
+  hideSpeechPill();
+};
+
+// The voice layer: true while a request is in progress or a reply is still playing.
+export const setAgentVisible = (on: boolean) => {
+  if (agentVisible === on) {
+    publishSpeechPill();
+    return;
+  }
+
+  agentVisible = on;
+  syncSpeechView();
+};
+
+// The recording that held the pill open has been dealt with.
+export const settleTalkLatch = () => {
+  if (!talkLatch) {
+    return;
+  }
+
+  talkLatch = false;
+  syncSpeechView();
 };
 
 // Adding a view that is already a child moves it to the top. Page views are created after this one.
@@ -269,41 +356,21 @@ const notifySpeechHeld = (held: boolean) => {
   contents.send('speech:held', held, getSystemVolumeDb());
 };
 
-// The view shows first, then the pill slides up inside it.
-const showSpeechPill = () => {
-  if (!host || host.isDestroyed() || !speechView) {
-    return;
-  }
-
-  speechGeneration += 1;
-  raiseSpeechPill();
-  placeSpeechPill();
-  speechView.setVisible(true);
-  notifySpeechHeld(true);
-
-  const focused = allContents.getFocusedWebContents();
-  focusBeforeTalk = focused && focused !== speechView.webContents ? focused : null;
-  speechView.webContents.focus();
-};
-
 // The pill slides down first, then the view hides. Pressing again mid-slide keeps it shown.
 const hideSpeechPill = () => {
   const generation = ++speechGeneration;
-  notifySpeechHeld(false);
+  speechShown = false;
+  publishSpeechPill();
 
   if (talkWatchdog) {
     clearTimeout(talkWatchdog);
     talkWatchdog = null;
   }
 
-  if (focusBeforeTalk && !focusBeforeTalk.isDestroyed()) {
-    focusBeforeTalk.focus();
-  }
-
-  focusBeforeTalk = null;
+  restoreTalkFocus();
 
   setTimeout(() => {
-    if (generation !== speechGeneration || talking) {
+    if (generation !== speechGeneration || speechOpen()) {
       return;
     }
 
@@ -326,20 +393,139 @@ export const attachSpeechOverlay = (view: WebContentsView) => {
   placeSpeechPill();
 };
 
+// Two corners of the page light up (top-left and bottom-right), then the purple fades out along the edges.
+// The whole graphic fades in when a web task starts and out when it ends. The middle stays clear.
+// The cursor is the same layer, above the page. The image never takes clicks: opacity fades on its own,
+// and the inline style moves it with transform only, so the fade and the glide don't fight.
+const GLASS_FRAME = `<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;height:100%;background:transparent;overflow:hidden}
+svg{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity 560ms ease}
+html.on svg{opacity:1}
+#cursor{position:fixed;left:0;top:0;width:32px;height:32px;z-index:50;pointer-events:none;opacity:0;transform:translate3d(300px,300px,0)}
+.cursor-in{animation:cursor-in 350ms ease forwards}
+.cursor-out{animation:cursor-out 350ms ease forwards}
+@keyframes cursor-in{from{opacity:0}to{opacity:1}}
+@keyframes cursor-out{from{opacity:1}to{opacity:0}}
+</style></head><body><svg width="100%" height="100%">
+<defs>
+<linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#f3ebff" stop-opacity="1"/>
+<stop offset=".07" stop-color="#c9b6ff" stop-opacity=".9"/>
+<stop offset=".2" stop-color="#9572ff" stop-opacity="0"/>
+<stop offset=".8" stop-color="#7c5cff" stop-opacity="0"/>
+<stop offset=".93" stop-color="#b39cff" stop-opacity=".9"/>
+<stop offset="1" stop-color="#efe6ff" stop-opacity="1"/>
+</linearGradient>
+<filter id="glow" x="-12%" y="-12%" width="124%" height="124%"><feGaussianBlur stdDeviation="2.6"/></filter>
+</defs>
+<rect class="glow" fill="none" stroke="url(#g)" stroke-width="14" filter="url(#glow)" opacity=".85"/>
+<rect class="line" fill="none" stroke="url(#g)" stroke-width="2"/>
+</svg><script>
+function fit(){
+  var w=innerWidth,h=innerHeight,inset=10,r=18;
+  document.querySelectorAll('rect').forEach(function(rect){
+    rect.setAttribute('x',inset);
+    rect.setAttribute('y',inset);
+    rect.setAttribute('width',Math.max(0,w-inset*2));
+    rect.setAttribute('height',Math.max(0,h-inset*2));
+    rect.setAttribute('rx',r);
+    rect.setAttribute('ry',r);
+  });
+}
+addEventListener('resize',fit);
+fit();
+</script>
+<img id="cursor" alt="" draggable="false" src="${cursorImage}">
+<script>
+(function () {
+  var el = document.getElementById('cursor');
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var state = { x: 300, y: 300, visible: false, clicking: false, duration: 600, placed: false };
+  function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+  function paint() {
+    el.style.transition = 'transform ' + state.duration + 'ms cubic-bezier(0.3, 0.7, 0.25, 1)';
+    el.style.transform = 'translate3d(' + (state.x - 8) + 'px,' + (state.y - 5) + 'px,0) scale(' + (state.clicking ? 0.8 : 1) + ')';
+  }
+  window.browsieCursor = {
+    move: function (x, y, duration) {
+      var first = !state.placed;
+      var show = !state.visible;
+      state.x = x;
+      state.y = y;
+      state.duration = reduce || first ? 0 : duration;
+      state.clicking = false;
+      state.visible = true;
+      state.placed = true;
+      paint();
+      if (state.duration === 0) void el.offsetWidth;
+      if (show) {
+        el.classList.remove('cursor-out');
+        el.classList.remove('cursor-in');
+        void el.offsetWidth;
+        el.classList.add('cursor-in');
+      }
+      return sleep(state.duration + 40);
+    },
+    click: function () {
+      if (!state.visible || reduce) return;
+      state.clicking = true;
+      state.duration = 100;
+      paint();
+      return sleep(160).then(function () {
+        if (!state.visible) return;
+        state.clicking = false;
+        paint();
+        return sleep(120);
+      });
+    },
+    hide: function () {
+      if (!state.visible) return;
+      state.visible = false;
+      state.placed = false;
+      state.clicking = false;
+      paint();
+      el.classList.remove('cursor-in');
+      void el.offsetWidth;
+      el.classList.add('cursor-out');
+    }
+  };
+})();
+</script></body></html>`;
+
+const glassDocument = () => `data:text/html,${encodeURIComponent(GLASS_FRAME)}`;
+
 const createGlass = () => {
   const view = new WebContentsView({
-    webPreferences: { partition: 'browsie-glass', sandbox: true, contextIsolation: true, nodeIntegration: false, webviewTag: false },
+    webPreferences: {
+      partition: 'browsie-glass',
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      webviewTag: false,
+      backgroundThrottling: false,
+    },
   });
   view.setBackgroundColor('#00000000');
   view.setVisible(false);
-  view.webContents.loadURL('data:text/html,<html><body style="margin:0;background:transparent"></body></html>').catch(() => undefined);
+  view.webContents.loadURL(glassDocument()).catch(() => undefined);
+  view.webContents.on('did-finish-load', () => {
+    agentFrameOn = false;
+    layout();
+  });
   // Clicking the glass focuses it, so keys land here: only space (push-to-talk) does anything.
   view.webContents.on('before-input-event', (event, input) => {
     handleTalkKey(input);
     event.preventDefault();
   });
   view.webContents.on('context-menu', (event) => event.preventDefault());
-  view.webContents.on('will-navigate', (event) => event.preventDefault());
+  view.webContents.on('will-navigate', (event, url) => {
+    // loadURL of our own frame document must get through. Everything else stays put.
+    if (typeof url === 'string' && url.startsWith('data:')) {
+      return;
+    }
+
+    event.preventDefault();
+  });
   return view;
 };
 
@@ -356,6 +542,62 @@ const emit = () => {
   if (host && !host.isDestroyed()) {
     host.webContents.send('browser:state-changed', getBrowserState());
   }
+};
+
+// Page coordinates, already scaled into this view. The first placement snaps; later ones glide.
+const cursorCall = (expression: string) => {
+  const contents = glassView?.webContents;
+
+  if (!contents || contents.isDestroyed()) {
+    return Promise.resolve();
+  }
+
+  return contents
+    .executeJavaScript(`window.browsieCursor?.${expression}`)
+    .then(() => undefined)
+    .catch(() => undefined);
+};
+
+export const agentCursor: AgentCursor = {
+  move(x, y, durationMs = 600) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return Promise.resolve();
+    }
+
+    const ms = Number.isFinite(durationMs) ? Math.min(2000, Math.max(0, durationMs)) : 600;
+    return cursorCall(`move(${x}, ${y}, ${ms})`);
+  },
+  click() {
+    return cursorCall('click()');
+  },
+  hide() {
+    void cursorCall('hide()');
+  },
+};
+
+// Fades the stroke in when a web task is on screen, and back out when it leaves.
+let agentFrameOn = false;
+const syncAgentFrame = (on: boolean) => {
+  if (!glassView || glassView.webContents.isDestroyed() || on === agentFrameOn) {
+    return;
+  }
+
+  agentFrameOn = on;
+
+  if (!on) {
+    agentCursor.hide();
+  }
+
+  void glassView.webContents
+    .executeJavaScript(`(() => {
+      if (!document.querySelector('svg')) throw new Error('no frame');
+      const root = document.documentElement;
+      if (${on}) requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add('on')));
+      else root.classList.remove('on');
+    })()`)
+    .catch(() => {
+      agentFrameOn = !on;
+    });
 };
 
 // Puts every view where it belongs: only the active tab is visible, inside the page card,
@@ -399,6 +641,7 @@ const layout = () => {
   }
 
   placeSpeechPill();
+  syncAgentFrame(Boolean(lockdown && pageVisible && shown?.agentTaskId));
 };
 
 // Typed text → a safe web address. Real http(s) URLs pass through, things that look like a
@@ -683,7 +926,12 @@ const applyLockdown = (enabled: boolean) => {
   lockdown = enabled;
 
   if (!enabled) {
-    setTalking(false);
+    talking = false;
+    talkLatch = false;
+    agentVisible = false;
+    notifySpeechHeld(false);
+    hideSpeechPill();
+    emit();
   }
 
   layout();
@@ -1310,13 +1558,9 @@ export const handleTalkKey = (input: Input) => {
       return true;
     }
 
-    // Only a fresh press starts talking. A key held through the cooldown (or the launch wait) only
-    // sends repeats, so it stays ignored until it's let go and pressed again.
-    if (!talking && (input.isAutoRepeat || Date.now() < Math.max(talkCooldownUntil, talkReadyAt))) {
-      return true;
-    }
-
-    if (!talking && spaceGate?.()) {
+    // Stop comes before the cooldown. The cooldown is only there so the pill can't be opened again
+    // the instant it's let go, and that must not swallow Space while a request can still be cut off.
+    if (!talking && !input.isAutoRepeat && spaceGate?.()) {
       spaceUsed = true;
 
       if (spaceUsedTimer) {
@@ -1328,6 +1572,12 @@ export const handleTalkKey = (input: Input) => {
         spaceUsedTimer = null;
       }, 50);
 
+      return true;
+    }
+
+    // Only a fresh press starts talking. A key held through the cooldown (or the launch wait) only
+    // sends repeats, so it stays ignored until it's let go and pressed again.
+    if (!talking && (input.isAutoRepeat || Date.now() < Math.max(talkCooldownUntil, talkReadyAt))) {
       return true;
     }
 
@@ -1618,6 +1868,7 @@ export const leaseAgentTab = (taskId: string) => {
 
   tab.agentTaskId = taskId;
   emit();
+  layout();
   return tab.id;
 };
 
@@ -1629,6 +1880,7 @@ export const releaseAgentTab = (taskId: string) => {
   }
 
   emit();
+  layout();
 };
 
 // The only way the executor reaches a page: a leased tab's own website view. Never the chrome, a popup or

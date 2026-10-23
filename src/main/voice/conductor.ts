@@ -7,14 +7,14 @@ import type { SpeechApi, SpeechErrorCode } from './speechApi';
 // The voice side of main: what Space does, what happens to what the user said, and what Browsie says.
 // Main owns this, so Space stops a task even when the agent process is busy or stuck.
 //
-//   idle ──(Space held, released, transcribed)──► working ──(turn done)──► idle
+//   idle ──(Space held, released, transcribed)──► working ──(turn done, and the reply has finished)──► idle
 //                                                   │  ▲
 //                         (ask_user / confirm / help)  (answer given)
 //                                                   ▼  │
 //                                                awaiting
 //
-// In working, pressing Space stops the task at once and says nothing (no pill, no cue). In awaiting,
-// Space is hold-to-talk so the user can answer; "stop" or "cancel" there stops the task and says so.
+// Working lasts through the spoken reply. Space in that stretch only stops the task: no pill, no cue.
+// In awaiting, Space is hold-to-talk so the user can answer; "stop" or "cancel" there stops the task and says so.
 
 export type VoiceMode = 'idle' | 'working' | 'awaiting';
 
@@ -37,9 +37,18 @@ export type ConductorDeps = {
     onEvent(listener: (event: TaskEvent) => void): () => void;
   };
   speech: Pick<SpeechApi, 'transcribe' | 'speak'>;
-  audio: { play(item: AudioItem): void; stop(): void; setStyle(style: VoiceStyle): void };
+  audio: {
+    // epoch marks this stretch of speech. The player reports it back when that audio has finished.
+    play(item: AudioItem, epoch: number): void;
+    stop(): void;
+    setStyle(style: VoiceStyle): void;
+  };
   context(): TurnContext;
   status(mode: VoiceMode): void;
+  // The speech pill stays up while this is true (a request is running, or a reply is still playing).
+  pill?(visible: boolean): void;
+  // This recording has been dealt with, so a pill kept up for that press can close.
+  audioSettled?(): void;
   // Shipped recordings the speech view has, so their lines aren't synthesized.
   hasClip(id: FallbackId): boolean;
   now?: () => number;
@@ -98,48 +107,105 @@ export const createConductor = (deps: ConductorDeps) => {
   let quietStop = false;
   // Bumped on stop so speech that was already being made doesn't play afterwards.
   let playGen = 0;
+  // Speech still being made or played. Space while this is going on only stops it.
+  // epoch is handed to the player with each clip; a quiet report from an older epoch is ignored.
+  let epoch = 1;
+  let sent = 0;
+  let finished = 0;
+  let synthesizing = 0;
+  // A recording is being transcribed and has not become a turn yet. Space in that gap still cancels it.
+  let transcribing = false;
+  let listenGen = 0;
+  // The turn itself is over, but the reply is still being said. Stay "working" until it finishes,
+  // so Space keeps meaning "stop" instead of opening the mic.
+  let deferIdle = false;
   let pending: { taskId: string; kind: 'confirm' | 'ask' | 'help'; prompt: string } | undefined;
   let lastSaid: { text?: string; clip?: FallbackId } | undefined;
   let lastNarrationAt = 0;
   const style: VoiceStyle = { volume: 1, rate: 1 };
+  // Assigned once `speaking` exists. setMode runs only after that.
+  let syncPill = () => {};
 
   const setMode = (next: VoiceMode) => {
     if (next !== mode) log(`mode ${mode} → ${next}`);
     mode = next;
     deps.status(next);
+    syncPill();
+  };
+
+  const speaking = () => synthesizing > 0 || finished < sent;
+  syncPill = () => {
+    deps.pill?.(mode === 'working' || speaking() || transcribing);
+  };
+
+  const maybeIdle = () => {
+    if (deferIdle && mode === 'working' && !speaking()) {
+      deferIdle = false;
+      setMode('idle');
+    }
+  };
+
+  // Drops every clip already handed to the player. In-flight synthesis checks epoch and bails out.
+  const cutSpeech = () => {
+    epoch += 1;
+    sent = 0;
+    finished = 0;
+    synthesizing = 0;
+    deferIdle = false;
+  };
+
+  const handoff = (item: AudioItem, mine: number) => {
+    if (mine !== epoch) return;
+    sent += 1;
+    deps.audio.play(item, mine);
   };
 
   const playText = async (text: string, droppable = false) => {
     const gen = playGen;
+    const mine = epoch;
+    synthesizing += 1;
+    syncPill();
     log(`say${droppable ? ' (narration)' : ''}: ${JSON.stringify(text)}`);
     try {
       const data = await deps.speech.speak(text);
-      if (gen !== playGen) return;
+      if (gen !== playGen || mine !== epoch) return;
       log(`  speech ok, ${data.byteLength} bytes`);
-      deps.audio.play({ kind: 'mp3', data, droppable });
+      handoff({ kind: 'mp3', data, droppable }, mine);
     } catch (error) {
-      if (gen !== playGen) return;
+      if (gen !== playGen || mine !== epoch) return;
       log(`  speech FAILED: ${describeError(error)}${droppable ? '' : ' (falling back to the system voice)'}`);
-      if (!droppable) deps.audio.play({ kind: 'system', text });
+      if (!droppable) handoff({ kind: 'system', text }, mine);
+    } finally {
+      if (mine === epoch) synthesizing = Math.max(0, synthesizing - 1);
+      maybeIdle();
+      syncPill();
     }
   };
 
   const playClip = async (id: FallbackId) => {
     const gen = playGen;
+    const mine = epoch;
+    synthesizing += 1;
+    syncPill();
     lastSaid = { clip: id };
     log(`clip ${id}: ${JSON.stringify(FALLBACKS[id])}${deps.hasClip(id) ? ' (recording)' : ''}`);
-    if (deps.hasClip(id)) {
-      deps.audio.play({ kind: 'clip', id });
-      return;
-    }
     try {
+      if (deps.hasClip(id)) {
+        if (gen !== playGen || mine !== epoch) return;
+        handoff({ kind: 'clip', id }, mine);
+        return;
+      }
       const data = await deps.speech.speak(FALLBACKS[id]);
-      if (gen !== playGen) return;
-      deps.audio.play({ kind: 'clip', id, data });
+      if (gen !== playGen || mine !== epoch) return;
+      handoff({ kind: 'clip', id, data }, mine);
     } catch (error) {
-      if (gen !== playGen) return;
+      if (gen !== playGen || mine !== epoch) return;
       log(`  speech FAILED: ${describeError(error)} (falling back to the system voice)`);
-      deps.audio.play({ kind: 'system', text: FALLBACKS[id] });
+      handoff({ kind: 'system', text: FALLBACKS[id] }, mine);
+    } finally {
+      if (mine === epoch) synthesizing = Math.max(0, synthesizing - 1);
+      maybeIdle();
+      syncPill();
     }
   };
 
@@ -150,6 +216,9 @@ export const createConductor = (deps: ConductorDeps) => {
 
   const stop = (quiet = false) => {
     playGen += 1;
+    listenGen += 1;
+    transcribing = false;
+    cutSpeech();
     deps.audio.stop();
     pending = undefined;
     quietStop = quiet;
@@ -159,6 +228,7 @@ export const createConductor = (deps: ConductorDeps) => {
     }
     turnId = undefined;
     setMode('idle');
+    deps.audioSettled?.();
     if (!quiet) void playClip('stopped');
   };
 
@@ -235,7 +305,10 @@ export const createConductor = (deps: ConductorDeps) => {
       if (mine) {
         turnId = undefined;
         pending = undefined;
-        setMode('idle');
+        // The reply is usually still being synthesized or played. Stay working until it's over,
+        // so a Space press here cancels instead of bringing the pill back.
+        if (mode === 'working' && speaking()) deferIdle = true;
+        else if (mode === 'working') setMode('idle');
       }
     }
   });
@@ -270,53 +343,75 @@ export const createConductor = (deps: ConductorDeps) => {
     mode: () => mode,
 
     // Space pressed (a fresh press, not a repeat). True means it was used to stop, so don't open the mic.
+    // The player finished everything it was given for this epoch.
+    noteQuiet(playedEpoch: number, count: number) {
+      if (playedEpoch !== epoch) return;
+      finished = Math.max(finished, count);
+      maybeIdle();
+      syncPill();
+    },
+
     onSpacePress() {
-      if (mode === 'working') {
+      if (mode === 'working' || transcribing || (mode !== 'awaiting' && speaking())) {
         stop(true);
         return true;
       }
-      // Talking over Browsie cuts it off.
+      // Talking over Browsie cuts it off. In awaiting, that press is the answer, so the mic opens.
       deps.audio.stop();
       return false;
     },
 
     // What the speech view recorded while Space was held.
     async onAudio(wav: Uint8Array, durationMs: number) {
-      log(`recording ${Math.round(durationMs)}ms, ${wav.byteLength} bytes`);
-      if (durationMs < MIN_SPEECH_MS) return;
-
-      let text: string;
+      const mine = ++listenGen;
       try {
-        text = await deps.speech.transcribe(wav);
-        log(`heard: ${JSON.stringify(text)}`);
-      } catch (error) {
-        log(`transcription FAILED: ${describeError(error)}`);
-        const code = (error as { code?: SpeechErrorCode }).code;
-        await playClip(code ? ERROR_CLIPS[code] : 'error');
-        return;
+        log(`recording ${Math.round(durationMs)}ms, ${wav.byteLength} bytes`);
+        if (durationMs < MIN_SPEECH_MS) return;
+
+        transcribing = true;
+        syncPill();
+        let text: string;
+        try {
+          text = await deps.speech.transcribe(wav);
+          if (mine !== listenGen) return;
+          log(`heard: ${JSON.stringify(text)}`);
+        } catch (error) {
+          if (mine !== listenGen) return;
+          log(`transcription FAILED: ${describeError(error)}`);
+          const code = (error as { code?: SpeechErrorCode }).code;
+          await playClip(code ? ERROR_CLIPS[code] : 'error');
+          return;
+        }
+
+        if (mine !== listenGen) return;
+
+        if (!text) {
+          await playClip('didnt_catch');
+          return;
+        }
+
+        const control = matchControl(text);
+        if (control) {
+          await handleControl(control);
+          return;
+        }
+
+        if (mode === 'awaiting' && pending) {
+          await handleAnswer(text);
+          return;
+        }
+
+        // Space stops a working turn, so speech can't normally arrive mid-turn. If it does, it waits its turn.
+        if (mode === 'working') return;
+
+        setMode('working');
+        turnId = deps.host.startTurn(text, deps.context());
+      } finally {
+        if (mine !== listenGen) return;
+        transcribing = false;
+        syncPill();
+        deps.audioSettled?.();
       }
-
-      if (!text) {
-        await playClip('didnt_catch');
-        return;
-      }
-
-      const control = matchControl(text);
-      if (control) {
-        await handleControl(control);
-        return;
-      }
-
-      if (mode === 'awaiting' && pending) {
-        await handleAnswer(text);
-        return;
-      }
-
-      // Space stops a working turn, so speech can't normally arrive mid-turn. If it does, it waits its turn.
-      if (mode === 'working') return;
-
-      setMode('working');
-      turnId = deps.host.startTurn(text, deps.context());
     },
   };
 };

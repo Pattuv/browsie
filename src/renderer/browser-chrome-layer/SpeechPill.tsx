@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import mascot from "../assets/speechpillmascot.png";
+import { holdAudioAwake, playDictationSound, soundContext, startThinkingLoop, stopThinkingLoop } from "../sounds";
 import { useAuthStore } from "../stores/authStore";
-import { holdAudioAwake, playDictationSound, soundContext } from "../sounds";
+import { clearAgentSilence, useAgentPlayback } from "../voice-layer/agentPlayback";
 import { useRecorder } from "../voice-layer/useRecorder";
 import { useVoicePlayer } from "../voice-layer/useVoicePlayer";
 
@@ -44,95 +46,43 @@ const loudnessFromDb = (db: number) => {
   return x * x * (3 - 2 * x);
 };
 
-// The pill's outline: full corner radius with 100% corner smoothing (Figma's squircle math), so the
-// curve eases into the straight edges instead of meeting them at a hard tangent.
 const PILL_WIDTH = 104;
 const PILL_HEIGHT = 48;
 
-const squirclePath = (
-  width: number,
-  height: number,
-  radius: number,
-  smoothing: number,
-) => {
-  const budget = Math.min(width, height) / 2;
-  const r = Math.min(radius, budget);
-  const rad = (deg: number) => (deg * Math.PI) / 180;
-  const arcMeasure = 90 * (1 - smoothing);
-  const arc = Math.sin(rad(arcMeasure / 2)) * r * Math.SQRT2;
-  const alpha = (90 - arcMeasure) / 2;
-  const beta = 45 * smoothing;
-  const c = r * Math.tan(rad(alpha / 2)) * Math.cos(rad(beta));
-  const d = c * Math.tan(rad(beta));
-  let p = (1 + smoothing) * r;
-  let b = (p - arc - c - d) / 3;
-  let a = 2 * b;
-
-  // Not enough room for the full smoothing: keep its shape and shorten the lead-in instead.
-  if (p > budget) {
-    const room = budget - d - arc - c;
-    b = Math.min(b, room - room / 6);
-    a = room - b;
-    p = budget;
-  }
-
-  const ab = a + b;
-  const abc = a + b + c;
-  const bc = b + c;
-
-  return [
-    `M ${width - p} 0`,
-    `c ${a} 0 ${ab} 0 ${abc} ${d} a ${r} ${r} 0 0 1 ${arc} ${arc} c ${d} ${c} ${d} ${bc} ${d} ${abc}`,
-    `L ${width} ${height - p}`,
-    `c 0 ${a} 0 ${ab} ${-d} ${abc} a ${r} ${r} 0 0 1 ${-arc} ${arc} c ${-c} ${d} ${-bc} ${d} ${-abc} ${d}`,
-    `L ${p} ${height}`,
-    `c ${-a} 0 ${-ab} 0 ${-abc} ${-d} a ${r} ${r} 0 0 1 ${-arc} ${-arc} c ${-d} ${-c} ${-d} ${-bc} ${-d} ${-abc}`,
-    `L 0 ${p}`,
-    `c 0 ${-a} 0 ${-ab} ${d} ${-abc} a ${r} ${r} 0 0 1 ${arc} ${-arc} c ${c} ${-d} ${bc} ${-d} ${abc} ${-d}`,
-    "Z",
-  ].join(" ");
-};
-
-const PILL_PATH = squirclePath(PILL_WIDTH, PILL_HEIGHT, PILL_HEIGHT / 2, 1);
-const PILL_CLIP = `path('${PILL_PATH}')`;
-
-function Avatar({ pictureDataUrl }: { pictureDataUrl?: string }) {
-  if (pictureDataUrl) {
-    return (
-      <img
-        src={pictureDataUrl}
-        alt=""
-        className="h-8 w-8 shrink-0 rounded-full object-cover"
-      />
-    );
-  }
-
-  return (
-    <span className="flex h-8 w-8 shrink-0 items-end justify-center overflow-hidden rounded-full bg-zinc-300">
-      <i
-        className="bi bi-person-fill -mb-1 text-xl leading-none text-white"
-        aria-hidden="true"
-      />
-    </span>
-  );
-}
+// Listening and speaking stay the narrow capsule. "Working..." is wider, and the pill eases between them.
+const REST_WIDTH = PILL_WIDTH;
+const WORK_WIDTH = 150;
 
 // Bars follow the mic's loudness (RMS of the waveform), with most of each bar's height from its own
 // frequency band, so the shape changes with every syllable. Every bar moves on a critically damped
 // spring, and bars scale with transforms rather than height, so motion is sub-pixel smooth.
 // Time is in seconds per frame, so 120Hz displays don't race ahead of 60Hz ones.
-function SpeechBars({ live }: { live: boolean }) {
+function SpeechBars({
+  live,
+  source = "mic",
+}: {
+  live: boolean;
+  // mic: the user's hold. An analyser: Browsie's own voice. synth: the system voice, which can't be measured.
+  source?: AnalyserNode | "mic" | "synth";
+}) {
   const barsRef = useRef<Array<HTMLSpanElement | null>>([]);
 
   useEffect(() => {
     if (!live) {
+      barsRef.current.forEach((el) => {
+        if (el) {
+          el.style.transform = `scaleY(${BAR_MIN / BAR_MAX})`;
+        }
+      });
       return undefined;
     }
 
+    const external = source instanceof AnalyserNode ? source : null;
+    const synthetic = source === "synth";
     let stopped = false;
     let raf = 0;
     let stream: MediaStream | null = null;
-    let source: MediaStreamAudioSourceNode | null = null;
+    let micSource: MediaStreamAudioSourceNode | null = null;
     let analyser: AnalyserNode | null = null;
     let samples: Float32Array<ArrayBuffer> | null = null;
     let freq: Float32Array<ArrayBuffer> | null = null;
@@ -148,6 +98,17 @@ function SpeechBars({ live }: { live: boolean }) {
 
     const measure = (dt: number) => {
       goals.fill(0);
+
+      if (synthetic) {
+        const t = performance.now() / 1000;
+
+        for (let i = 0; i < BAR_COUNT; i++) {
+          const wave = 0.5 + 0.5 * Math.sin(t * (5.5 + i * 0.7) + i * 1.3);
+          goals[i] = 0.22 + 0.72 * wave * wave;
+        }
+
+        return;
+      }
 
       if (!analyser || !samples || !freq) {
         return;
@@ -244,8 +205,8 @@ function SpeechBars({ live }: { live: boolean }) {
       stream?.getTracks().forEach((track) => track.stop());
       stream = null;
       analyser = null;
-      source?.disconnect();
-      source = null;
+      micSource?.disconnect();
+      micSource = null;
     };
 
     const openMic = async () => {
@@ -271,8 +232,8 @@ function SpeechBars({ live }: { live: boolean }) {
         const node = audio.createAnalyser();
         node.fftSize = 1024;
         node.smoothingTimeConstant = 0.5;
-        source = audio.createMediaStreamSource(stream);
-        source.connect(node);
+        micSource = audio.createMediaStreamSource(stream);
+        micSource.connect(node);
         samples = new Float32Array(node.fftSize);
         freq = new Float32Array(node.frequencyBinCount);
 
@@ -297,15 +258,34 @@ function SpeechBars({ live }: { live: boolean }) {
       }
     };
 
+    const arm = (node: AnalyserNode) => {
+      samples = new Float32Array(node.fftSize);
+      freq = new Float32Array(node.frequencyBinCount);
+      const hzPerBin = node.context.sampleRate / node.fftSize;
+      const ratio = Math.pow(BAND_HIGH_HZ / BAND_LOW_HZ, 1 / BAR_COUNT);
+      bands = Array.from({ length: BAR_COUNT }, (_, i) => {
+        const start = Math.max(1, Math.floor((BAND_LOW_HZ * Math.pow(ratio, i)) / hzPerBin));
+        const end = Math.max(start + 1, Math.floor((BAND_LOW_HZ * Math.pow(ratio, i + 1)) / hzPerBin));
+        return [start, Math.min(end, node.frequencyBinCount)] as [number, number];
+      });
+      analyser = node;
+    };
+
+    if (external) {
+      arm(external);
+    }
+
     raf = requestAnimationFrame(tick);
-    void openMic();
+    if (!external && !synthetic) {
+      void openMic();
+    }
 
     return () => {
       stopped = true;
       cancelAnimationFrame(raf);
       stopMic();
     };
-  }, [live]);
+  }, [live, source]);
 
   return (
     <div
@@ -329,14 +309,52 @@ function SpeechBars({ live }: { live: boolean }) {
   );
 }
 
+function Profile({ pictureDataUrl }: { pictureDataUrl?: string }) {
+  if (pictureDataUrl) {
+    return (
+      <img
+        src={pictureDataUrl}
+        alt=""
+        className="h-8 w-8 shrink-0 rounded-full object-cover"
+      />
+    );
+  }
+
+  return (
+    <span className="flex h-8 w-8 shrink-0 items-end justify-center overflow-hidden rounded-full bg-[#d4d4d4]">
+      <i
+        className="bi bi-person-fill -mb-1 text-xl leading-none text-[#ffffff]"
+        aria-hidden="true"
+      />
+    </span>
+  );
+}
+
 /**
- * Push-to-talk pill. Main shows this view over every page while space is held. The view is a fixed
- * slot reaching down to the window's bottom edge: the pill slides up into it on press and back down
- * out of it on release, then main hides the view (its timing matches the slide-out here).
+ * The pill over the page. Space held: it slides up and the bars follow the mic. After release it
+ * stays while a request is running — "Working..." until Browsie speaks, then the same bars drawn
+ * from Browsie's voice — and slides away once that is finished.
  */
 function SpeechPill() {
   const pictureDataUrl = useAuthStore((state) => state.pictureDataUrl);
+  const deviceVolumeDbRef = useRef(-10);
+  const [thinkingFlash, setThinkingFlash] = useState(0);
   const [live, setLive] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  // Release should not drop the pill in the gap before main says the request is underway.
+  const [sticky, setSticky] = useState(false);
+  const playback = useAgentPlayback();
+  const present = live || pinned || sticky;
+  // Space cutting the agent off is the resting bars: no words, no sound.
+  const face = live
+    ? "listen"
+    : playback.speaking
+      ? "speak"
+      : playback.silenced
+        ? "quiet"
+        : pinned || sticky
+          ? "work"
+          : "quiet";
   // This view also records what's said while Space is held, and plays Browsie's voice.
   useRecorder(live);
   useVoicePlayer();
@@ -371,11 +389,29 @@ function SpeechPill() {
     // Only for these events: the pill opening while space is already held (below) stays quiet.
     const stop = browsie?.onSpeechHeld((held, deviceVolumeDb) => {
       heard = true;
+      deviceVolumeDbRef.current = deviceVolumeDb;
 
-      if (current) {
-        playDictationSound(held ? "start" : "end", deviceVolumeDb);
-        holdAudioAwake(held);
-        follow(held);
+      if (!current) {
+        return;
+      }
+
+      playDictationSound(held ? "start" : "end", deviceVolumeDb);
+      holdAudioAwake(held);
+      if (!held) {
+        setSticky(true);
+      }
+      follow(held);
+    });
+    const stopPill = browsie?.voice.onPill((visible) => {
+      if (!current) {
+        return;
+      }
+
+      setPinned(visible);
+      if (visible) {
+        clearAgentSilence();
+      } else {
+        setSticky(false);
       }
     });
 
@@ -389,38 +425,61 @@ function SpeechPill() {
       current = false;
       cancelAnimationFrame(raf);
       stop?.();
+      stopPill?.();
     };
   }, []);
+
+  const working = face === "work";
+
+  useEffect(() => {
+    if (!working) {
+      stopThinkingLoop();
+      return;
+    }
+
+    startThinkingLoop(deviceVolumeDbRef.current, () => setThinkingFlash((flash) => flash + 1));
+    return stopThinkingLoop;
+  }, [working]);
+  const bars =
+    face === "listen" ? "mic" : face === "speak" ? playback.analyser ?? "synth" : "mic";
 
   return (
     <div className="relative h-full w-full overflow-hidden">
       <div
-        className={`absolute left-2 top-2 transition-transform will-change-transform ${
-          live
-            ? "translate-y-0 duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
-            : "translate-y-[100vh] duration-200 ease-[cubic-bezier(0.55,0,1,0.45)]"
-        }`}
+        className="absolute top-2 left-1/2 will-change-transform"
+        style={{
+          transform: `translateX(-50%) translateY(${present ? "0" : "100vh"})`,
+          transition: present
+            ? "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)"
+            : "transform 200ms cubic-bezier(0.55, 0, 1, 0.45)",
+        }}
       >
-        <div className="relative" style={{ width: PILL_WIDTH, height: PILL_HEIGHT }}>
-          <div
-            role="status"
-            aria-label="Listening"
-            className="flex h-full items-center bg-black pl-1.5"
-            style={{ clipPath: PILL_CLIP }}
-          >
-            <Avatar pictureDataUrl={pictureDataUrl} />
-            <SpeechBars live={live} />
-          </div>
-          {/* A hairline so the black pill still reads on a black page. */}
-          <svg
-            width={PILL_WIDTH}
-            height={PILL_HEIGHT}
-            overflow="visible"
-            className="pointer-events-none absolute inset-0"
-            aria-hidden="true"
-          >
-            <path d={PILL_PATH} fill="none" stroke="#4a4a4a" strokeWidth="1" />
-          </svg>
+        <div
+          role="status"
+          aria-label={working ? "Working" : face === "listen" ? "Listening" : face === "speak" ? "Speaking" : "Stopped"}
+          className="flex items-center overflow-hidden rounded-full bg-[#111111] pl-1.5 shadow-[inset_0_0_0_1px_#4a4a4a]"
+          style={{
+            width: working ? WORK_WIDTH : REST_WIDTH,
+            height: PILL_HEIGHT,
+            transition: "width 320ms cubic-bezier(0.22, 1, 0.36, 1)",
+          }}
+        >
+          {face === "listen" ? (
+            <Profile pictureDataUrl={pictureDataUrl} />
+          ) : (
+            <img
+              src={mascot}
+              alt=""
+              className="h-8 w-8 shrink-0 rounded-full bg-[#ffffff] object-contain p-[3px]"
+            />
+          )}
+          {working ? (
+            <span key={thinkingFlash} className="working-shimmer flex-1 pr-3 text-center text-[15px] font-medium tracking-tight">
+              Working...
+            </span>
+          ) : (
+            <SpeechBars live={present && face !== "quiet"} source={bars} />
+          )}
         </div>
       </div>
     </div>

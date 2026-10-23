@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { setAgentPlayback } from './agentPlayback';
 
 // Plays what main says, one item at a time: synthesized speech, the fixed lines (their shipped
 // recordings when there are some), or the system voice when synthesis failed. Main stops it when Space
@@ -32,16 +33,29 @@ export function useVoicePlayer() {
     // "Louder" goes past the element's own maximum, so volume is a gain node.
     const context = new AudioContext();
     const gain = context.createGain();
-    context.createMediaElementSource(audio).connect(gain).connect(context.destination);
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.5;
+    context.createMediaElementSource(audio).connect(analyser).connect(gain).connect(context.destination);
     const style = { volume: 1, rate: 1 };
     const log = (message: string) => void voice.log(message);
     const queue: VoicePlayItem[] = [];
     let playing = false;
     let objectUrl: string | null = null;
+    // How many clips of the current epoch have finished. Main stays "working" until this catches up.
+    let epoch = 0;
+    let completed = 0;
+    let finishCurrent = () => {};
 
     const release = () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       objectUrl = null;
+    };
+
+    const reportQuiet = () => {
+      if (!playing && queue.length === 0 && completed > 0) {
+        void voice.reportQuiet(epoch, completed);
+      }
     };
 
     const next = () => {
@@ -49,19 +63,31 @@ export function useVoicePlayer() {
       const item = queue.shift();
       if (!item) {
         playing = false;
+        finishCurrent = () => {};
+        setAgentPlayback(false, null, false);
+        reportQuiet();
         return;
       }
       playing = true;
+      setAgentPlayback(true, item.kind === 'system' ? null : analyser, false);
+      let settled = false;
+      // Once only: ending, failing, and the element error can all fire for the same clip.
+      finishCurrent = () => {
+        if (settled) return;
+        settled = true;
+        completed += 1;
+        next();
+      };
 
       if (item.kind === 'system') {
         const utterance = new SpeechSynthesisUtterance(item.text);
         utterance.rate = style.rate;
         utterance.volume = Math.min(1, style.volume);
         utterance.onstart = () => log(`system voice started (${speechSynthesis.getVoices().length} voices)`);
-        utterance.onend = next;
+        utterance.onend = finishCurrent;
         utterance.onerror = (event) => {
           log(`system voice FAILED: ${event.error}`);
-          next();
+          finishCurrent();
         };
         speechSynthesis.speak(utterance);
         return;
@@ -70,7 +96,7 @@ export function useVoicePlayer() {
       const shipped = item.kind === 'clip' ? clipUrl(item.id) : undefined;
       if (!shipped && !item.data) {
         log(`nothing to play for ${item.kind}`);
-        next();
+        finishCurrent();
         return;
       }
       if (shipped) {
@@ -87,32 +113,42 @@ export function useVoicePlayer() {
         .then(() => log(`playing ${item.kind}${shipped ? ' recording' : ` ${item.data?.byteLength ?? 0} bytes`}, audio context ${context.state}`))
         .catch((error) => {
           log(`play FAILED: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`);
-          next();
+          finishCurrent();
         });
     };
 
     audio.onended = () => {
       log('finished');
-      next();
+      finishCurrent();
     };
     audio.onerror = () => {
       log(`audio error ${audio.error?.code ?? '?'}: ${audio.error?.message ?? ''}`);
-      next();
+      finishCurrent();
     };
 
     const stopAll = () => {
       queue.length = 0;
+      finishCurrent = () => {};
       audio.pause();
       audio.removeAttribute('src');
       speechSynthesis.cancel();
       release();
       playing = false;
+      completed = 0;
+      setAgentPlayback(false, null, true);
     };
 
     const offPlay = voice.onPlay((item) => {
+      if (typeof item.epoch === 'number' && item.epoch !== epoch) {
+        epoch = item.epoch;
+        completed = 0;
+      }
       // A step phrase that would only start after the step is over isn't worth saying.
+      // It still counts as finished, or the request would stay "working" after the reply.
       if (item.kind === 'mp3' && item.droppable && (playing || queue.length > 0)) {
         log('dropped a narration line (still speaking)');
+        completed += 1;
+        reportQuiet();
         return;
       }
       queue.push(item);

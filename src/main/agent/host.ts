@@ -4,7 +4,7 @@ import { describe as describeChrome, parseChromeAction } from '../../shared/chro
 import { addressOf, checkNavigation } from '../../shared/chrome/policy';
 import { textForModel, type Snapshot } from '../web/snapshot';
 import { checkLimits, evaluate, evaluateBatch, grantFor, type ConfirmGrant, type PolicyContext } from '../web/policy';
-import { ElectronCdpExecutor, type Executor, type TabResolver } from '../web/executor';
+import { ElectronCdpExecutor, type AgentCursor, type Executor, type TabResolver } from '../web/executor';
 import { listUploadable, resolveUploadable } from '../web/files';
 import { TASK_SPEND_CAP_USD } from './config';
 import type { Broker } from './broker';
@@ -28,6 +28,8 @@ export type HostDeps = {
   downloadsFolder: () => string;
   // The browser-chrome commands the UI lane may run. Without it, UI tasks can't start.
   chrome?: ChromeApi;
+  // Drawn over the page while a web task clicks and moves. Tests omit it.
+  cursor?: AgentCursor;
   allowPrivateNetwork?: boolean;
   capUsd?: number;
   onTrace?: (taskId: string, event: TraceEvent) => void;
@@ -441,7 +443,7 @@ export const createAgentHost = (deps: HostDeps) => {
 
       let executor: Executor;
       try {
-        executor = await ElectronCdpExecutor.open(tabId, deps.resolveTab);
+        executor = await ElectronCdpExecutor.open(tabId, deps.resolveTab, deps.cursor);
       } catch (error) {
         deps.releaseTab(id);
         throw error;

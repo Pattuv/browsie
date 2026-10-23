@@ -355,10 +355,11 @@ type VoiceMode = 'idle' | 'working' | 'awaiting';
 
 // Something for the speech view to play: synthesized speech, a fixed line (its shipped recording if there
 // is one, else the audio given), or text for the system voice when synthesis failed.
-type VoicePlayItem =
+type VoicePlayItem = (
   | { kind: 'mp3'; data: Uint8Array; droppable?: boolean }
   | { kind: 'clip'; id: string; data?: Uint8Array }
-  | { kind: 'system'; text: string };
+  | { kind: 'system'; text: string }
+) & { epoch?: number };
 
 interface BrowsieVoiceAPI {
   // The speech view: what was recorded while Space was held, as 16 kHz mono WAV.
@@ -367,7 +368,11 @@ interface BrowsieVoiceAPI {
   reportClips: (ids: string[]) => Promise<void>;
   // Development diagnostics: what happened to each thing it was asked to play.
   log: (message: string) => Promise<void>;
+  // Everything handed over for this epoch has finished playing.
+  reportQuiet: (epoch: number, finished: number) => Promise<void>;
   onPlay: (callback: (item: VoicePlayItem) => void) => () => void;
+  // The speech pill: stay up while a request is running or a reply is still playing.
+  onPill: (callback: (visible: boolean) => void) => () => void;
   onStop: (callback: () => void) => () => void;
   onStyle: (callback: (style: { volume: number; rate: number }) => void) => () => void;
   // The chrome: for the "Working… press Space to stop" status.

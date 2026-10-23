@@ -1,7 +1,7 @@
 import { app } from 'electron';
 import path from 'node:path';
 import { getAccountId } from '../auth/session';
-import { agentTabContents, isAgentContents, leaseAgentTab, releaseAgentTab } from '../browser/tabs';
+import { agentCursor, agentTabContents, isAgentContents, leaseAgentTab, releaseAgentTab } from '../browser/tabs';
 import { getDownloadsFolder, setDownloadPolicy } from '../browser/webSession';
 import { readAiKey } from '../data/aiKey';
 import { createBroker } from './broker';
@@ -34,6 +34,7 @@ export const getAgentHost = () => {
     releaseTab: releaseAgentTab,
     downloadsFolder: getDownloadsFolder,
     chrome: createChromeApi(chromeOperations),
+    cursor: agentCursor,
   });
 
   // Only the tab the agent is working on may download, and the task hears about it.

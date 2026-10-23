@@ -164,6 +164,7 @@ contextBridge.exposeInMainWorld("browsie", {
     sendAudio: (wav: ArrayBuffer, durationMs: number) => ipcRenderer.invoke("voice:audio", wav, durationMs),
     reportClips: (ids: string[]) => ipcRenderer.invoke("voice:clips", ids),
     log: (message: string) => ipcRenderer.invoke("voice:log", message),
+    reportQuiet: (epoch: number, finished: number) => ipcRenderer.invoke("voice:quiet", epoch, finished),
     onPlay: (callback: (item: VoicePlayItem) => void) => {
       const listener = (_event: IpcRendererEvent, item: VoicePlayItem) => callback(item);
       ipcRenderer.on("voice:play", listener);
@@ -173,6 +174,11 @@ contextBridge.exposeInMainWorld("browsie", {
       const listener = () => callback();
       ipcRenderer.on("voice:stop", listener);
       return () => ipcRenderer.removeListener("voice:stop", listener);
+    },
+    onPill: (callback: (visible: boolean) => void) => {
+      const listener = (_event: IpcRendererEvent, visible: boolean) => callback(visible === true);
+      ipcRenderer.on("voice:pill", listener);
+      return () => ipcRenderer.removeListener("voice:pill", listener);
     },
     onStyle: (callback: (style: { volume: number; rate: number }) => void) => {
       const listener = (_event: IpcRendererEvent, style: { volume: number; rate: number }) => callback(style);

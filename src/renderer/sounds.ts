@@ -3,6 +3,7 @@ import clickLight from './assets/sounds/clicklight.wav?inline';
 import startupSound from './assets/sounds/browsiestartupsound.wav?inline';
 import dictationStart from './assets/sounds/dictationstart.mp3?inline';
 import dictationEnd from './assets/sounds/dictationend.mp3?inline';
+import thinkingSound from './assets/sounds/browsiethinking.mp3?inline';
 
 // One long-lived context with pre-decoded buffers. <audio> elements let the output device go idle,
 // so the first click after a pause lagged while it woke back up. A running context keeps it open.
@@ -118,6 +119,70 @@ export const dictationGain = (deviceVolumeDb: number) =>
 
 export const playDictationSound = (kind: keyof typeof DICTATION_SOUNDS, deviceVolumeDb: number) =>
   play(DICTATION_SOUNDS[kind], dictationGain(deviceVolumeDb));
+
+const THINKING_SOUND = decode(thinkingSound);
+// This source is quieter than the dictation clips, so normalize it before applying the same
+// device-volume compensation. Never exceed the file's normal full level.
+const THINKING_LEVEL = 20;
+const THINKING_GAP_MS = 500;
+let thinkingGen = 0;
+let thinking: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
+let thinkingTimer: ReturnType<typeof setTimeout> | null = null;
+
+export const startThinkingLoop = (deviceVolumeDb: number, onPlay?: () => void) => {
+  if (thinking) {
+    return;
+  }
+
+  const gen = ++thinkingGen;
+  wake();
+  void Promise.all([THINKING_SOUND, context.resume().catch(() => undefined)]).then(([buffer]) => {
+    if (gen !== thinkingGen || !buffer || thinking) {
+      return;
+    }
+
+    const level = context.createGain();
+    level.gain.value = Math.min(1, THINKING_LEVEL * dictationGain(deviceVolumeDb));
+    level.connect(context.destination);
+
+    const playNext = () => {
+      if (gen !== thinkingGen || !thinking) {
+        return;
+      }
+
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(level);
+      source.onended = () => {
+        source.disconnect();
+        if (gen === thinkingGen && thinking) {
+          thinkingTimer = setTimeout(() => {
+            thinkingTimer = null;
+            playNext();
+          }, THINKING_GAP_MS);
+        }
+      };
+      thinking = { source, gain: level };
+      source.start();
+      onPlay?.();
+    };
+
+    thinking = { source: context.createBufferSource(), gain: level };
+    playNext();
+  });
+};
+
+export const stopThinkingLoop = () => {
+  thinkingGen += 1;
+  if (thinkingTimer) {
+    clearTimeout(thinkingTimer);
+    thinkingTimer = null;
+  }
+  thinking?.source.stop();
+  thinking?.source.disconnect();
+  thinking?.gain.disconnect();
+  thinking = null;
+};
 
 // Keeps the output awake while the speech pill is up, and long enough after release for the end cue
 // to finish, so the cues never land on an output that's waking from sleep.

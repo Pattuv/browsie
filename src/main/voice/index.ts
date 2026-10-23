@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 import { getAccountId } from '../auth/session';
-import { getBrowserState, isSpeechViewContents, sendToChrome, sendToSpeechView, setSpaceGate } from '../browser/tabs';
+import { getBrowserState, isSpeechViewContents, sendToChrome, sendToSpeechView, setAgentVisible, setSpaceGate, settleTalkLatch } from '../browser/tabs';
 import { readAiKey } from '../data/aiKey';
 import { getAgentHost } from '../agent';
 import { FALLBACK_IDS, type FallbackId } from '../../shared/agent/fallbacks';
@@ -33,7 +33,7 @@ const getConductor = () => {
     host: getAgentHost(),
     speech,
     audio: {
-      play: (item) => sendToSpeechView('voice:play', item),
+      play: (item, epoch) => sendToSpeechView('voice:play', { ...item, epoch }),
       stop: () => sendToSpeechView('voice:stop'),
       setStyle: (style) => sendToSpeechView('voice:style', style),
     },
@@ -43,6 +43,8 @@ const getConductor = () => {
       return { site: active?.url ? hostOf(active.url) : undefined, tabCount: state.tabs.length };
     },
     status: (mode) => sendToChrome('voice:status', mode),
+    pill: (visible) => setAgentVisible(visible),
+    audioSettled: () => settleTalkLatch(),
     hasClip: (id) => clips.has(id),
     log: voiceLog,
   });
@@ -66,6 +68,14 @@ export const startVoice = () => {
   ipcMain.handle('voice:log', (event, message: unknown) => {
     if (!isSpeechViewContents(event.sender) || typeof message !== 'string') return;
     voiceLog(`  player: ${message.slice(0, 300)}`);
+  });
+
+  // The speech view finished the clips it was given. A reply can outlast the turn, and Space during it
+  // has to keep meaning "stop" rather than opening the mic.
+  ipcMain.handle('voice:quiet', (event, epoch: unknown, finished: unknown) => {
+    if (!isSpeechViewContents(event.sender)) return;
+    if (typeof epoch !== 'number' || typeof finished !== 'number') return;
+    conductor?.noteQuiet(epoch, finished);
   });
 
   ipcMain.handle('voice:clips', (event, ids: unknown) => {
