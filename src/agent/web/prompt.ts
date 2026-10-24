@@ -2,8 +2,7 @@ import type { ToolDef } from '../../shared/agent/llm';
 import type { Observation, Source } from '../../shared/agent/protocol';
 import { KEYS } from '../../shared/web/actions';
 
-// What the WEB lane's model is told. Stable text first, so it caches: the system prompt and the tool never
-// change between calls.
+//web lane system prompt and configuration
 
 export const SYSTEM_PROMPT = `You operate a web browser for someone who controls it by voice and may not be able to see the screen well. You act on one tab to get done exactly what they asked, and nothing else.
 
@@ -87,7 +86,7 @@ export const renderObservation = (observation: Observation) =>
     .filter(Boolean)
     .join('\n');
 
-// The first message of a conversation (and of a fresh one, when the history gets long).
+// first message of a conversation (and new when history gets long).
 export const renderStart = (
   goal: string,
   sources: readonly Source[],
