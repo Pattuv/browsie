@@ -5,8 +5,7 @@ import { GOOGLE_TOOL_NAMES, GOOGLE_TOOLS, type GoogleCallResult } from '../../sh
 import SYSTEM_PROMPT from './prompt.md?raw';
 
 // info lane: basis on which google tools can be called to provide user information.
-// Consists of a tool-calling loop where the model calls tools, reads the results,
-// and finishes with what to say.
+// Consists of a tool-calling loop where the model calls tools, reads the results, and finishes with what to say.
 
 export type InfoDeps = {
   llm(request: { tier: Tier; messages: ChatMessage[]; tools?: ToolDef[]; maxTokens?: number }): Promise<LlmResponse>;
@@ -25,7 +24,7 @@ const ESCALATE_AFTER = 2;
 const MAX_REPLY_TOKENS = 8_000;
 const MAX_RESULT_CHARS = 12_000;
 
-// error code for if agent doesn't have google access (see src/shared/agent/protocol.ts for all error codes)
+// error code for if agent doesn't have google access (see FAILURES in verbalEngine.ts)
 export const NEEDS_GOOGLE_ACCESS = 'needs_google_access';
 
 const toolDef = (name: string, description: string, input: z.ZodType): ToolDef => {
@@ -145,6 +144,7 @@ export const runInfoTask = async (task: InfoTask, deps: InfoDeps): Promise<TaskR
         checkStopped();
 
         // Main is reading the user a summary and waiting for yes or no.
+        // this is used for confirmation or anything else that requires further looking by the user.
         if (!outcome.ok && outcome.error === 'needs_user') {
           const answer = await deps.waitForAnswer();
           checkStopped();
@@ -185,7 +185,7 @@ export const runInfoTask = async (task: InfoTask, deps: InfoDeps): Promise<TaskR
   }
 };
 
-// Narration while it works ("Checking your calendar").
+// Narration for calendar reading and editing.
 const PHRASES: Record<string, string> = {
   gmail_search: 'Checking your email',
   gmail_read: 'Reading the email',

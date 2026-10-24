@@ -4,12 +4,11 @@ import type { ActResponse, Observation, Source, TaskEventBody, TaskResult } from
 import { type Action, type ActionResult, describe, parseBatch } from '../../shared/web/actions';
 import { ACT_TOOL, renderObservation, renderStart, SYSTEM_PROMPT } from './prompt';
 
-// The WEB lane: plan → observe → decide → check → act → verify, until the job is done, the user stops it,
-// or it gets stuck. Runs in the agent process. Everything it touches comes in through `deps`, so tests
-// drive it with a scripted model and a fake page.
-//
-// Main has the final say on every action. The checks here only catch mistakes early, so the model can
-// try again without a round trip.
+// WEB LANE - this is the biggest lane of all, this is responsible for interacting with webpages.
+// Rhe workflow is:plan → observe → decide → check → act → verify, until the job is done or the user stops it (using spacebar). 
+// Runs in the agent process.
+// All actions must be approved by the main process before they're taken. 
+// This layer catches obvious mistakes quickly, letting the model fix issues immediately instead of waiting for a full review.
 
 export type Answer = { text: string; sourceId?: string; confirmed?: boolean };
 
@@ -25,21 +24,21 @@ export type LoopDeps = {
   llm(request: { tier: Tier; messages: ChatMessage[]; tools?: ToolDef[]; maxTokens?: number }): Promise<LlmResponse>;
   web: WebPort;
   emit(event: TaskEventBody): void;
-  // Resolves with the user's next reply. Rejects when the task is stopped.
+  // Waits for the user's reply; throws error if the task is stopped.
   waitForAnswer(): Promise<Answer>;
   signal: AbortSignal;
 };
 
 export type WebTask = { taskId: string; goal: string; sources: Source[] };
 
-// Past this many characters of history, start a fresh conversation carrying the plan and progress.
+// after this many characters of history, start a new  conversation carrying the plan and progress.
 const HISTORY_LIMIT = 60_000;
-// Failed steps in a row before moving up to the stronger model, and before asking the user.
+// how many failed steps in a row before moving up to the stronger model (sonnet), and before asking the user.
 const ESCALATE_AFTER = 2;
 const ASK_AFTER = 4;
-// Times the loop may ask the user for help when stuck before giving up.
+// loop can only ask the user for help once before giving up.
 const MAX_STUCK_ASKS = 1;
-// Thinking counts against this too, so leave plenty: it's only billed for what's used.
+// // this includes thinking as well, only billed for what's used.
 const MAX_REPLY_TOKENS = 8_000;
 
 class Stopped extends Error {}
@@ -49,7 +48,6 @@ const NEEDS_SNAP = new Set(['click', 'type', 'press', 'select', 'scroll']);
 const withSnap = (raw: unknown, snap: number) => {
   if (typeof raw !== 'object' || raw === null) return raw;
   const action = raw as Record<string, unknown>;
-  // The model decided on the latest observation, so a missing snap means that one.
   return NEEDS_SNAP.has(String(action.type)) && action.snap === undefined ? { ...action, snap } : action;
 };
 
@@ -137,13 +135,13 @@ export const runWebTask = async (task: WebTask, deps: LoopDeps): Promise<TaskRes
     ...imageMessage(observation),
   ];
 
-  // Too much of the page has no names: look again, with a screenshot.
+  // if too much of the page lacks names then take a screenshot to get more info.
   const observe = async () => {
     const observation = await deps.web.observe(false);
     return observation.needsScreenshot ? deps.web.observe(true) : observation;
   };
 
-  // The page is asking for a file: the user picks one from Browsie's folder, never the model.
+  // The page is asking for a file: the user picks one from Browsie's folder, never the model. (WIP feature NOT DONE)
   const handleFileChooser = async (): Promise<string> => {
     const files = await deps.web.listFiles();
     if (files.length === 0) {
@@ -166,7 +164,6 @@ export const runWebTask = async (task: WebTask, deps: LoopDeps): Promise<TaskRes
       checkStopped();
       const tier: Tier = failures >= ESCALATE_AFTER ? 'escalate' : 'main';
 
-      // Stuck: ask the user once, then give up.
       if (failures >= ASK_AFTER) {
         if (stuckAsks >= MAX_STUCK_ASKS) {
           const failed = result(false, progress, "I couldn't get this to work.");

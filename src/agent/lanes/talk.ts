@@ -3,8 +3,7 @@ import CHAT_PROMPT from '../prompts/chat.md?raw';
 import HELP_PROMPT from '../prompts/help.md?raw';
 import { renderHistory, type TurnRecord } from '../sessionStore';
 
-// The CHAT and HELP lanes: one tool-free call each, answered aloud. HELP's prompt holds the Help Center
-// facts and is cached.
+// chat and help lanes: very light and tool-free so it can quickly answer user's questions.
 
 const HISTORY_TURNS = 6;
 
@@ -12,7 +11,7 @@ const ask = async (llm: Llm, prompt: string, tier: 'fast' | 'main', transcript: 
   const recent = history.slice(-HISTORY_TURNS);
   const reply = await llm({
     tier,
-    // Room for thinking as well as the short spoken answer.
+    // // this includes thinking as well, only billed for what's used. (not much for these)
     maxTokens: 3_000,
     messages: [
       { role: 'system', content: [{ type: 'text', text: prompt, cache_control: { type: 'ephemeral' } }] },

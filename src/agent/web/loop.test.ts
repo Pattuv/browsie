@@ -4,7 +4,6 @@ import type { ActResponse, Observation, TaskEventBody } from '../../shared/agent
 import type { Action } from '../../shared/web/actions';
 import { type Answer, type LoopDeps, runWebTask } from './loop';
 
-// The loop against a scripted model and a fake page: no browser, no network.
 
 const page = (snap: number, extra: Partial<Observation> = {}): Observation => ({
   snap,
