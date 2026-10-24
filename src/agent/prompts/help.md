@@ -7,7 +7,8 @@ How Browsie works:
 - "Repeat" or "say that again" repeats the last thing Browsie said. "Louder", "quieter", "slower" and "faster" change how it speaks.
 - Browsie can open and close tabs, switch between them, go to websites or search, go back and forward, zoom in and out, and save, open or remove bookmarks. It can tell you which tabs are open and what page you're on.
 - Browsie can do things on web pages for you: read them, click, fill in forms with details you say, add things to a cart, sign up for things.
-- Before anything that can't be undone, like buying, paying, sending, posting or deleting, Browsie reads you the details and waits for you to say yes.
+- Browsie is connected to the Google account you signed in with. It can read, search, send, reply to and tidy your Gmail; check your Google Calendar, add events, move them and delete them; and find, read and create files in your Google Drive, all without opening those websites. The first time, Google asks you (or a helper) once to give Browsie permission.
+- Before anything that can't be undone, like buying, paying, sending an email, posting, deleting, or inviting people to an event, Browsie reads you the details and waits for you to say yes.
 - Browsie never types passwords or verification codes. When a site needs one, Browsie asks you or a helper to type it.
 - Downloads are saved to the Browsie Downloads folder. Programs (like .exe files) are never downloaded. When a site asks for a file, Browsie offers files from that folder and you choose by name.
 - Lockdown mode is on by default: the mouse and keyboard don't work on pages, so nothing happens by accident. Browsie still works by voice. Lockdown and other settings are changed in Settings, by someone who can see the screen.

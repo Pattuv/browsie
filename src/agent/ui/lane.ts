@@ -4,9 +4,9 @@ import type { ChromeResponse, Source, TaskEventBody, TaskResult } from '../../sh
 import { type ChromeAction, describe, parseChromeAction } from '../../shared/chrome/actions';
 import SYSTEM_PROMPT from './prompt.md?raw';
 
-// The UI lane: drives the browser chrome through main's typed command table. No page access, no clicks on
-// the chrome's pixels. Usually one model call ("open a new tab"), a few when it has to look first
-// ("switch to my email tab" → tabs.list → tabs.switch).
+// ui lane: this controls the browser chrome through the command table in shared/chrome/actions.ts. It has no page access or real GUI interaction.
+// This is usually a one model call ("open a new tab"), sometimes multiple when it has to look  for information first
+// ex: ("switch to my email tab" → tabs.list → tabs.switch).
 
 export type UiDeps = {
   llm(request: { tier: Tier; messages: ChatMessage[]; tools?: ToolDef[]; maxTokens?: number }): Promise<LlmResponse>;
@@ -20,7 +20,7 @@ export type UiTask = { taskId: string; goal: string; sources: Source[] };
 
 const MAX_ROUNDS = 8;
 const ESCALATE_AFTER = 2;
-// Thinking counts against this too, so leave plenty: it's only billed for what's used.
+// this includes thinking as well, only billed for what's used.
 const MAX_REPLY_TOKENS = 6_000;
 
 const COMMANDS = [

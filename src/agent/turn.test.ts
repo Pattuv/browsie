@@ -113,11 +113,17 @@ describe('runTurn', () => {
     expect(t.deps.runTask).toHaveBeenCalledTimes(1);
   });
 
-  it('reads email on the site itself while there is no INFO lane', async () => {
-    const t = setup(['{"label":"INFO","confidence":0.9}'], [result({ lane: 'WEB', facts: ['Your first email is from Sam.'], untrusted: true })]);
-    await t.run('read out my first email', 'mail.google.com');
-    expect(t.deps.runTask).toHaveBeenCalledWith('WEB', 'read out my first email');
-    expect(t.said()).toEqual([{ type: 'say', text: 'Your first email is from Sam.' }]);
+  it('sends email, calendar and Drive requests to the INFO lane, site open or not', async () => {
+    const t = setup(['{"label":"INFO","confidence":0.9}'], [result({ lane: 'INFO', facts: ['You have 3 unread emails, the newest from Sam.'], untrusted: true })]);
+    await t.run('any new emails?');
+    expect(t.deps.runTask).toHaveBeenCalledWith('INFO', 'any new emails?');
+    expect(t.said()).toEqual([{ type: 'say', text: 'You have 3 unread emails, the newest from Sam.' }]);
+  });
+
+  it('asks for Google permission in plain words when it is missing', async () => {
+    const t = setup(['{"label":"INFO","confidence":0.9}'], [result({ lane: 'INFO', ok: false, error: 'needs_google_access' })]);
+    await t.run("what's on my calendar tomorrow?");
+    expect(t.said()[0]).toMatchObject({ type: 'say', text: expect.stringContaining("Google's permission page") });
   });
 
   it('accepts a less certain WEB label when a site is open', async () => {
@@ -149,6 +155,12 @@ describe('runTurn', () => {
     expect(t.deps.llm).not.toHaveBeenCalled();
     expect(t.deps.runTask).not.toHaveBeenCalled();
     expect(t.said()).toEqual([{ type: 'say', clip: 'not_allowed' }]);
+  });
+
+  it('names the Google service that is switched off', async () => {
+    const t = setup(['{"label":"INFO","confidence":0.9}'], [result({ lane: 'INFO', ok: false, error: "The Google Calendar API isn't turned on for Browsie's Google Cloud project. Enable it…" })]);
+    await t.run('check my calendar');
+    expect(t.said()[0]).toMatchObject({ text: expect.stringContaining("Google Calendar isn't switched on") });
   });
 
   it('names a missing key instead of a vague error', async () => {

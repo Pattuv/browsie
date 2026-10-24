@@ -2,6 +2,7 @@ import type { MessagePortMain } from 'electron';
 import type { AgentLane, AgentMessage, HostMessage, RpcMethod, RpcParams, RpcResults, TaskEventBody, TurnContext } from '../shared/agent/protocol';
 import { type Answer, runWebTask } from './web/loop';
 import { runUiTask } from './ui/lane';
+import { runInfoTask } from './info/lane';
 import { createSessionStore } from './sessionStore';
 import { runTurn } from './turn';
 
@@ -72,7 +73,20 @@ const start = (lane: AgentLane, taskId: string, turnId: string, goal: string, so
       },
     );
 
-  void (lane === 'UI' ? runUi() : runWeb()).finally(() => tasks.delete(taskId));
+  const runInfo = () =>
+    runInfoTask(
+      { taskId, goal, sources },
+      {
+        signal,
+        emit,
+        llm,
+        waitForAnswer,
+        context: () => call('google.context', { taskId }),
+        call: (tool, args) => call('google.call', { taskId, tool, args }),
+      },
+    );
+
+  void (lane === 'UI' ? runUi() : lane === 'INFO' ? runInfo() : runWeb()).finally(() => tasks.delete(taskId));
 };
 
 const startTurn = (turnId: string, transcript: string, context: TurnContext) => {

@@ -5,6 +5,11 @@ import type { TaskResult } from '../shared/agent/protocol';
 // (Step-by-step narration comes from main, which hears each step_started as it happens.)
 
 const FAILURES: [RegExp, string][] = [
+  [
+    /needs_google_access/,
+    "To use your Gmail, Google Calendar and Drive, Browsie needs your permission once. I've opened Google's permission page in your browser. When you've allowed it, ask me again.",
+  ],
+  [/API isn't turned on/i, "Your Google account is connected, but that Google service isn't switched on for Browsie yet, so I couldn't do it."],
   [/no web page|no website/i, "There's no web page open for me to work on."],
   [/declined/i, "OK, I didn't do it."],
   [/spending limit|over its limit|out of credit/i, 'I stopped because this task reached its spending limit.'],
@@ -13,8 +18,14 @@ const FAILURES: [RegExp, string][] = [
   [/key/i, "Browsie's AI key isn't working, so I couldn't do that."],
 ];
 
-const failureText = (error: string | undefined) =>
-  FAILURES.find(([pattern]) => error && pattern.test(error))?.[1] ?? "Sorry, I couldn't finish that.";
+// "The Google Calendar API isn't turned on…" → name the service, so whoever sets Browsie up knows which.
+const disabledService = (error: string) => /The (Gmail|Google Calendar|Google Drive) API isn't turned on/i.exec(error)?.[1];
+
+const failureText = (error: string | undefined) => {
+  const service = error ? disabledService(error) : undefined;
+  if (service) return `Your Google account is connected, but ${service} isn't switched on in Browsie's Google Cloud project yet, so I couldn't do that. Whoever set up Browsie can turn it on.`;
+  return FAILURES.find(([pattern]) => error && pattern.test(error))?.[1] ?? "Sorry, I couldn't finish that.";
+};
 
 const sentence = (text: string) => {
   const trimmed = text.trim();

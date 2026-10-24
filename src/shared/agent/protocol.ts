@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ActionError, ActionResult, ConfirmRequest } from '../web/actions';
 import type { FallbackId } from './fallbacks';
+import type { GoogleCallResult, GoogleService } from '../google/tools';
 import { LlmRequest, type LlmResponse } from './llm';
 
 // Everything that crosses the MessagePort between main and the agent utilityProcess.
@@ -12,7 +13,7 @@ import { LlmRequest, type LlmResponse } from './llm';
 export type Source = { id: string; text: string };
 
 // The lanes that run in the agent process. (CHAT, HELP and INFO arrive with the voice phase.)
-export type AgentLane = 'WEB' | 'UI';
+export type AgentLane = 'WEB' | 'UI' | 'INFO';
 
 export type TaskResult = {
   taskId: string;
@@ -105,7 +106,11 @@ export const RPC = {
   // One command from shared/chrome/actions.ts. Main parses it again.
   'chrome.execute': z.strictObject({ taskId, action: z.unknown() }),
   // A turn asks main to run one WEB or UI task and waits for its result. (taskId is the turn's id here.)
-  'turn.run_task': z.strictObject({ taskId, lane: z.enum(['WEB', 'UI']), goal: z.string().min(1).max(1_000) }),
+  'turn.run_task': z.strictObject({ taskId, lane: z.enum(['WEB', 'UI', 'INFO']), goal: z.string().min(1).max(1_000) }),
+  // INFO lane: who the account is, today's date and time zone, and which Google services Browsie may use.
+  'google.context': z.strictObject({ taskId }),
+  // INFO lane: one Gmail, Calendar or Drive tool (shared/google/tools.ts). Main parses it again.
+  'google.call': z.strictObject({ taskId, tool: z.string().min(1).max(64), args: z.unknown() }),
 } as const;
 
 export type RpcMethod = keyof typeof RPC;
@@ -119,6 +124,17 @@ export type RpcResults = {
   'files.choose': { ok: boolean; message?: string };
   'chrome.execute': ChromeResponse;
   'turn.run_task': TaskResult;
+  'google.context': GoogleContext;
+  'google.call': GoogleCallResult;
+};
+
+export type GoogleContext = {
+  email?: string;
+  // Now, as the user's wall clock reads it, e.g. "Friday, October 23, 2026, 9:12 PM".
+  now: string;
+  nowIso: string;
+  timeZone: string;
+  access: Record<GoogleService, boolean>;
 };
 
 export type RpcParams<M extends RpcMethod> = z.infer<(typeof RPC)[M]>;

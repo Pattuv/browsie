@@ -11,6 +11,7 @@ import DashboardTip from "../../components/DashboardTip";
 import ProfileMenu from "../../components/ProfileMenu";
 import SettingsDialog from "../../components/SettingsDialog";
 import { useAuthStore } from "../../stores/authStore";
+import { ConnectGoogleButton } from "./setup-pages/GoogleSetup";
 import { useDataStore } from "../../stores/dataStore";
 import { playClick } from "../../sounds";
 import Mascot from "../../components/Mascot";
@@ -148,6 +149,8 @@ function Dashboard() {
   const [showNotch, setShowNotch] = useState(false);
   const mode = useDataStore((state) => state.userMode);
   const firstName = useAuthStore((state) => state.firstName);
+  const googleServices = useAuthStore((state) => state.googleServices);
+  const googleMissing = Boolean(googleServices) && !Object.values(googleServices ?? {}).every(Boolean);
 
   useEffect(() => {
     let timers: ReturnType<typeof setTimeout>[] = [];
@@ -306,6 +309,10 @@ function Dashboard() {
           >
             Your AI navigation assistant is here.
           </p>
+        )}
+
+        {showRestLayout && googleMissing && (
+          <ConnectGoogleButton className={revealClass(shouldAnimate.current, showSubtitle)} />
         )}
 
         {showRestLayout && (

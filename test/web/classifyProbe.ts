@@ -5,11 +5,17 @@ import { classify } from '../../src/agent/classifier';
 // some come back UNCLEAR. Run through withAppKey (needs OPENROUTER_API_KEY).
 
 const SAMPLES: [string, string | undefined][] = [
-  ['Can you please open a new tab and search for ChatGPT Atlas and then go to images?', 'www.google.com'],
-  ['open a new tab, search for cats and open the first result', undefined],
-  ['What am I looking at right now?', 'mail.google.com'],
-  ['Um, read out the first three emails for me', 'mail.google.com'],
+  ["what's on my calendar tomorrow?", undefined],
+  ['am I free at 3?', 'www.youtube.com'],
+  ['create an event called Bro on the twenty-fourth of October', undefined],
+  ['any new emails?', undefined],
+  ['read out the first three emails', 'mail.google.com'],
+  ['reply to Sam and say I will be there', undefined],
+  ["what's in my storage?", undefined],
+  ['find my resume', undefined],
   ['open Gmail', undefined],
+  ['click the second email', 'mail.google.com'],
+  ['go to Amazon and add a blue mug to my cart', undefined],
 ];
 
 const main = async () => {

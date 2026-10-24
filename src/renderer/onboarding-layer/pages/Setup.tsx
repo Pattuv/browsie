@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Volume2, VolumeX } from "lucide-react";
+import { ArrowLeft, Volume2, VolumeX } from "lucide-react";
 import cloudGraphic from "../../assets/cloudgraphic.png";
 import {
   fadeOutSetupSoundtrack,
@@ -10,12 +10,15 @@ import Auth, { type Phase } from "./setup-pages/Auth";
 import AppearanceSetup from "./setup-pages/AppearanceSetup";
 import FinalConfirmation from "./setup-pages/FinalConfirmation";
 import KeySetup from "./setup-pages/KeySetup";
+import GoogleSetup from "./setup-pages/GoogleSetup";
 import SetupGuide from "./setup-pages/SetupGuide";
 
 // What the gate wants: signed out is always Auth; signed in but not set up runs the setup steps.
 export type SetupStep = "auth" | "setup";
 // The steps after Auth, in order. Setup walks these itself; the gate only knows "not set up yet".
-type SetupPage = "guide" | "key" | "appearance" | "done";
+type SetupPage = "guide" | "key" | "google" | "appearance" | "done";
+
+const SETUP_PAGES: SetupPage[] = ["guide", "key", "google", "appearance", "done"];
 
 type SetupProps = {
   // true: first-time install (white → hello → mascot → welcome, with the soundtrack).
@@ -48,6 +51,16 @@ function Setup({ playIntro, step }: SetupProps) {
     };
   }, []);
 
+  const goBack = () => {
+    if (page === "guide") {
+      void window.browsie?.auth.signOut();
+      return;
+    }
+
+    const index = SETUP_PAGES.indexOf(page);
+    setPage(SETUP_PAGES[index - 1]);
+  };
+
   const toggleSoundtrack = () => {
     const audio = getSetupSoundtrack();
 
@@ -61,6 +74,17 @@ function Setup({ playIntro, step }: SetupProps) {
 
   return (
     <div className="relative h-full min-h-full overflow-hidden bg-white">
+      {step === "setup" && (
+        <button
+          type="button"
+          aria-label="Back"
+          onClick={goBack}
+          className={`smooth app-region-no-drag absolute top-4 z-20 flex size-11 cursor-pointer items-center justify-center rounded-2xl border border-[#cccccc] bg-white text-[#243746] transition-transform duration-300 ease-out hover:scale-105 active:scale-95 ${playIntro ? "left-[4.75rem]" : "left-5"}`}
+        >
+          <ArrowLeft size={20} strokeWidth={2} aria-hidden="true" />
+        </button>
+      )}
+
       {playIntro && (
         <button
           type="button"
@@ -126,7 +150,10 @@ function Setup({ playIntro, step }: SetupProps) {
         <SetupGuide onContinue={() => setPage("key")} />
       )}
       {step === "setup" && page === "key" && (
-        <KeySetup onContinue={() => setPage("appearance")} />
+        <KeySetup onContinue={() => setPage("google")} />
+      )}
+      {step === "setup" && page === "google" && (
+        <GoogleSetup onContinue={() => setPage("appearance")} />
       )}
       {step === "setup" && page === "appearance" && (
         <AppearanceSetup onContinue={() => setPage("done")} />

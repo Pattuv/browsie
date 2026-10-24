@@ -222,6 +222,8 @@ export type ConfirmRequest = {
   origin: string;
   button: string;
   fields: { label: string; value: string }[];
+  // Said instead of "On <site>, I'm about to press <button>" (Gmail, Calendar and Drive actions).
+  summary?: string;
 };
 
 export type ActionResult =

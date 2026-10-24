@@ -10,6 +10,9 @@ import { TASK_SPEND_CAP_USD } from './config';
 import type { Broker } from './broker';
 import type { ChromeApi } from './chromeApi';
 import { viewForAgent } from './chromeView';
+import { callKey, GOOGLE_TOOLS, parseGoogleCall, type GoogleCallResult, type GoogleService } from '../../shared/google/tools';
+import type { GoogleTools } from '../google/tools';
+import { GoogleApiError } from '../google/client';
 import { serializeSnapshot, summarizeBatch, type TraceEvent } from './traceEvents';
 
 // Runs the agent utilityProcess and is the only place its requests enter main. The agent has no keys and no
@@ -28,6 +31,14 @@ export type HostDeps = {
   downloadsFolder: () => string;
   // The browser-chrome commands the UI lane may run. Without it, UI tasks can't start.
   chrome?: ChromeApi;
+  // The user's Gmail, Calendar and Drive. Without it, INFO tasks can't start.
+  google?: {
+    tools: GoogleTools;
+    access: () => Record<GoogleService, boolean>;
+    email: () => string | undefined;
+    // Opens Google's permission page for mail, calendar and Drive. Resolves when the user is done there.
+    connect: () => Promise<unknown>;
+  };
   // Drawn over the page while a web task clicks and moves. Tests omit it.
   cursor?: AgentCursor;
   allowPrivateNetwork?: boolean;
@@ -49,6 +60,11 @@ type HostTask = {
   executor?: Executor;
   // UI tasks only: sites the agent was shown in tab, bookmark and history lists, which it may open.
   seenHosts: Set<string>;
+  // INFO tasks only: the Google call the user said yes to, and the one they're being asked about.
+  googleGrant?: string;
+  pendingGoogleGrant?: string;
+  // Google's permission page was opened for this task already.
+  askedForAccess?: boolean;
   grant?: ConfirmGrant;
   pendingGrant?: ConfirmGrant;
   done: boolean;
@@ -249,6 +265,74 @@ export const createAgentHost = (deps: HostDeps) => {
     return { ok: true, phrase: describeChrome(action), data: view.data };
   };
 
+  // --- INFO lane: Gmail, Calendar and Drive ---
+
+  const google = (task: HostTask) => {
+    if (task.lane !== 'INFO' || !deps.google) throw new Error('That only works in an INFO task.');
+    return deps.google;
+  };
+
+  const googleContext = (task: HostTask) => {
+    const g = google(task);
+    const timeZone = g.tools.timeZone();
+    const now = new Date();
+    return {
+      email: g.email(),
+      now: new Intl.DateTimeFormat('en-US', { dateStyle: 'full', timeStyle: 'short', timeZone }).format(now),
+      nowIso: now.toISOString(),
+      timeZone,
+      access: g.access(),
+    };
+  };
+
+  const MAX_INFO_CALLS = 25;
+
+  const googleCall = async (task: HostTask, tool: string, rawArgs: unknown): Promise<GoogleCallResult> => {
+    const g = google(task);
+    if (task.steps >= MAX_INFO_CALLS) return { ok: false, error: 'failed', message: `Stopped after ${MAX_INFO_CALLS} steps.` };
+    const parsed = parseGoogleCall(tool, rawArgs);
+    if (!parsed.ok) return { ok: false, error: 'invalid', message: parsed.message };
+    const { name, args } = parsed;
+    const service = GOOGLE_TOOLS[name].service;
+
+    // No permission yet: open Google's page once, and tell the lane so it can say so.
+    if (!g.access()[service]) {
+      if (!task.askedForAccess) {
+        task.askedForAccess = true;
+        void g.connect().catch(() => undefined);
+      }
+      return { ok: false, error: 'needs_access', service, message: 'Browsie needs permission for this Google service first. Google\'s permission page is open in the browser.' };
+    }
+
+    const key = callKey(name, args);
+    try {
+      if (g.tools.needsConfirm(name, args)) {
+        if (task.googleGrant !== key) {
+          const confirm = await g.tools.confirmation(name, args);
+          task.pendingGoogleGrant = key;
+          emit({ type: 'needs_confirm', taskId: task.id, turnId: task.turnId, confirm });
+          return { ok: false, error: 'needs_user', message: 'The user is being asked to confirm. Wait for their answer, then call the same tool again with the same arguments.' };
+        }
+        // A yes covers one call, once.
+        task.googleGrant = undefined;
+      }
+      task.steps += 1;
+      const data = await g.tools.run(name, args);
+      trace(task, { t: 'google', step: task.steps, tool: name, ok: true });
+      return { ok: true, data };
+    } catch (error) {
+      trace(task, { t: 'google', step: task.steps, tool: name, ok: false, error: error instanceof Error ? error.message : String(error) });
+      if (error instanceof GoogleApiError) {
+        if (error.kind === 'needs_access' && !task.askedForAccess) {
+          task.askedForAccess = true;
+          void g.connect().catch(() => undefined);
+        }
+        return { ok: false, error: error.kind, service: error.service, message: error.message };
+      }
+      return { ok: false, error: 'failed', message: error instanceof Error ? error.message : String(error) };
+    }
+  };
+
   const handlers: { [M in RpcMethod]: (task: HostTask, params: any) => Promise<unknown> } = {
     'llm.complete': async (task, params) => {
       if (deps.broker.spentFor(task.id) >= capUsd) throw new Error('This task reached its spending limit.');
@@ -274,6 +358,8 @@ export const createAgentHost = (deps: HostDeps) => {
       return { ok: true };
     },
     'chrome.execute': (task, params) => chromeCommand(task, params.action),
+    'google.context': async (task) => googleContext(task),
+    'google.call': (task, params) => googleCall(task, params.tool, params.args),
     // Only turns call this (handled above).
     'turn.run_task': async () => {
       throw new Error('No such turn.');
@@ -281,13 +367,18 @@ export const createAgentHost = (deps: HostDeps) => {
   };
 
   // Runs one task for a turn and waits for it to end, however it ends.
-  const runTaskForTurn = async (turn: HostTurn, lane: 'WEB' | 'UI', goal: string): Promise<TaskResult> => {
+  const runTaskForTurn = async (turn: HostTurn, lane: 'WEB' | 'UI' | 'INFO', goal: string): Promise<TaskResult> => {
     const failed = (error: string): TaskResult => ({ taskId: '', lane, ok: false, facts: [], untrusted: false, error });
     if (turn.controller.signal.aborted) return failed('stopped');
 
     let taskId: string;
     try {
-      taskId = lane === 'WEB' ? await api.startWebTask({ goal, turnId: turn.id }) : api.startUiTask({ goal, turnId: turn.id });
+      taskId =
+        lane === 'WEB'
+          ? await api.startWebTask({ goal, turnId: turn.id })
+          : lane === 'INFO'
+            ? api.startInfoTask({ goal, turnId: turn.id })
+            : api.startUiTask({ goal, turnId: turn.id });
     } catch (error) {
       return failed(error instanceof Error ? error.message : String(error));
     }
@@ -453,6 +544,13 @@ export const createAgentHost = (deps: HostDeps) => {
     },
 
     // Starts a UI task: browser chrome only (tabs, address bar, back, zoom, bookmarks), no page access.
+    // Starts an INFO task: the user's Gmail, Calendar and Drive through Google's APIs, no browser page.
+    startInfoTask({ goal, facts = [], turnId }: { goal: string; facts?: string[]; turnId?: string }) {
+      if (!deps.google) throw new Error('Google services are not available.');
+      ensureWorker();
+      return register(newTaskId(), 'INFO', goal, facts, turnId);
+    },
+
     startUiTask({ goal, facts = [], turnId }: { goal: string; facts?: string[]; turnId?: string }) {
       if (!deps.chrome) throw new Error('Browser commands are not available.');
       ensureWorker();
@@ -474,6 +572,8 @@ export const createAgentHost = (deps: HostDeps) => {
       const task = tasks.get(taskId);
       if (!task) return;
       if (yes && task.pendingGrant) task.grant = task.pendingGrant;
+      if (yes && task.pendingGoogleGrant) task.googleGrant = task.pendingGoogleGrant;
+      task.pendingGoogleGrant = undefined;
       if (task.pendingGrant) trace(task, { t: 'confirm', step: task.steps, grant: task.pendingGrant, answer: yes ? 'yes' : 'no' });
       task.pendingGrant = undefined;
       post({ kind: 'answer', taskId, text: yes ? 'yes' : 'no', confirmed: yes });

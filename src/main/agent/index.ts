@@ -1,6 +1,8 @@
 import { app } from 'electron';
 import path from 'node:path';
-import { getAccountId } from '../auth/session';
+import { connectWorkspace, getAccessToken, getAccountId, getSession, invalidateAccessToken, workspaceAccess } from '../auth/session';
+import { createGoogleTools } from '../google/tools';
+import { bringToFront, getBrowserWindow } from '../windows';
 import { agentCursor, agentTabContents, isAgentContents, leaseAgentTab, releaseAgentTab } from '../browser/tabs';
 import { getDownloadsFolder, setDownloadPolicy } from '../browser/webSession';
 import { readAiKey } from '../data/aiKey';
@@ -35,6 +37,17 @@ export const getAgentHost = () => {
     downloadsFolder: getDownloadsFolder,
     chrome: createChromeApi(chromeOperations),
     cursor: agentCursor,
+    google: {
+      tools: createGoogleTools({ getToken: getAccessToken, invalidateToken: invalidateAccessToken }),
+      access: workspaceAccess,
+      email: () => getSession().email,
+      // Google's page opens in the user's browser, like sign-in. Browsie comes back to the front after.
+      connect: () =>
+        connectWorkspace(() => {
+          const window = getBrowserWindow();
+          if (window && !window.isDestroyed()) bringToFront(window);
+        }),
+    },
   });
 
   // Only the tab the agent is working on may download, and the task hears about it.

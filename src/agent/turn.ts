@@ -1,5 +1,5 @@
 import type { AgentLane, TaskResult, TurnContext, TurnEvent, TurnLabel } from '../shared/agent/protocol';
-import { FALLBACKS, type FallbackId } from '../shared/agent/fallbacks';
+import type { FallbackId } from '../shared/agent/fallbacks';
 import type { PlannedTask } from '../shared/agent/tasks';
 import { isAdultContent } from '../shared/safety/contentPolicy';
 import { classify, type Llm } from './classifier';
@@ -16,7 +16,7 @@ type TurnEventBody = TurnEvent extends infer E ? (E extends { turnId: string } ?
 export type TurnDeps = {
   llm: Llm;
   // Asks main to run one task and resolves with its result (including when it was stopped).
-  runTask(lane: Extract<AgentLane, 'WEB' | 'UI'>, goal: string): Promise<TaskResult>;
+  runTask(lane: Extract<AgentLane, 'WEB' | 'UI' | 'INFO'>, goal: string): Promise<TaskResult>;
   emit(event: TurnEventBody): void;
   session: SessionStore;
   signal: AbortSignal;
@@ -62,9 +62,6 @@ export const runTurn = async (turnId: string, transcript: string, context: TurnC
       return;
     }
     const classification = await classify(deps.llm, transcript, context, history);
-    // There's no INFO lane yet, so email, calendar and Drive questions are done on the site itself:
-    // open it if needed, then read it like any other page.
-    if (classification.label === 'INFO') Object.assign(classification, { label: 'WEB', multi: !context.site || classification.multi });
     label = classification.label;
 
     const clip = LABEL_CLIPS[label];
@@ -75,21 +72,16 @@ export const runTurn = async (turnId: string, transcript: string, context: TurnC
       deps.emit({ type: 'routed', label, confidence: classification.confidence, tasks: [] });
       say((label === 'CHAT' ? await chat(deps.llm, transcript, history) : await help(deps.llm, transcript, history)) || "Sorry, I don't have an answer for that.");
     } else {
-      // Every other label was handled above, so this is UI or WEB.
-      const single: PlannedTask[] = [{ lane: label as 'UI' | 'WEB', goal: transcript }];
+      // Every other label was handled above, so this is UI, WEB or INFO.
+      const single: PlannedTask[] = [{ lane: label as 'UI' | 'WEB' | 'INFO', goal: transcript }];
       const planned = classification.multi ? ((await planTasks(deps.llm, transcript, context)) ?? single) : single;
       const queue = [...planned];
-      deps.emit({ type: 'routed', label, confidence: classification.confidence, tasks: queue.filter((task) => task.lane !== 'INFO') as { lane: AgentLane; goal: string }[] });
+      deps.emit({ type: 'routed', label, confidence: classification.confidence, tasks: queue as { lane: AgentLane; goal: string }[] });
 
       const results: TaskResult[] = [];
       let handoffs = 0;
-      let needsInfo = false;
       while (queue.length) {
         const task = queue.shift()!;
-        if (task.lane === 'INFO') {
-          needsInfo = true;
-          break;
-        }
         const result = await deps.runTask(task.lane, task.goal);
         results.push(result);
         untrusted ||= result.untrusted;
@@ -100,8 +92,7 @@ export const runTurn = async (turnId: string, transcript: string, context: TurnC
         }
       }
 
-      if (needsInfo && results.length === 0) sayClip('info_unavailable');
-      else say(needsInfo ? `${composeReply(results)} ${FALLBACKS.info_unavailable}` : composeReply(results));
+      say(composeReply(results));
     }
     deps.emit({ type: 'done', ok: true });
   } catch (error) {

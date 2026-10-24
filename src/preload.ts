@@ -12,6 +12,7 @@ const auth: BrowsieAuthAPI = {
   signIn: () => ipcRenderer.invoke("auth:sign-in"),
   cancelSignIn: () => ipcRenderer.invoke("auth:cancel-sign-in"),
   completeSetup: () => ipcRenderer.invoke("auth:complete-setup"),
+  connectGoogle: () => ipcRenderer.invoke("auth:connect-google"),
   saveAiKey: (key, cap) => ipcRenderer.invoke("auth:save-ai-key", key, cap),
   updateAiCap: (cap) => ipcRenderer.invoke("auth:update-ai-cap", cap),
   replaceManagementKey: (key, cap) => ipcRenderer.invoke("auth:replace-management-key", key, cap),

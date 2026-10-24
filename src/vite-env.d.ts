@@ -49,6 +49,8 @@ type AuthSession = {
   pictureDataUrl?: string;
   // False when the user didn't grant Drive access on the consent screen.
   syncEnabled?: boolean;
+  // Which of the account's Google services Browsie may read and change (Connect Google in setup).
+  googleServices?: { gmail: boolean; calendar: boolean; drive: boolean };
   // False when the sign-in isn't saved, so it ends when the app quits: setup isn't finished yet,
   // or Windows DPAPI could not save it.
   rememberedOnDevice?: boolean;
@@ -64,6 +66,9 @@ interface BrowsieAuthAPI {
   cancelSignIn: () => Promise<void>;
   // Marks the signed-in account as set up; the session push that follows swaps setup for the Dashboard.
   completeSetup: () => Promise<void>;
+  // Opens Google's permission page for Gmail, Calendar and Drive. Resolves with what's connected once the
+  // user is done there (or closes it).
+  connectGoogle: () => Promise<{ gmail: boolean; calendar: boolean; drive: boolean }>;
   // Hands the signed-in account's OpenRouter management key to main. Main checks it with OpenRouter, makes
   // Browsie its own AI key with it (capped at `cap`), and stores both encrypted. Never read back.
   // invalid: not shaped like a key. invalid-cap: cap not between $0 and $10,000. rejected: OpenRouter doesn't

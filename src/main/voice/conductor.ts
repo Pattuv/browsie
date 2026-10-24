@@ -87,7 +87,7 @@ const siteName = (origin: string) => {
 export const confirmationText = (confirm: ConfirmRequest) => {
   const fields = confirm.fields.slice(0, 6).map((field) => `${field.label}: ${field.value}`);
   return [
-    `On ${siteName(confirm.origin)}, I'm about to press ${confirm.button || 'the button'}.`,
+    confirm.summary ?? `On ${siteName(confirm.origin)}, I'm about to press ${confirm.button || 'the button'}.`,
     fields.length ? `${fields.join('. ')}.` : '',
     'Shall I go ahead? Say yes or no.',
   ]

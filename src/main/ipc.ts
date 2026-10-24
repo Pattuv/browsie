@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
-import { cancelSignIn, completeSetup, getAccountId, getSession, signIn, signOut } from './auth/session';
+import { cancelSignIn, completeSetup, connectWorkspace, getAccountId, getSession, signIn, signOut } from './auth/session';
 import { removeWebData } from './browser/webSession';
 import { getData, updateData } from './data/localStore';
 import { removeAiKey, replaceManagementKey, saveAiKey, updateAiCap } from './data/aiKey';
@@ -171,6 +171,10 @@ export const registerIpc = () => {
   });
   handle('auth:cancel-sign-in', () => cancelSignIn());
   handle('auth:complete-setup', () => completeSetup());
+  handle('auth:connect-google', (event) => {
+    const requester = BrowserWindow.fromWebContents(event.sender);
+    return connectWorkspace(() => requester && bringToFront(requester));
+  });
   handle('auth:save-ai-key', async (_event, key: unknown, cap: unknown) => {
     const accountId = getAccountId();
     const result = accountId ? await saveAiKey(accountId, key, cap) : 'unavailable';
@@ -229,5 +233,10 @@ export const registerIpc = () => {
     }
 
     await revoked;
+
+    // Factory reset leaves the browser. Closing it opens the main window, which is now the sign-in screen.
+    if (resetSetup) {
+      getBrowserWindow()?.close();
+    }
   });
 };

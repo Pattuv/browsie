@@ -53,7 +53,8 @@ export const LlmRequest = z.strictObject({
   taskId: z.string().min(1).max(64),
   tier: z.enum(TIERS),
   messages: z.array(ChatMessage).min(1).max(400),
-  tools: z.array(ToolDef).max(8).optional(),
+  // The INFO lane offers every Gmail, Calendar and Drive tool at once.
+  tools: z.array(ToolDef).max(32).optional(),
   maxTokens: z.number().int().min(16).max(16_000).optional(),
 });
 export type LlmRequest = z.infer<typeof LlmRequest>;
