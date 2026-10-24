@@ -1,5 +1,5 @@
-# browsie
-### The assistive AI browser for visually impaired users.
+# Browsie: The assistive AI browser for visually impaired users.
+
 Browsie is an agentic browser that navigates the web for those who cannot see.
 
 [Official Website](https://browsie.org) · [Setup Guide](https://browsie.org/setup-guide)
