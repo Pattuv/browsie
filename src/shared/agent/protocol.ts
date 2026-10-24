@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ActionError, ActionResult, ConfirmRequest } from '../web/actions';
 import type { FallbackId } from './fallbacks';
+import type { SessionTurn } from './session';
 import type { GoogleCallResult, GoogleService } from '../google/tools';
 import { LlmRequest, type LlmResponse } from './llm';
 
@@ -149,6 +150,8 @@ export type HostMessage =
   // helps route it (is a website open?), never page text.
   | { kind: 'turn'; turnId: string; transcript: string; context: TurnContext }
   | { kind: 'abort_turn'; turnId: string }
+  // Drop what this session remembers. The agent replies with an empty session snapshot.
+  | { kind: 'clear_session' }
   | { kind: 'rpc-result'; id: number; ok: true; value: unknown }
   | { kind: 'rpc-result'; id: number; ok: false; error: string };
 
@@ -156,7 +159,9 @@ export type HostMessage =
 export type AgentMessage =
   | { kind: 'rpc'; id: number; method: RpcMethod; params: unknown }
   | { kind: 'event'; event: TaskEvent }
-  | { kind: 'turn_event'; event: TurnEvent };
+  | { kind: 'turn_event'; event: TurnEvent }
+  // The conversation the session sidebar shows. Replaces the previous snapshot.
+  | { kind: 'session'; turns: SessionTurn[] };
 
 export type TurnContext = {
   // The active tab shows a website (WEB tasks need one), and which site, for the classifier.

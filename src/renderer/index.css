@@ -132,6 +132,18 @@
     filter: invert(1);
   }
 
+  /* spinner.svg is white artwork. On the session panel it reads as gray, and stays light on dark surfaces. */
+  .session-mark {
+    filter: invert(1);
+    opacity: 0.38;
+  }
+
+  html[data-theme="dark"] .session-mark,
+  html[data-theme="high-contrast"] .session-mark {
+    filter: none;
+    opacity: 0.55;
+  }
+
   /* The Dashboard's window background follows the appearance. */
   html[data-window="main"][data-theme] body {
     background-color: var(--color-white);

@@ -1,15 +1,16 @@
+import { FALLBACKS, type FallbackId } from '../shared/agent/fallbacks';
 import type { AgentLane, TaskResult, TurnContext, TurnEvent, TurnLabel } from '../shared/agent/protocol';
-import type { FallbackId } from '../shared/agent/fallbacks';
+import { packSession, SESSION_TURN_LIMIT, type SessionTask, type SessionTurn } from '../shared/agent/session';
 import type { PlannedTask } from '../shared/agent/tasks';
 import { isAdultContent } from '../shared/safety/contentPolicy';
 import { classify, type Llm } from './classifier';
 import { chat, help } from './lanes/talk';
 import { planTasks } from './orchestrator';
-import type { SessionStore } from './sessionStore';
+import { toSessionTurn, type SessionStore } from './sessionStore';
 import { composeReply, composeStopped } from './verbalEngine';
 
-// One turn: classifier → (orchestrator) → lanes → verbal engine. Runs in the agent process. WEB and UI
-// tasks run through main, one at a time, so only one interactive task ever holds a tab.
+// One turn = classifier, orchestrator, lanes, and then verbal engine. Runs in the agent process. 
+// WEB and UI tasks are handled one at a time via main. a tab can be held by only one task.
 
 type TurnEventBody = TurnEvent extends infer E ? (E extends { turnId: string } ? Omit<E, 'turnId'> : never) : never;
 
@@ -19,10 +20,12 @@ export type TurnDeps = {
   runTask(lane: Extract<AgentLane, 'WEB' | 'UI' | 'INFO'>, goal: string): Promise<TaskResult>;
   emit(event: TurnEventBody): void;
   session: SessionStore;
+  // The turns the sidebar should show, including this one while it is still running.
+  publish?(turns: SessionTurn[]): void;
   signal: AbortSignal;
 };
 
-// Tasks may hand off to another lane at most this many times in one turn.
+// (REVIEW this as more handoffs may be needed for complex tasks)
 const MAX_HANDOFFS = 2;
 
 const errorClip = (message: string): FallbackId => {
@@ -38,25 +41,56 @@ const LABEL_CLIPS: Partial<Record<TurnLabel, FallbackId>> = {
 };
 
 export const runTurn = async (turnId: string, transcript: string, context: TurnContext, deps: TurnDeps) => {
+  const startedAt = Date.now();
   let label: TurnLabel = 'UNCLEAR';
+  let announced = false;
   let reply = '';
   let untrusted = false;
+  let fallback: FallbackId | null = null;
+  const tasks: SessionTask[] = [];
+
+  const remembered = () => deps.session.recent(6);
+  const live = (): SessionTurn => ({
+    turnId,
+    user: transcript,
+    label: announced ? label : null,
+    reply,
+    fallback,
+    tasks: tasks.map((task) => ({ ...task })),
+    pending: true,
+    at: startedAt,
+  });
+  const publishPending = () => deps.publish?.(packSession([...deps.session.recent(SESSION_TURN_LIMIT).map(toSessionTurn), live()]));
 
   const say = (text: string) => {
+    fallback = null;
     reply = text;
     deps.emit({ type: 'say', text });
+    publishPending();
   };
   const sayClip = (clip: FallbackId) => {
-    reply = `[${clip}]`;
+    fallback = clip;
+    reply = FALLBACKS[clip];
     deps.emit({ type: 'say', clip });
+    publishPending();
+  };
+  const routed = (confidence: number | undefined, planned: { lane: AgentLane; goal: string }[]) => {
+    announced = true;
+    deps.emit({ type: 'routed', label, confidence, tasks: planned });
+    publishPending();
+  };
+  const noteTask = (lane: AgentLane, goal: string, result: TaskResult) => {
+    tasks.push({ lane, goal, ok: result.ok, ...(result.error ? { error: result.error } : {}) });
+    publishPending();
   };
 
   try {
-    const history = deps.session.recent(6);
+    publishPending();
+    const history = remembered();
     // Refused before any model sees it. Main refuses the searches and pages too, whatever a lane tries.
     if (isAdultContent(transcript)) {
       label = 'RESTRICTED';
-      deps.emit({ type: 'routed', label, confidence: 1, tasks: [] });
+      routed(1, []);
       sayClip('not_allowed');
       deps.emit({ type: 'done', ok: true });
       return;
@@ -66,23 +100,24 @@ export const runTurn = async (turnId: string, transcript: string, context: TurnC
 
     const clip = LABEL_CLIPS[label];
     if (clip) {
-      deps.emit({ type: 'routed', label, confidence: classification.confidence, tasks: [] });
+      routed(classification.confidence, []);
       sayClip(clip);
     } else if (label === 'CHAT' || label === 'HELP') {
-      deps.emit({ type: 'routed', label, confidence: classification.confidence, tasks: [] });
+      routed(classification.confidence, []);
       say((label === 'CHAT' ? await chat(deps.llm, transcript, history) : await help(deps.llm, transcript, history)) || "Sorry, I don't have an answer for that.");
     } else {
       // Every other label was handled above, so this is UI, WEB or INFO.
       const single: PlannedTask[] = [{ lane: label as 'UI' | 'WEB' | 'INFO', goal: transcript }];
       const planned = classification.multi ? ((await planTasks(deps.llm, transcript, context)) ?? single) : single;
       const queue = [...planned];
-      deps.emit({ type: 'routed', label, confidence: classification.confidence, tasks: queue as { lane: AgentLane; goal: string }[] });
+      routed(classification.confidence, queue as { lane: AgentLane; goal: string }[]);
 
       const results: TaskResult[] = [];
       let handoffs = 0;
       while (queue.length) {
         const task = queue.shift()!;
         const result = await deps.runTask(task.lane, task.goal);
+        noteTask(task.lane, task.goal, result);
         results.push(result);
         untrusted ||= result.untrusted;
         if (!result.ok) break;
@@ -103,6 +138,16 @@ export const runTurn = async (turnId: string, transcript: string, context: TurnC
     }
     deps.emit({ type: 'done', ok: false });
   } finally {
-    deps.session.add({ turnId, user: transcript, label, reply, untrusted, at: Date.now() });
+    deps.session.add({
+      turnId,
+      user: transcript,
+      label,
+      reply,
+      untrusted,
+      tasks: tasks.map((task) => ({ ...task })),
+      fallback,
+      at: startedAt,
+    });
+    deps.publish?.(packSession(deps.session.recent(SESSION_TURN_LIMIT).map(toSessionTurn)));
   }
 };

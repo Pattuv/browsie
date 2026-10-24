@@ -5,15 +5,15 @@ import { extractJson } from '../shared/agent/tasks';
 import SYSTEM_PROMPT from './prompts/classifier.md?raw';
 import { renderHistory, type TurnRecord } from './sessionStore';
 
-// Haiku, tool-free: which lane a transcript goes to. Anything it isn't sure of is UNCLEAR, which asks the
-// user to say it again rather than guessing.
+//CLASSIFER - this is the main LLM classifer that determines which lane(s) to use for a user's request. Uses Haiku.
+// Anything it isn't sure of is UNCLEAR, which asks the user to say it again rather than guessing.
 
 export type Llm = (request: { tier: Tier; messages: ChatMessage[]; maxTokens?: number }) => Promise<LlmResponse>;
 
 export type Classification = { label: TurnLabel; confidence: number; multi: boolean };
 
 export const MIN_CONFIDENCE = 0.6;
-// With a website open, a page task is the likely meaning, so WEB needs less certainty.
+// FUTURE EDIT: review this confidence as sometimes even if a webpage is open you may not want to use the web lane.
 export const MIN_WEB_CONFIDENCE_ON_SITE = 0.35;
 const HISTORY_TURNS = 3;
 
@@ -38,7 +38,7 @@ export const classify = async (llm: Llm, transcript: string, context: TurnContex
   const recent = history.slice(-HISTORY_TURNS);
   const reply = await llm({
     tier: 'fast',
-    // Haiku thinks before answering, and the thinking counts against this. 100 left nothing for the answer.
+    // Haiku thinks before answering, and this includes thinking as well. 100 left nothing for the answer, only billed for what's used. 
     maxTokens: 2_000,
     messages: [
       { role: 'system', content: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }] },

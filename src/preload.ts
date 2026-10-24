@@ -162,6 +162,15 @@ contextBridge.exposeInMainWorld("browsie", {
     ipcRenderer.on("speech:held", listener);
     return () => ipcRenderer.removeListener("speech:held", listener);
   },
+  session: {
+    get: () => ipcRenderer.invoke("session:get"),
+    clear: () => ipcRenderer.invoke("session:clear"),
+    onChanged: (callback: (turns: SessionTurn[]) => void) => {
+      const listener = (_event: IpcRendererEvent, turns: SessionTurn[]) => callback(turns);
+      ipcRenderer.on("session:changed", listener);
+      return () => ipcRenderer.removeListener("session:changed", listener);
+    },
+  },
   // The speech view only: main refuses these from anywhere else.
   voice: {
     sendAudio: (wav: ArrayBuffer, durationMs: number) => ipcRenderer.invoke("voice:audio", wav, durationMs),

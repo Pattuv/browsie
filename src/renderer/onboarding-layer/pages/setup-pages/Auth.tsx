@@ -2,6 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Mascot from "../../../components/Mascot";
 import browserIllustration from "../../../assets/paint-icons/browser.png";
 
+const TERMS_URL = "https://browsie.org/terms";
+const PRIVACY_URL = "https://browsie.org/privacy";
+
 const WHITE_HOLD_MS = 1000;
 const BLUR_MS = 1000;
 const HELLO_HOLD_MS = 2200;
@@ -263,9 +266,21 @@ function Auth({ playIntro, phase, onPhase }: AuthProps) {
           className={`absolute inset-x-0 bottom-5 z-10 px-6 text-center text-sm font-[500] tracking-tight text-zinc-400 ${playIntro ? "enter-fade-slow" : ""}`}
         >
           By continuing, you agree to the{" "}
-          <span className="underline underline-offset-2">Terms of Service</span>{" "}
+          <button
+            type="button"
+            onClick={() => window.browsie?.openExternal(TERMS_URL)}
+            className="app-region-no-drag cursor-pointer underline underline-offset-2"
+          >
+            Terms of Service
+          </button>{" "}
           and{" "}
-          <span className="underline underline-offset-2">Privacy Policy</span>.
+          <button
+            type="button"
+            onClick={() => window.browsie?.openExternal(PRIVACY_URL)}
+            className="app-region-no-drag cursor-pointer underline underline-offset-2"
+          >
+            Privacy Policy
+          </button>.
         </p>
       )}
     </div>

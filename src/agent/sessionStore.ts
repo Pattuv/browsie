@@ -1,9 +1,10 @@
+import type { FallbackId } from '../shared/agent/fallbacks';
 import type { TurnLabel } from '../shared/agent/protocol';
+import { SESSION_TURN_LIMIT, type SessionTask, type SessionTurn } from '../shared/agent/session';
 
-// What Browsie remembers of this conversation: what was said each turn, how it was routed, and what Browsie
-// answered. Gives the classifier and CHAT lane context ("do that again", "and the red one?").
-// Never raw page text: replies drawn from pages are model summaries, and they're marked untrusted so they
-// go back to models as information only.
+// browsie's current memory at any given time.
+// Gives  classifier and chat context (for amigious requests like "do that again")
+// Never raw page text and instead its summaries
 
 export type TurnRecord = {
   turnId: string;
@@ -12,10 +13,21 @@ export type TurnRecord = {
   reply: string;
   // The reply was drawn from website content.
   untrusted: boolean;
+  tasks: SessionTask[];
+  fallback: FallbackId | null;
   at: number;
 };
 
-const MAX_TURNS = 20;
+export const toSessionTurn = (record: TurnRecord): SessionTurn => ({
+  turnId: record.turnId,
+  user: record.user,
+  label: record.label,
+  reply: record.reply,
+  fallback: record.fallback,
+  tasks: record.tasks.map((task) => ({ ...task })),
+  pending: false,
+  at: record.at,
+});
 
 export const createSessionStore = () => {
   const turns: TurnRecord[] = [];
@@ -23,7 +35,7 @@ export const createSessionStore = () => {
   return {
     add(record: TurnRecord) {
       turns.push(record);
-      if (turns.length > MAX_TURNS) turns.shift();
+      if (turns.length > SESSION_TURN_LIMIT) turns.shift();
     },
     recent: (count: number) => turns.slice(-count),
     clear: () => {
@@ -34,7 +46,6 @@ export const createSessionStore = () => {
 
 export type SessionStore = ReturnType<typeof createSessionStore>;
 
-// The recent turns as plain text for a prompt. Untrusted replies are fenced off.
 export const renderHistory = (records: readonly TurnRecord[]) =>
   records
     .map((record) => {

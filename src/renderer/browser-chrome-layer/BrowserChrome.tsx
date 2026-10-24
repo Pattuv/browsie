@@ -4,6 +4,7 @@ import TabStrip from './TabStrip';
 import Toolbar from './Toolbar';
 import BookmarksBar from './BookmarksBar';
 import AgentHighlight from './AgentHighlight';
+import SessionSidebar from './SessionSidebar';
 import SettingsPage from './pages/SettingsPage';
 import BookmarksPage from './pages/BookmarksPage';
 import HistoryPage from './pages/HistoryPage';
@@ -111,6 +112,7 @@ function BrowserChrome() {
   const activeTab = useActiveTab();
   const pageSnapshot = usePageSnapshot((state) => state.src);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const [sessionOpen, setSessionOpen] = useState(false);
   const showChrome = phase !== 'splash';
 
   // Tabs whose New Tab page has already been on screen. A fresh tab fades in; switching back to one doesn't.
@@ -150,30 +152,38 @@ function BrowserChrome() {
             id="browser-chrome-card"
             className="absolute inset-x-0 bottom-0 top-12 flex flex-col overflow-hidden bg-white"
           >
-            <Toolbar tab={activeTab} entranceDelay={TOOLBAR_DELAY} />
+            <Toolbar
+              tab={activeTab}
+              entranceDelay={TOOLBAR_DELAY}
+              sessionOpen={sessionOpen}
+              onToggleSession={() => setSessionOpen((open) => !open)}
+            />
             <BookmarksBar style={{ animationDelay: `${TOOLBAR_DELAY + 60}ms` }} />
-            {/* The page area: Browsie's own pages live here, or a website is laid exactly over it. */}
-            <div ref={viewportRef} className="relative min-h-0 flex-1">
-              {/* Keyed by tab, so each tab gets its own page. */}
-              {activeTab?.url === null && activeTab.page === 'history' && <HistoryPage key={activeTab.id} />}
-              {activeTab?.url === null && activeTab.page === 'bookmarks' && <BookmarksPage key={activeTab.id} />}
-              {activeTab?.url === null && activeTab.page === 'settings' && <SettingsPage key={activeTab.id} />}
-              {activeTab?.url === null && activeTab.page === 'newtab' && (
-                <NewTab
-                  key={activeTab.id}
-                  entranceDelay={newTabEntranceDelay(activeTab.id)}
-                  launched={phase === 'ready'}
-                />
-              )}
-              {/* Freeze-frame of the website while a popover has the real page hidden (see setChromeOverlay). */}
-              {pageSnapshot && activeTab?.url !== null && (
-                <img
-                  src={pageSnapshot}
-                  alt=""
-                  draggable={false}
-                  className="pointer-events-none absolute inset-0 h-full w-full"
-                />
-              )}
+            {/* The page area shrinks when the session sidebar is open. Websites are laid exactly over it. */}
+            <div className="flex min-h-0 flex-1">
+              <div ref={viewportRef} className="relative min-h-0 min-w-0 flex-1">
+                {/* Keyed by tab, so each tab gets its own page. */}
+                {activeTab?.url === null && activeTab.page === 'history' && <HistoryPage key={activeTab.id} />}
+                {activeTab?.url === null && activeTab.page === 'bookmarks' && <BookmarksPage key={activeTab.id} />}
+                {activeTab?.url === null && activeTab.page === 'settings' && <SettingsPage key={activeTab.id} />}
+                {activeTab?.url === null && activeTab.page === 'newtab' && (
+                  <NewTab
+                    key={activeTab.id}
+                    entranceDelay={newTabEntranceDelay(activeTab.id)}
+                    launched={phase === 'ready'}
+                  />
+                )}
+                {/* Freeze-frame of the website while a popover has the real page hidden (see setChromeOverlay). */}
+                {pageSnapshot && activeTab?.url !== null && (
+                  <img
+                    src={pageSnapshot}
+                    alt=""
+                    draggable={false}
+                    className="pointer-events-none absolute inset-0 h-full w-full"
+                  />
+                )}
+              </div>
+              <SessionSidebar open={sessionOpen} onClose={() => setSessionOpen(false)} />
             </div>
           </main>
         </div>

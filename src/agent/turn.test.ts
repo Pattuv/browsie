@@ -69,7 +69,13 @@ describe('runTurn', () => {
     await t.run('hello');
     expect(t.said()).toEqual([{ type: 'say', text: 'Hello! How can I help?' }]);
     expect(t.deps.runTask).not.toHaveBeenCalled();
-    expect(t.session.recent(1)[0]).toMatchObject({ user: 'hello', label: 'CHAT', reply: 'Hello! How can I help?' });
+    expect(t.session.recent(1)[0]).toMatchObject({
+      user: 'hello',
+      label: 'CHAT',
+      reply: 'Hello! How can I help?',
+      tasks: [],
+      fallback: null,
+    });
     expect(t.events.at(-1)).toEqual({ type: 'done', ok: true });
   });
 
@@ -85,6 +91,7 @@ describe('runTurn', () => {
     await t.run('open a new tab');
     expect(t.deps.runTask).toHaveBeenCalledWith('UI', 'open a new tab');
     expect(t.said()).toEqual([{ type: 'say', text: 'I opened a new tab.' }]);
+    expect(t.session.recent(1)[0].tasks).toEqual([{ lane: 'UI', goal: 'open a new tab', ok: true }]);
   });
 
   it('plans multi-step requests and runs the tasks in order', async () => {
@@ -111,6 +118,7 @@ describe('runTurn', () => {
     );
     await t.run('do two things');
     expect(t.deps.runTask).toHaveBeenCalledTimes(1);
+    expect(t.session.recent(1)[0].tasks).toEqual([{ lane: 'UI', goal: 'a', ok: false, error: 'declined' }]);
   });
 
   it('sends email, calendar and Drive requests to the INFO lane, site open or not', async () => {
@@ -170,6 +178,7 @@ describe('runTurn', () => {
     });
     await t.run('hello');
     expect(t.said()).toEqual([{ type: 'say', clip: 'no_key' }]);
+    expect(t.session.recent(1)[0].fallback).toBe('no_key');
     expect(t.events.at(-1)).toEqual({ type: 'done', ok: false });
   });
 });

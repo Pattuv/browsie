@@ -208,10 +208,12 @@ type ToolbarProps = {
   tab: BrowserTab | null;
   /** Base delay for the launch entrance, in ms. */
   entranceDelay: number;
+  sessionOpen: boolean;
+  onToggleSession: () => void;
 };
 
 /** The bar at the top of the page card: navigation, address bar, Sessions. */
-function Toolbar({ tab, entranceDelay }: ToolbarProps) {
+function Toolbar({ tab, entranceDelay, sessionOpen, onToggleSession }: ToolbarProps) {
   const browser = window.browsie?.browser;
   const locked = useLockdownStore((state) => state.enabled);
   const delay = (ms: number): CSSProperties => ({
@@ -250,10 +252,13 @@ function Toolbar({ tab, entranceDelay }: ToolbarProps) {
 
       <AddressBar tab={tab} style={delay(60)} />
 
-      {/* The Sessions panel arrives with the agent; the button is here so the layout is final. */}
       <button
         type="button"
-        className="chrome-item flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] tracking-tight text-zinc-500 transition-[background-color,color,transform] duration-150 ease-out hover:bg-zinc-100 hover:text-zinc-800 active:scale-95"
+        aria-pressed={sessionOpen}
+        onClick={onToggleSession}
+        className={`chrome-item flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] tracking-tight transition-[background-color,color,transform] duration-150 ease-out active:scale-95 ${
+          sessionOpen ? "bg-zinc-100 text-zinc-900" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+        }`}
         style={delay(120)}
       >
         <MessagesSquare size={15} aria-hidden="true" />

@@ -1,7 +1,6 @@
 import type { TaskResult } from '../shared/agent/protocol';
 
-// What Browsie says when tasks end. No model call: each lane already finishes with a one-sentence summary
-// written to be read aloud, so this joins them and turns failures and stops into plain words.
+// What Browsie says when tasks end. This is deterministic without a mode, just fill in text after all streps are finished.
 // (Step-by-step narration comes from main, which hears each step_started as it happens.)
 
 const FAILURES: [RegExp, string][] = [
@@ -18,7 +17,7 @@ const FAILURES: [RegExp, string][] = [
   [/key/i, "Browsie's AI key isn't working, so I couldn't do that."],
 ];
 
-// "The Google Calendar API isn't turned on…" → name the service, so whoever sets Browsie up knows which.
+// "The Google Calendar API isn't turned on…", and name the service, so caretaker knows which (although user may need to inform caretaker).
 const disabledService = (error: string) => /The (Gmail|Google Calendar|Google Drive) API isn't turned on/i.exec(error)?.[1];
 
 const failureText = (error: string | undefined) => {
@@ -32,7 +31,7 @@ const sentence = (text: string) => {
   return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 };
 
-// "Clicking "Add to cart"" → "clicked "Add to cart"", for "I'd clicked … before I stopped".
+// Changes task verbs to past tense
 const pastTense = (phrase: string) =>
   phrase
     .replace(/^Clicking/, 'clicked')

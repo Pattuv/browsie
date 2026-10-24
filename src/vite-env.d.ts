@@ -340,11 +340,53 @@ type AiUsage =
     }
   | { state: 'no-key' | 'invalid-key' | 'offline' };
 
+// One turn in the session sidebar. Mirrors shared/agent/session.ts.
+type SessionTaskNote = {
+  lane: 'WEB' | 'UI' | 'INFO';
+  goal: string;
+  ok: boolean;
+  error?: string;
+};
+
+type SessionTurn = {
+  turnId: string;
+  user: string;
+  label: 'CHAT' | 'HELP' | 'INFO' | 'UI' | 'WEB' | 'RESTRICTED' | 'UNCLEAR' | null;
+  reply: string;
+  // A fixed line from shared/agent/fallbacks.ts, or null when the reply was composed live.
+  fallback:
+    | 'didnt_catch'
+    | 'unclear'
+    | 'restricted'
+    | 'stopped'
+    | 'not_allowed'
+    | 'info_unavailable'
+    | 'no_key'
+    | 'offline'
+    | 'out_of_credit'
+    | 'no_page'
+    | 'confirm_again'
+    | 'error'
+    | null;
+  tasks: SessionTaskNote[];
+  pending: boolean;
+  at: number;
+};
+
+interface BrowsieSessionAPI {
+  get: () => Promise<SessionTurn[]>;
+  // Forgets the turns this session is remembering.
+  clear: () => Promise<void>;
+  // Returns an unsubscribe function. The list replaces the previous one.
+  onChanged: (callback: (turns: SessionTurn[]) => void) => () => void;
+}
+
 interface BrowsieAPI {
   auth: BrowsieAuthAPI;
   data: BrowsieDataAPI;
   browser: BrowsieBrowserAPI;
   library: BrowsieLibraryAPI;
+  session: BrowsieSessionAPI;
   openModePicker: () => Promise<void>;
   openExternal: (url: string) => Promise<void>;
   // Asks OpenRouter at most once a minute; the menu can call it every time it opens.

@@ -4,6 +4,7 @@ import { type Answer, runWebTask } from './web/loop';
 import { runUiTask } from './ui/lane';
 import { runInfoTask } from './info/lane';
 import { createSessionStore } from './sessionStore';
+import type { SessionTurn } from '../shared/agent/session';
 import { runTurn } from './turn';
 
 // The agent utilityProcess. It runs every model-facing step and holds no keys and no Electron APIs: all it
@@ -98,6 +99,7 @@ const startTurn = (turnId: string, transcript: string, context: TurnContext) => 
     llm: (request) => call('llm.complete', { taskId: turnId, ...request }),
     runTask: (lane, goal) => call('turn.run_task', { taskId: turnId, lane, goal }),
     emit: (body) => post({ kind: 'turn_event', event: { ...body, turnId } as never }),
+    publish: (turns: SessionTurn[]) => post({ kind: 'session', turns }),
   }).finally(() => turns.delete(turnId));
 };
 
@@ -128,6 +130,10 @@ const onHostMessage = (message: HostMessage) => {
       return;
     case 'abort_turn':
       turns.get(message.turnId)?.abort();
+      return;
+    case 'clear_session':
+      session.clear();
+      post({ kind: 'session', turns: [] });
       return;
     case 'abort': {
       const task = tasks.get(message.taskId);

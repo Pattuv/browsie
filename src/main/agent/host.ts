@@ -1,5 +1,8 @@
 import { MessageChannelMain, type MessagePortMain, utilityProcess, type UtilityProcess, type WebContents } from 'electron';
-import { RPC, type ActResponse, type AgentLane, type AgentMessage, type ChromeResponse, type HostMessage, type TurnContext, type TurnEvent, type Observation, type RpcMethod, type TaskEvent, type TaskResult } from '../../shared/agent/protocol';
+import { z } from 'zod';
+import { FALLBACK_IDS, type FallbackId } from '../../shared/agent/fallbacks';
+import { SESSION_TURN_LIMIT, type SessionTurn } from '../../shared/agent/session';
+import { RPC, TURN_LABELS, type ActResponse, type AgentLane, type AgentMessage, type ChromeResponse, type HostMessage, type TurnContext, type TurnEvent, type Observation, type RpcMethod, type TaskEvent, type TaskResult } from '../../shared/agent/protocol';
 import { describe as describeChrome, parseChromeAction } from '../../shared/chrome/actions';
 import { addressOf, checkNavigation } from '../../shared/chrome/policy';
 import { textForModel, type Snapshot } from '../web/snapshot';
@@ -91,6 +94,33 @@ export const createAgentHost = (deps: HostDeps) => {
   const listeners = new Set<(event: TaskEvent) => void>();
   const turns = new Map<string, HostTurn>();
   const turnListeners = new Set<(event: TurnEvent) => void>();
+  const sessionListeners = new Set<(turns: SessionTurn[]) => void>();
+  let sessionTurns: SessionTurn[] = [];
+  // What the agent still remembers. A restart of that process sends an empty list.
+  const setSession = (turns: SessionTurn[]) => {
+    sessionTurns = turns;
+    sessionListeners.forEach((listener) => listener(sessionTurns));
+  };
+  const sessionTurnSchema = z.strictObject({
+    turnId: z.string().min(1).max(64),
+    user: z.string().max(2_000),
+    label: z.enum(TURN_LABELS).nullable(),
+    reply: z.string().max(4_000),
+    fallback: z.enum(FALLBACK_IDS as [FallbackId, ...FallbackId[]]).nullable(),
+    tasks: z
+      .array(
+        z.strictObject({
+          lane: z.enum(['WEB', 'UI', 'INFO']),
+          goal: z.string().max(1_000),
+          ok: z.boolean(),
+          error: z.string().max(500).optional(),
+        }),
+      )
+      .max(12),
+    pending: z.boolean(),
+    at: z.number().finite(),
+  });
+  const sessionSchema = z.array(sessionTurnSchema).max(SESSION_TURN_LIMIT);
   const capUsd = deps.capUsd ?? TASK_SPEND_CAP_USD;
   let worker: UtilityProcess | undefined;
   let port: MessagePortMain | undefined;
@@ -408,6 +438,12 @@ export const createAgentHost = (deps: HostDeps) => {
   } as const;
 
   const onAgentMessage = async (message: AgentMessage) => {
+    if (message.kind === 'session') {
+      const parsed = sessionSchema.safeParse(message.turns);
+      if (parsed.success) setSession(parsed.data);
+      return;
+    }
+
     if (message.kind === 'turn_event') {
       if (!turns.has(message.event.turnId)) return;
       if (message.event.type === 'done') turns.delete(message.event.turnId);
@@ -459,6 +495,7 @@ export const createAgentHost = (deps: HostDeps) => {
       worker = undefined;
       port = undefined;
       failAll('The agent process stopped.');
+      setSession([]);
     });
     worker = child;
     port = port1;
@@ -475,6 +512,7 @@ export const createAgentHost = (deps: HostDeps) => {
     port?.close();
     port = undefined;
     old?.kill();
+    setSession([]);
   };
 
   const newTaskId = () => `t${++taskCounter}-${Date.now().toString(36)}`;
@@ -522,6 +560,19 @@ export const createAgentHost = (deps: HostDeps) => {
     onTurnEvent(listener: (event: TurnEvent) => void) {
       turnListeners.add(listener);
       return () => turnListeners.delete(listener);
+    },
+
+    getSession: () => sessionTurns,
+
+    // Forgets the turns used for follow-ups. The sidebar hears the empty snapshot.
+    clearSession() {
+      setSession([]);
+      post({ kind: 'clear_session' });
+    },
+
+    onSession(listener: (turns: SessionTurn[]) => void) {
+      sessionListeners.add(listener);
+      return () => sessionListeners.delete(listener);
     },
 
     // Starts a WEB task on the leased tab. `facts` are extra things the user has confirmed (f1, f2…); the

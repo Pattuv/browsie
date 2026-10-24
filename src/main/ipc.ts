@@ -32,6 +32,7 @@ import { listBookmarks, moveBookmark, removeBookmark, updateBookmark } from './d
 import { clearHistory, listHistory, removeVisit, searchHistory } from './data/history';
 import { changeSitePermission, clearSiteData, getSiteInfo, resetActiveSitePermissions } from './browser/siteInfo';
 import { getSuggestionImage, getSuggestions, warmSuggestions } from './browser/suggestions';
+import { clearSessionTurns, getSessionTurns } from './agent';
 import { bringToFront, getBrowserWindow, isAppUrl, openBrowser, openModePicker } from './windows';
 
 let dashboardAnimatedThisSession = false;
@@ -124,6 +125,8 @@ export const registerIpc = () => {
   handle('browser:launch', () => openBrowser());
   handleFromBrowser('browser:exit', () => getBrowserWindow()?.close());
   handleFromBrowser('browser:get-state', () => getBrowserState());
+  handleFromBrowser('session:get', () => getSessionTurns());
+  handleFromBrowser('session:clear', () => clearSessionTurns());
   handleFromBrowser('browser:new-tab', (_event, url?: unknown) =>
     newTab(typeof url === 'string' ? url : undefined),
   );

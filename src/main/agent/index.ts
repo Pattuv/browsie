@@ -3,7 +3,7 @@ import path from 'node:path';
 import { connectWorkspace, getAccessToken, getAccountId, getSession, invalidateAccessToken, workspaceAccess } from '../auth/session';
 import { createGoogleTools } from '../google/tools';
 import { bringToFront, getBrowserWindow } from '../windows';
-import { agentCursor, agentTabContents, isAgentContents, leaseAgentTab, releaseAgentTab } from '../browser/tabs';
+import { agentCursor, agentTabContents, isAgentContents, leaseAgentTab, releaseAgentTab, sendToChrome } from '../browser/tabs';
 import { getDownloadsFolder, setDownloadPolicy } from '../browser/webSession';
 import { readAiKey } from '../data/aiKey';
 import { createBroker } from './broker';
@@ -56,6 +56,12 @@ export const getAgentHost = () => {
     onStarted: (contents, fileName) => host?.noteDownload(contents, fileName),
   });
 
+  host.onSession((turns) => sendToChrome('session:changed', turns));
+
   app.once('will-quit', () => host?.stop());
   return host;
 };
+
+export const getSessionTurns = () => host?.getSession() ?? [];
+
+export const clearSessionTurns = () => host?.clearSession();
