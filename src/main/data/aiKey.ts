@@ -35,6 +35,9 @@ export type SaveAiKeyResult =
   | 'offline'
   | 'unavailable';
 
+// no-key: this account has no Browsie key yet, so the cap can't be changed on its own.
+export type UpdateAiKeyResult = SaveAiKeyResult | 'no-key';
+
 // Most Browsie's key may spend, in US dollars, per period (or in total when it never resets).
 const MAX_CAP = 10_000;
 
@@ -74,6 +77,14 @@ const readStored = (accountId: string): StoredKeys | null => {
 // Best effort: an orphaned Browsie key only clutters their dashboard; it can't be used without the file.
 const deleteBrowsieKey = (stored: StoredKeys) => {
   openRouterFetch(`/keys/${stored.aiKeyHash}`, stored.managementKey, { method: 'DELETE' }).catch(() => undefined);
+};
+
+// Write-then-rename: a crash mid-write leaves the old keys intact instead of half a file.
+const writeStored = (accountId: string, stored: StoredKeys) => {
+  fs.mkdirSync(keyFolder(), { recursive: true });
+  const tempPath = `${keyPath(accountId)}.tmp`;
+  fs.writeFileSync(tempPath, safeStorage.encryptString(JSON.stringify(stored)));
+  fs.renameSync(tempPath, keyPath(accountId));
 };
 
 export const saveAiKey = async (accountId: string, raw: unknown, rawCap: unknown): Promise<SaveAiKeyResult> => {
@@ -121,12 +132,7 @@ export const saveAiKey = async (accountId: string, raw: unknown, rawCap: unknown
 
     const previous = readStored(accountId);
     const stored: StoredKeys = { managementKey, aiKey: body.key, aiKeyHash: body.data.hash };
-
-    // Write-then-rename: a crash mid-write leaves the old keys intact instead of half a file.
-    fs.mkdirSync(keyFolder(), { recursive: true });
-    const tempPath = `${keyPath(accountId)}.tmp`;
-    fs.writeFileSync(tempPath, safeStorage.encryptString(JSON.stringify(stored)));
-    fs.renameSync(tempPath, keyPath(accountId));
+    writeStored(accountId, stored);
 
     // Replacing the keys: don't leave the old Browsie key live on their account.
     if (previous) {
@@ -152,6 +158,86 @@ export const removeAiKey = (accountId: string) => {
 
   fs.rmSync(keyPath(accountId), { force: true });
   fs.rmSync(`${keyPath(accountId)}.tmp`, { force: true });
+};
+
+// Changes the cap on the Browsie key this account already has. The management key stays put.
+export const updateAiCap = async (accountId: string, rawCap: unknown): Promise<UpdateAiKeyResult> => {
+  const cap = parseCap(rawCap);
+  const stored = readStored(accountId);
+
+  if (!cap) {
+    return 'invalid-cap';
+  }
+
+  if (!stored) {
+    return 'no-key';
+  }
+
+  try {
+    const response = await openRouterFetch(`/keys/${stored.aiKeyHash}`, stored.managementKey, {
+      method: 'PATCH',
+      body: JSON.stringify({ limit: cap.limit, limit_reset: cap.reset }),
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      return 'rejected';
+    }
+
+    return response.ok ? 'saved' : 'offline';
+  } catch {
+    return 'offline';
+  }
+};
+
+// Swaps the management key used to read credits and change the cap. When the new key can see Browsie's
+// existing AI key, that key is kept. When it can't (a different OpenRouter account, or the key was
+// deleted), a new Browsie key is made with `rawCap` and the old one is removed.
+export const replaceManagementKey = async (accountId: string, raw: unknown, rawCap: unknown): Promise<UpdateAiKeyResult> => {
+  const managementKey = typeof raw === 'string' ? raw.trim() : '';
+  const stored = readStored(accountId);
+
+  if (!KEY_PATTERN.test(managementKey)) {
+    return 'invalid';
+  }
+
+  if (!stored) {
+    return saveAiKey(accountId, managementKey, rawCap);
+  }
+
+  if (!canPersistSecrets()) {
+    return 'unavailable';
+  }
+
+  try {
+    const check = await openRouterFetch('/credits', managementKey);
+
+    if (check.status === 401) {
+      return 'rejected';
+    }
+
+    if (check.status === 403) {
+      return 'not-management';
+    }
+
+    if (!check.ok) {
+      return 'offline';
+    }
+
+    const owns = await openRouterFetch(`/keys/${stored.aiKeyHash}`, managementKey);
+
+    if (owns.ok) {
+      writeStored(accountId, { ...stored, managementKey });
+      return 'saved';
+    }
+
+    if (owns.status === 404 || owns.status === 403) {
+      return saveAiKey(accountId, managementKey, rawCap);
+    }
+
+    return 'offline';
+  } catch {
+    return 'offline';
+  }
 };
 
 // Main only: the key the AI features call OpenRouter with. Null when missing or the OS refuses to decrypt.

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Review · Mug Shop</title><link rel="stylesheet" href="/shared.css"><script src="/shared.js"></script><script src="cart.js"></script></head>
+<body>
+  <main>
+    <h1>Step 3 of 3: Review your order</h1>
+    <dl id="summary"></dl>
+    <form id="review">
+      <label><input type="checkbox" id="gift"> Gift wrap</label>
+      <button>Place order</button>
+    </form>
+  </main>
+  <script>
+    const current = order();
+    const items = cart().map((id) => PRODUCTS[id].name);
+    document.getElementById('summary').innerHTML = [
+      ['Items', items.join(', ') || 'none'],
+      ['Ship to', `${current.name ?? ''}, ${current.address ?? ''}, ${current.city ?? ''}`],
+      ['Pay with', current.method === 'paypal' ? 'PayPal' : 'Card ending in 4242'],
+    ]
+      .map(([term, detail]) => `<dt>${term}</dt><dd>${escapeHtml(detail)}</dd>`)
+      .join('');
+    document.getElementById('review').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      await report('order', { ...current, items, giftWrap: document.getElementById('gift').checked });
+      sessionStorage.clear();
+      location.href = 'done.html';
+    });
+  </script>
+</body>
+</html>

@@ -7,6 +7,16 @@ const REVOKE_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
 export const DRIVE_APPDATA_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 const SCOPES = ['openid', 'profile', 'email', DRIVE_APPDATA_SCOPE];
 
+// What the INFO lane needs to read and change the account's mail, calendar and files. Asked for only when
+// the user first asks Browsie about one of them (incremental consent), never at sign-in.
+// Gmail scopes are "restricted": fine for test users, but public release needs Google's verification.
+export const WORKSPACE_SCOPES = {
+  gmail: 'https://www.googleapis.com/auth/gmail.modify',
+  calendar: 'https://www.googleapis.com/auth/calendar',
+  drive: 'https://www.googleapis.com/auth/drive',
+} as const;
+export type WorkspaceService = keyof typeof WORKSPACE_SCOPES;
+
 export type TokenResponse = {
   access_token: string;
   expires_in: number;
@@ -36,14 +46,23 @@ const assertConfigured = () => {
   }
 };
 
-export const buildAuthUrl = (params: { redirectUri: string; codeChallenge: string; state: string }) => {
+export const buildAuthUrl = (params: {
+  redirectUri: string;
+  codeChallenge: string;
+  state: string;
+  // Extra permissions on top of sign-in's, kept alongside what was granted before.
+  extraScopes?: string[];
+  loginHint?: string;
+}) => {
   assertConfigured();
   const url = new URL(AUTH_ENDPOINT);
   url.search = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
     redirect_uri: params.redirectUri,
     response_type: 'code',
-    scope: SCOPES.join(' '),
+    scope: [...SCOPES, ...(params.extraScopes ?? [])].join(' '),
+    ...(params.extraScopes?.length && { include_granted_scopes: 'true' }),
+    ...(params.loginHint && { login_hint: params.loginHint }),
     code_challenge: params.codeChallenge,
     code_challenge_method: 'S256',
     state: params.state,

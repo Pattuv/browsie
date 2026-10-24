@@ -49,6 +49,8 @@ type AuthSession = {
   pictureDataUrl?: string;
   // False when the user didn't grant Drive access on the consent screen.
   syncEnabled?: boolean;
+  // Which of the account's Google services Browsie may read and change (Connect Google in setup).
+  googleServices?: { gmail: boolean; calendar: boolean; drive: boolean };
   // False when the sign-in isn't saved, so it ends when the app quits: setup isn't finished yet,
   // or Windows DPAPI could not save it.
   rememberedOnDevice?: boolean;
@@ -64,6 +66,9 @@ interface BrowsieAuthAPI {
   cancelSignIn: () => Promise<void>;
   // Marks the signed-in account as set up; the session push that follows swaps setup for the Dashboard.
   completeSetup: () => Promise<void>;
+  // Opens Google's permission page for Gmail, Calendar and Drive. Resolves with what's connected once the
+  // user is done there (or closes it).
+  connectGoogle: () => Promise<{ gmail: boolean; calendar: boolean; drive: boolean }>;
   // Hands the signed-in account's OpenRouter management key to main. Main checks it with OpenRouter, makes
   // Browsie its own AI key with it (capped at `cap`), and stores both encrypted. Never read back.
   // invalid: not shaped like a key. invalid-cap: cap not between $0 and $10,000. rejected: OpenRouter doesn't
@@ -73,6 +78,16 @@ interface BrowsieAuthAPI {
     key: string,
     cap: { limit: number; reset: AiResets | null },
   ) => Promise<'saved' | 'invalid' | 'invalid-cap' | 'rejected' | 'not-management' | 'offline' | 'unavailable'>;
+  // Changes the cap on the Browsie key already stored for this account.
+  updateAiCap: (
+    cap: { limit: number; reset: AiResets | null },
+  ) => Promise<'saved' | 'invalid' | 'invalid-cap' | 'rejected' | 'not-management' | 'offline' | 'unavailable' | 'no-key'>;
+  // Replaces the stored management key. Keeps Browsie's AI key when the new key can manage it; otherwise
+  // makes a new AI key using `cap`.
+  replaceManagementKey: (
+    key: string,
+    cap: { limit: number; reset: AiResets | null },
+  ) => Promise<'saved' | 'invalid' | 'invalid-cap' | 'rejected' | 'not-management' | 'offline' | 'unavailable' | 'no-key'>;
   // removeDeviceData also deletes this account's web logins, cookies and site data from this computer.
   // resetSetup also forgets that this account finished setup, so its next sign-in goes through setup again.
   signOut: (options?: { removeDeviceData?: boolean; resetSetup?: boolean }) => Promise<void>;
@@ -122,6 +137,14 @@ type BrowserTab = {
   muted: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
+  // The agent is working on this tab.
+  agent: boolean;
+};
+
+// Which chrome control the agent used, so the chrome can pulse it for a caretaker watching. Cosmetic only.
+type AgentUiActivity = {
+  target: 'tab' | 'address' | 'back' | 'forward' | 'reload' | 'zoom' | 'bookmarks' | 'history';
+  label: string;
 };
 
 // Main owns the tabs; this snapshot is everything the chrome is told about them.
@@ -132,6 +155,8 @@ type BrowserState = {
   lockdown: boolean;
   // Goes up each time lockdown comes back on after Google sign-in, to show the lockdown notice again.
   lockdownNotice: number;
+  // Space is held while lockdown is on. Main shows the speech pill over the page.
+  talking: boolean;
 };
 
 // Where the page area sits in the window, in CSS pixels (the chrome measures it, main places the website there).
@@ -216,6 +241,8 @@ interface BrowsieBrowserAPI {
   // True while a chrome popover is open, so the website is inset and does not cover the menu.
   // A still image (data: URL) of the website on screen, or null if there isn't one.
   capturePage: () => Promise<string | null>;
+  // The launch animation finished. Push-to-talk starts working shortly after.
+  chromeReady: () => Promise<void>;
   setOverlayOpen: (open: boolean) => Promise<void>;
   // Human input on websites is ignored while this is on. Main-process loads still run.
   setLockdown: (enabled: boolean) => Promise<void>;
@@ -228,6 +255,8 @@ interface BrowsieBrowserAPI {
   resetSitePermissions: () => Promise<SitePermission[]>;
   // Ctrl+L / F6 / Alt+D. Returns an unsubscribe function.
   onFocusAddress: (callback: () => void) => () => void;
+  // The agent just used a chrome control (opened a tab, typed in the address bar…), for the highlight.
+  onAgentActivity: (callback: (activity: AgentUiActivity) => void) => () => void;
   // Opens browsie://history or browsie://bookmarks: an existing tab showing it, the empty New Tab, or a new tab.
   openPage: (page: 'history' | 'bookmarks' | 'settings') => Promise<void>;
 }
@@ -311,11 +340,52 @@ type AiUsage =
     }
   | { state: 'no-key' | 'invalid-key' | 'offline' };
 
+// One turn in the session sidebar. Mirrors shared/agent/session.ts.
+type SessionTaskNote = {
+  lane: 'WEB' | 'UI' | 'INFO';
+  goal: string;
+  ok: boolean;
+  error?: string;
+};
+
+type SessionTurn = {
+  turnId: string;
+  user: string;
+  label: 'CHAT' | 'HELP' | 'INFO' | 'UI' | 'WEB' | 'RESTRICTED' | 'UNCLEAR' | null;
+  reply: string;
+  // A fixed line from shared/agent/fallbacks.ts, or null when the reply was composed live.
+  fallback:
+    | 'didnt_catch'
+    | 'unclear'
+    | 'restricted'
+    | 'stopped'
+    | 'info_unavailable'
+    | 'no_key'
+    | 'offline'
+    | 'out_of_credit'
+    | 'no_page'
+    | 'confirm_again'
+    | 'error'
+    | null;
+  tasks: SessionTaskNote[];
+  pending: boolean;
+  at: number;
+};
+
+interface BrowsieSessionAPI {
+  get: () => Promise<SessionTurn[]>;
+  // Forgets the turns this session is remembering.
+  clear: () => Promise<void>;
+  // Returns an unsubscribe function. The list replaces the previous one.
+  onChanged: (callback: (turns: SessionTurn[]) => void) => () => void;
+}
+
 interface BrowsieAPI {
   auth: BrowsieAuthAPI;
   data: BrowsieDataAPI;
   browser: BrowsieBrowserAPI;
   library: BrowsieLibraryAPI;
+  session: BrowsieSessionAPI;
   openModePicker: () => Promise<void>;
   openExternal: (url: string) => Promise<void>;
   // Asks OpenRouter at most once a minute; the menu can call it every time it opens.
@@ -328,6 +398,41 @@ interface BrowsieAPI {
   isWindowMaximized: () => Promise<boolean>;
   // Returns an unsubscribe function.
   onWindowMaximizedChange: (callback: (maximized: boolean) => void) => () => void;
+  // Space is held. The speech pill asks once when it mounts, then listens.
+  isSpeechHeld: () => Promise<boolean>;
+  // deviceVolumeDb is how far the system volume turns sound down, in dB (0 at full), when space
+  // was pressed or let go.
+  onSpeechHeld: (callback: (held: boolean, deviceVolumeDb: number) => void) => () => void;
+  voice: BrowsieVoiceAPI;
+}
+
+// What the voice layer is doing: working on a request (Space stops it), or waiting for an answer.
+type VoiceMode = 'idle' | 'working' | 'awaiting';
+
+// Something for the speech view to play: synthesized speech, a fixed line (its shipped recording if there
+// is one, else the audio given), or text for the system voice when synthesis failed.
+type VoicePlayItem = (
+  | { kind: 'mp3'; data: Uint8Array; droppable?: boolean }
+  | { kind: 'clip'; id: string; data?: Uint8Array }
+  | { kind: 'system'; text: string }
+) & { epoch?: number };
+
+interface BrowsieVoiceAPI {
+  // The speech view: what was recorded while Space was held, as 16 kHz mono WAV.
+  sendAudio: (wav: ArrayBuffer, durationMs: number) => Promise<void>;
+  // Which fixed lines have shipped recordings.
+  reportClips: (ids: string[]) => Promise<void>;
+  // Development diagnostics: what happened to each thing it was asked to play.
+  log: (message: string) => Promise<void>;
+  // Everything handed over for this epoch has finished playing.
+  reportQuiet: (epoch: number, finished: number) => Promise<void>;
+  onPlay: (callback: (item: VoicePlayItem) => void) => () => void;
+  // The speech pill: stay up while a request is running or a reply is still playing.
+  onPill: (callback: (visible: boolean) => void) => () => void;
+  onStop: (callback: () => void) => () => void;
+  onStyle: (callback: (style: { volume: number; rate: number }) => void) => () => void;
+  // The chrome: for the "Working… press Space to stop" status.
+  onStatus: (callback: (mode: VoiceMode) => void) => () => void;
 }
 
 interface Window {

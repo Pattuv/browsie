@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Mug Shop</title><link rel="stylesheet" href="/shared.css"><script src="/shared.js"></script><script src="cart.js"></script></head>
+<body>
+  <nav><a href="cart.html" id="cart-link">Cart (0)</a></nav>
+  <main>
+    <h1>Mug Shop</h1>
+    <ul>
+      <li>Blue mug, $12 <button type="button" aria-label="Add Blue mug to cart" data-id="blue">Add to cart</button></li>
+      <li>Red mug, $14 <button type="button" aria-label="Add Red mug to cart" data-id="red">Add to cart</button></li>
+    </ul>
+    <p class="status" role="status" id="status"></p>
+  </main>
+  <script>
+    const refresh = () => (document.getElementById('cart-link').textContent = `Cart (${cart().length})`);
+    document.querySelectorAll('[data-id]').forEach((button) =>
+      button.addEventListener('click', () => {
+        save('cart', [...cart(), button.dataset.id]);
+        document.getElementById('status').textContent = `Added ${PRODUCTS[button.dataset.id].name} to cart`;
+        refresh();
+      }),
+    );
+    refresh();
+  </script>
+</body>
+</html>

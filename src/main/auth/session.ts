@@ -4,6 +4,8 @@ import {
   decodeIdToken,
   DRIVE_APPDATA_SCOPE,
   exchangeCode,
+  WORKSPACE_SCOPES,
+  type WorkspaceService,
   fetchPictureDataUrl,
   GoogleOAuthError,
   refreshAccessToken,
@@ -50,6 +52,11 @@ const toAuthSession = (live: LiveSession | null): AuthSession =>
         email: live.vault.email,
         pictureDataUrl: live.vault.pictureDataUrl,
         syncEnabled: hasDriveAccess(live),
+        googleServices: {
+          gmail: live.vault.scopes.includes(WORKSPACE_SCOPES.gmail),
+          calendar: live.vault.scopes.includes(WORKSPACE_SCOPES.calendar),
+          drive: live.vault.scopes.includes(WORKSPACE_SCOPES.drive),
+        },
         rememberedOnDevice: live.persisted,
         // Looked up here so the account ID stays in main; the renderer only learns the answer.
         setupComplete: isSetupComplete(live.vault.sub),
@@ -166,6 +173,76 @@ export const signIn = (onBrowserReturned?: () => void) => {
 
   return inFlightSignIn;
 };
+
+// --- Gmail, Calendar and Drive for the INFO lane ---
+
+export const hasWorkspaceAccess = (service: WorkspaceService) =>
+  current !== null && current.vault.scopes.includes(WORKSPACE_SCOPES[service]);
+
+export const workspaceAccess = () =>
+  Object.fromEntries((Object.keys(WORKSPACE_SCOPES) as WorkspaceService[]).map((service) => [service, hasWorkspaceAccess(service)])) as Record<
+    WorkspaceService,
+    boolean
+  >;
+
+let inFlightConnect: Promise<Record<WorkspaceService, boolean>> | null = null;
+
+// Opens Google's permission page (in the user's browser, like sign-in) asking for mail, calendar and
+// Drive access for the signed-in account. The new refresh token covers everything granted so far, so it
+// replaces the old one. A different account choosing to sign in on that page is refused.
+const runConnectWorkspace = async (onBrowserReturned?: () => void) => {
+  const live = current;
+  if (!live) throw new Error('Not signed in.');
+
+  const { verifier, challenge } = createPkcePair();
+  const state = createState();
+  const loopback = await startLoopback(state, SIGN_IN_TIMEOUT_MS, onBrowserReturned);
+
+  try {
+    await shell.openExternal(
+      buildAuthUrl({
+        redirectUri: loopback.redirectUri,
+        codeChallenge: challenge,
+        state,
+        extraScopes: Object.values(WORKSPACE_SCOPES),
+        loginHint: live.vault.email,
+      }),
+    );
+    const code = await loopback.code;
+    const tokens = await exchangeCode({ code, codeVerifier: verifier, redirectUri: loopback.redirectUri });
+
+    if (tokens.id_token && decodeIdToken(tokens.id_token).sub !== live.vault.sub) {
+      // Someone picked another Google account. Don't mix it into this one.
+      await revokeToken(tokens.refresh_token ?? tokens.access_token).catch(() => undefined);
+      throw new Error('That was a different Google account.');
+    }
+    if (current !== live) throw new Error('The account changed while asking for permission.');
+
+    live.vault = {
+      ...live.vault,
+      refreshToken: tokens.refresh_token ?? live.vault.refreshToken,
+      scopes: tokens.scope.split(' '),
+    };
+    rememberAccessToken(live, tokens);
+    if (live.persisted) live.persisted = writeVault(live.vault);
+    setSession(live);
+    return workspaceAccess();
+  } catch (error) {
+    if (error instanceof SignInAborted) return workspaceAccess();
+    throw error;
+  } finally {
+    loopback.cancel();
+  }
+};
+
+export const connectWorkspace = (onBrowserReturned?: () => void) => {
+  inFlightConnect ??= runConnectWorkspace(onBrowserReturned).finally(() => {
+    inFlightConnect = null;
+  });
+  return inFlightConnect;
+};
+
+export const isConnectingWorkspace = () => inFlightConnect !== null;
 
 export const cancelSignIn = () => {
   cancelPendingSignIn?.();

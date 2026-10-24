@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Sign in · Mug Shop</title><link rel="stylesheet" href="/shared.css"><script src="/shared.js"></script></head>
+<body>
+  <main>
+    <h1>Sign in to Mug Shop</h1>
+    <form id="login">
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="email" required>
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" required>
+      <button>Sign in</button>
+    </form>
+    <p id="error" class="status" role="alert"></p>
+  </main>
+  <script>
+    document.getElementById('login').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      if (!email || !password) {
+        document.getElementById('error').textContent = 'Enter your email and password.';
+        return;
+      }
+      // Never send the password itself anywhere, even to the mock server.
+      await report('login', { email, passwordLength: password.length });
+      sessionStorage.setItem('user', email);
+      location.href = '/login/welcome.html';
+    });
+  </script>
+</body>
+</html>

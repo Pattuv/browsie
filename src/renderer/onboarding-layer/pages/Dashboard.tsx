@@ -11,9 +11,10 @@ import DashboardTip from "../../components/DashboardTip";
 import ProfileMenu from "../../components/ProfileMenu";
 import SettingsDialog from "../../components/SettingsDialog";
 import { useAuthStore } from "../../stores/authStore";
+import { ConnectGoogleButton } from "./setup-pages/GoogleSetup";
 import { useDataStore } from "../../stores/dataStore";
 import { playClick } from "../../sounds";
-import mascot from "../../assets/mascot.svg";
+import Mascot from "../../components/Mascot";
 import wordmark from "../../assets/wordmark.svg";
 import book from "../../assets/paint-icons/book.png";
 
@@ -148,6 +149,8 @@ function Dashboard() {
   const [showNotch, setShowNotch] = useState(false);
   const mode = useDataStore((state) => state.userMode);
   const firstName = useAuthStore((state) => state.firstName);
+  const googleServices = useAuthStore((state) => state.googleServices);
+  const googleMissing = Boolean(googleServices) && !Object.values(googleServices ?? {}).every(Boolean);
 
   useEffect(() => {
     let timers: ReturnType<typeof setTimeout>[] = [];
@@ -268,7 +271,7 @@ function Dashboard() {
             aria-label="Settings"
             title="Settings"
             onClick={() => setSettingsOpen(true)}
-            className="app-region-no-drag flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl bg-zinc-100 text-black transition-[background-color,transform] duration-200 ease-out hover:bg-zinc-200 active:scale-95"
+            className="app-region-no-drag flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl text-black transition-[opacity,transform] duration-200 ease-out hover:opacity-60 active:scale-95"
           >
             <SlidersHorizontal size={18} strokeWidth={2.25} aria-hidden="true" />
           </button>
@@ -285,10 +288,9 @@ function Dashboard() {
           Vertical gaps are clamp(current size, vh, cap): unchanged at ~800px tall, roomier on taller windows. */}
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center p-5 gap-[clamp(0.5rem,1vh,1rem)]">
         {showRestLayout && (
-          <img
-            src={mascot}
+          <Mascot
             alt="Browsie"
-            className={`theme-invert h-25.5 mt-2.5 mb-1 ${revealClass(shouldAnimate.current, showMascot)}`}
+            className={`h-25.5 mt-2.5 mb-1 ${revealClass(shouldAnimate.current, showMascot)}`}
           />
         )}
 
@@ -307,6 +309,10 @@ function Dashboard() {
           >
             Your AI navigation assistant is here.
           </p>
+        )}
+
+        {showRestLayout && googleMissing && (
+          <ConnectGoogleButton className={revealClass(shouldAnimate.current, showSubtitle)} />
         )}
 
         {showRestLayout && (

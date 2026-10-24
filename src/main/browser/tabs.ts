@@ -8,10 +8,14 @@ import {
   type Input,
   type MenuItemConstructorOptions,
   type WebContents,
+  webContents as allContents,
 } from 'electron';
+import type { AgentCursor } from '../web/executor';
+import cursorImage from '../../renderer/assets/cursor.png?inline';
 import { getSession } from '../auth/session';
 import { bookmarkPage, listBookmarks, removeBookmark } from '../data/bookmarks';
 import { getData, updateData } from '../data/localStore';
+import { getSystemVolumeDb } from '../systemVolume';
 import { recordVisit, updateVisitTitle } from '../data/history';
 import { clearFaviconCache, resolveFavicon } from './favicons';
 import { getGoogleLogin, googleSignInUrl, isGoogleAccountsUrl, onGoogleLoginChange } from './googleWebLogin';
@@ -45,6 +49,8 @@ type Tab = {
   // Where Back goes from Browsie's own pages, newest last: an earlier Browsie page (New Tab → History),
   // or the website this page was opened over (that site's view is still loaded behind it).
   pageBack: PageBackEntry[];
+  // The agent task working on this tab's website, if any. Only one tab is leased at a time.
+  agentTaskId: string | null;
 };
 
 type PageBackEntry =
@@ -96,10 +102,14 @@ let lockdown = true;
 let relockAfterGoogleSignIn = false;
 // Bumped each time lockdown comes back on after Google sign-in, so the chrome shows its notice again.
 let lockdownNotice = 0;
+// Space held while lockdown is on. A view of its own draws the speech pill from this, above every page.
+let talking = false;
 // The first tab of a window or account, while we're still waiting to hear whether Google is logged in.
 let startTabId: number | null = null;
-const lockdownCssKey = new Map<number, string>();
-const LOCKDOWN_CSS = 'html { pointer-events: none !important; }';
+// Lockdown's mouse block: a transparent view stacked over the page that takes every click, scroll and
+// hover. Input the agent sends through the debugger goes straight to the page underneath, so the agent
+// keeps working while a person can't. Sits above the page views and below the speech pill.
+let glassView: WebContentsView | null = null;
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
@@ -129,6 +139,7 @@ const describeTab = (tab: Tab): BrowserTab => {
       // Back from its first page, still loaded behind (not when that site is what Back leads to).
       canGoBack: tab.pageBack.length > 0,
       canGoForward: view !== null && !isOverSite(tab),
+      agent: tab.agentTaskId !== null,
     };
   }
 
@@ -145,6 +156,7 @@ const describeTab = (tab: Tab): BrowserTab => {
     muted: contents.isAudioMuted(),
     canGoBack: canGoBackFrom(tab, contents),
     canGoForward: contents.navigationHistory.canGoForward(),
+    agent: tab.agentTaskId !== null,
   };
 };
 
@@ -153,12 +165,447 @@ export const getBrowserState = (): BrowserState => ({
   activeTabId,
   lockdown,
   lockdownNotice,
+  talking,
 });
+
+const setTalking = (held: boolean) => {
+  if (talking === held) {
+    return;
+  }
+
+  talking = held;
+
+  if (!held) {
+    talkCooldownUntil = Date.now() + TALK_COOLDOWN_MS;
+  }
+
+  if (held) {
+    talkLatch = false;
+    revealSpeechView(true);
+    notifySpeechHeld(true);
+  } else {
+    notifySpeechHeld(false);
+    restoreTalkFocus();
+    // The recording is still on its way to a request. Leave the pill up until that settles.
+    talkLatch = true;
+
+    if (talkLatchTimer) {
+      clearTimeout(talkLatchTimer);
+    }
+
+    talkLatchTimer = setTimeout(() => {
+      talkLatchTimer = null;
+      settleTalkLatch();
+    }, TALK_LATCH_TIMEOUT_MS);
+    syncSpeechView();
+  }
+
+  emit();
+};
+
+export const isTalking = () => talking;
+
+// The pill's own view. Web pages are views painted above the chrome, so a pill drawn in the chrome
+// either sits under them or has to shrink the page to stay visible. This view is kept above every
+// page view and only covers its own rectangle, so the page underneath does not move.
+// The view is a transparent slot that runs from the pill's resting spot down to the window's bottom
+// edge. The pill slides up and down inside it with CSS, so the view itself never moves while shown.
+// The pill grows while it says "Working…", so the view is the wide size and the pill centers inside it.
+const PILL_SLOT_WIDTH = 240;
+const PILL_HEIGHT = 48;
+// Margin around the pill inside its view.
+const PILL_PAD = 8;
+// Gap under the pill. Clears the rotating tips at the bottom of the New Tab page.
+const PILL_BOTTOM = 64;
+// How long the pill takes to slide back down before the view is hidden. Matches SpeechPill's CSS.
+const PILL_SLIDE_OUT_MS = 200;
+// Chromium drops the keyUp that follows a keyDown main blocked, so the release would never be seen
+// where the press was. While talking, focus moves to the pill's view (which lets space through), so
+// the keyUp lands there. Focus goes back when the pill hides.
+let speechView: WebContentsView | null = null;
+let speechGeneration = 0;
+let focusBeforeTalk: WebContents | null = null;
+// Backstop if a keyUp is still missed: space held sends repeat keyDowns, so a quiet gap means let go.
+const TALK_REPEAT_TIMEOUT_MS = 1200;
+let talkWatchdog: ReturnType<typeof setTimeout> | null = null;
+// After letting go, space does nothing for this long, so the pill can't be spammed. Presses during
+// it don't extend it.
+const TALK_COOLDOWN_MS = 1000;
+let talkCooldownUntil = 0;
+// Space does nothing until the chrome's launch animation has finished, and for this long after.
+const TALK_AFTER_LAUNCH_MS = 500;
+let talkReadyAt = Infinity;
+// Asked on each fresh Space press while lockdown is on. True means the press was used (to stop a task), so
+// it doesn't open the mic. Set by the voice layer.
+let spaceGate: (() => boolean) | null = null;
+// A press the gate used: its repeats and its release are swallowed too, and so is a second copy of the
+// same keydown. Cleared on release, or shortly after, in case blocking the keydown drops the keyup.
+let spaceUsed = false;
+let spaceUsedTimer: ReturnType<typeof setTimeout> | null = null;
+// Space was let go and the recording hasn't been settled yet. Keeps the pill from sliding away, and keeps
+// Space from opening the mic again until that recording is dealt with.
+let talkLatch = false;
+// If a recording never arrives (a tap too short to record anything), don't leave the pill up for good.
+const TALK_LATCH_TIMEOUT_MS = 8000;
+let talkLatchTimer: ReturnType<typeof setTimeout> | null = null;
+// After a press stops a request, Space does nothing for this long, so mashing it can't stop and then
+// immediately reopen the mic.
+const STOP_COOLDOWN_MS = 900;
+// A request is running, or Browsie is still speaking.
+let agentVisible = false;
+let speechShown = false;
+
+export const setSpaceGate = (gate: (() => boolean) | null) => {
+  spaceGate = gate;
+};
+
+// The chrome finished its launch animation.
+export const markChromeReady = () => {
+  talkReadyAt = Math.min(talkReadyAt, Date.now() + TALK_AFTER_LAUNCH_MS);
+};
+
+const placeSpeechPill = () => {
+  if (!host || host.isDestroyed() || !speechView) {
+    return;
+  }
+
+  const [width, height] = host.getContentSize();
+  const slotHeight = PILL_PAD + PILL_HEIGHT + PILL_BOTTOM;
+  speechView.setBounds({
+    x: Math.round((width - PILL_SLOT_WIDTH) / 2),
+    y: height - slotHeight,
+    width: PILL_SLOT_WIDTH,
+    height: slotHeight,
+  });
+};
+
+const speechOpen = () => talking || talkLatch || agentVisible;
+
+const publishSpeechPill = () => {
+  const contents = speechView?.webContents;
+
+  if (!contents || contents.isDestroyed()) {
+    return;
+  }
+
+  contents.send('voice:pill', speechOpen());
+};
+
+const restoreTalkFocus = () => {
+  if (focusBeforeTalk && !focusBeforeTalk.isDestroyed()) {
+    focusBeforeTalk.focus();
+  }
+
+  focusBeforeTalk = null;
+};
+
+// Shows the view. Focus moves to it only for a hold, so the keyup isn't lost. An agent pill leaves
+// focus where it was: Space still stops the request, and the page stays usable.
+const revealSpeechView = (focus: boolean) => {
+  if (!host || host.isDestroyed() || !speechView) {
+    return;
+  }
+
+  speechShown = true;
+  speechGeneration += 1;
+  raiseSpeechPill();
+  placeSpeechPill();
+  speechView.setVisible(true);
+  publishSpeechPill();
+
+  if (!focus) {
+    return;
+  }
+
+  const focused = allContents.getFocusedWebContents();
+  focusBeforeTalk = focused && focused !== speechView.webContents ? focused : focusBeforeTalk;
+  speechView.webContents.focus();
+};
+
+const syncSpeechView = () => {
+  if (speechOpen()) {
+    revealSpeechView(false);
+    return;
+  }
+
+  hideSpeechPill();
+};
+
+// The voice layer: true while a request is in progress or a reply is still playing.
+export const setAgentVisible = (on: boolean) => {
+  if (agentVisible === on) {
+    publishSpeechPill();
+    return;
+  }
+
+  agentVisible = on;
+  syncSpeechView();
+};
+
+// The recording that held the pill open has been dealt with.
+export const settleTalkLatch = () => {
+  if (talkLatchTimer) {
+    clearTimeout(talkLatchTimer);
+    talkLatchTimer = null;
+  }
+
+  if (!talkLatch) {
+    return;
+  }
+
+  talkLatch = false;
+  syncSpeechView();
+};
+
+// Adding a view that is already a child moves it to the top. Page views are created after this one.
+const raiseSpeechPill = () => {
+  if (!host || host.isDestroyed() || !speechView) {
+    return;
+  }
+
+  host.contentView.addChildView(speechView);
+};
+
+const notifySpeechHeld = (held: boolean) => {
+  const contents = speechView?.webContents;
+
+  if (!contents || contents.isDestroyed()) {
+    return;
+  }
+
+  // The device volume (in dB) rides along, so the pill can make up for it in its start and end sounds.
+  contents.send('speech:held', held, getSystemVolumeDb());
+};
+
+// The pill slides down first, then the view hides. Pressing again mid-slide keeps it shown.
+const hideSpeechPill = () => {
+  const generation = ++speechGeneration;
+  speechShown = false;
+  publishSpeechPill();
+
+  if (talkWatchdog) {
+    clearTimeout(talkWatchdog);
+    talkWatchdog = null;
+  }
+
+  restoreTalkFocus();
+
+  setTimeout(() => {
+    if (generation !== speechGeneration || speechOpen()) {
+      return;
+    }
+
+    speechView?.setVisible(false);
+  }, PILL_SLIDE_OUT_MS + 40);
+};
+
+// Created with the browser window. Hidden until space is held.
+export const attachSpeechOverlay = (view: WebContentsView) => {
+  speechView = view;
+  // Transparent (ARGB), so only the pill itself shows over the page.
+  view.setBackgroundColor('#00000000');
+  view.setVisible(false);
+
+  if (!host || host.isDestroyed()) {
+    return;
+  }
+
+  host.contentView.addChildView(view);
+  placeSpeechPill();
+};
+
+// Two corners of the page light up (top-left and bottom-right), then the purple fades out along the edges.
+// The whole graphic fades in when a web task starts and out when it ends. The middle stays clear.
+// The cursor is the same layer, above the page. The image never takes clicks: opacity fades on its own,
+// and the inline style moves it with transform only, so the fade and the glide don't fight.
+const GLASS_FRAME = `<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;height:100%;background:transparent;overflow:hidden}
+/* Lavender light around the page while the agent works: strong in the top-right and bottom-left with a dotted
+   texture, softer in the other corners, and a faint glow along every edge. No border. */
+#glow{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity 700ms ease}
+html.on #glow{opacity:1}
+#glow .edge{position:absolute;inset:0;box-shadow:inset 0 0 70px 6px rgba(149,114,255,.22),inset 0 0 18px rgba(149,114,255,.18)}
+#glow span.blob{position:absolute;border-radius:50%;filter:blur(60px);will-change:transform,opacity;animation:breathe 6s ease-in-out infinite}
+#glow .tr{width:60vmax;height:60vmax;right:-27vmax;top:-29vmax;background:radial-gradient(closest-side,rgba(149,114,255,.78),rgba(160,130,255,.35) 55%,rgba(149,114,255,0))}
+#glow .bl{width:62vmax;height:62vmax;left:-29vmax;bottom:-30vmax;background:radial-gradient(closest-side,rgba(149,114,255,.76),rgba(160,130,255,.33) 55%,rgba(149,114,255,0));animation-delay:-3s}
+#glow .br{width:30vmax;height:30vmax;right:-14vmax;bottom:-16vmax;background:radial-gradient(closest-side,rgba(180,156,255,.32),rgba(180,156,255,0));animation-delay:-1.5s}
+#glow .tl{width:26vmax;height:26vmax;left:-13vmax;top:-14vmax;background:radial-gradient(closest-side,rgba(180,156,255,.26),rgba(180,156,255,0));animation-delay:-4.5s}
+/* Halftone dots that fade out from the two strong corners. */
+#glow .dots{position:absolute;width:42vmax;height:42vmax;background-image:radial-gradient(circle,rgba(125,92,255,.45) 1.1px,transparent 1.7px);background-size:11px 11px}
+#glow .dots.d-tr{right:0;top:0;-webkit-mask-image:radial-gradient(circle at 100% 0,#000 0,rgba(0,0,0,.45) 24%,transparent 55%)}
+#glow .dots.d-bl{left:0;bottom:0;-webkit-mask-image:radial-gradient(circle at 0 100%,#000 0,rgba(0,0,0,.45) 24%,transparent 55%)}
+@keyframes breathe{0%,100%{opacity:.85;transform:scale(1)}50%{opacity:1;transform:scale(1.06)}}
+@media (prefers-reduced-motion: reduce){#glow span.blob{animation:none}}
+#cursor{position:fixed;left:0;top:0;width:32px;height:32px;z-index:50;pointer-events:none;opacity:0;transition:opacity 400ms ease;transform:translate3d(300px,300px,0)}
+#cursor.shown{opacity:1}
+</style></head><body><div id="glow" aria-hidden="true"><span class="blob tr"></span><span class="blob bl"></span><span class="blob br"></span><span class="blob tl"></span><span class="dots d-tr"></span><span class="dots d-bl"></span><span class="edge"></span></div>
+<img id="cursor" alt="" draggable="false" src="${cursorImage}">
+<script>
+(function () {
+  var el = document.getElementById('cursor');
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var state = { x: 0, y: 0, visible: false, clicking: false, duration: 600 };
+  var hideTimer = 0;
+  function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+  function paint() {
+    el.style.transition = 'opacity 400ms ease, transform ' + state.duration + 'ms cubic-bezier(0.45, 0, 0.2, 1)';
+    el.style.transform = 'translate3d(' + (state.x - 8) + 'px,' + (state.y - 5) + 'px,0) scale(' + (state.clicking ? 0.82 : 1) + ')';
+  }
+  window.browsieCursor = {
+    move: function (x, y, duration) {
+      clearTimeout(hideTimer);
+      if (!state.visible) {
+        // Appear in the middle of the page, fade in, then glide to the target.
+        state.x = innerWidth / 2;
+        state.y = innerHeight * 0.55;
+        state.duration = 0;
+        state.clicking = false;
+        paint();
+        void el.offsetWidth;
+        state.visible = true;
+        el.classList.add('shown');
+      }
+      // Longer trips take a little longer, so the motion reads as one smooth sweep.
+      var distance = Math.hypot(x - state.x, y - state.y);
+      state.duration = reduce ? 0 : Math.max(duration, Math.min(1100, 350 + distance * 0.6));
+      state.x = x;
+      state.y = y;
+      state.clicking = false;
+      paint();
+      return sleep(state.duration + 40);
+    },
+    click: function () {
+      if (!state.visible || reduce) return;
+      state.clicking = true;
+      state.duration = 110;
+      paint();
+      return sleep(150).then(function () {
+        if (!state.visible) return;
+        state.clicking = false;
+        paint();
+        return sleep(120);
+      });
+    },
+    hide: function () {
+      if (!state.visible) return;
+      state.visible = false;
+      state.clicking = false;
+      el.classList.remove('shown');
+    }
+  };
+})();
+</script></body></html>`;
+
+const glassDocument = () => `data:text/html,${encodeURIComponent(GLASS_FRAME)}`;
+
+const createGlass = () => {
+  const view = new WebContentsView({
+    webPreferences: {
+      partition: 'browsie-glass',
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      webviewTag: false,
+      backgroundThrottling: false,
+    },
+  });
+  view.setBackgroundColor('#00000000');
+  view.setVisible(false);
+  view.webContents.loadURL(glassDocument()).catch(() => undefined);
+  view.webContents.on('did-finish-load', () => {
+    agentFrameOn = false;
+    layout();
+  });
+  // Clicking the glass focuses it, so keys land here: only space (push-to-talk) does anything.
+  view.webContents.on('before-input-event', (event, input) => {
+    handleTalkKey(input);
+    event.preventDefault();
+  });
+  view.webContents.on('context-menu', (event) => event.preventDefault());
+  view.webContents.on('will-navigate', (event, url) => {
+    // loadURL of our own frame document must get through. Everything else stays put.
+    if (typeof url === 'string' && url.startsWith('data:')) {
+      return;
+    }
+
+    event.preventDefault();
+  });
+  return view;
+};
+
+// Page views are added after the glass, so it's raised again over each one, with the pill above it.
+const raiseGlass = () => {
+  if (host && !host.isDestroyed() && glassView) {
+    host.contentView.addChildView(glassView);
+  }
+
+  raiseSpeechPill();
+};
 
 const emit = () => {
   if (host && !host.isDestroyed()) {
     host.webContents.send('browser:state-changed', getBrowserState());
   }
+};
+
+// Page coordinates, already scaled into this view. The first placement snaps; later ones glide.
+const cursorCall = (expression: string) => {
+  const contents = glassView?.webContents;
+
+  if (!contents || contents.isDestroyed()) {
+    return Promise.resolve();
+  }
+
+  return contents
+    .executeJavaScript(`window.browsieCursor?.${expression}`)
+    .then(() => undefined)
+    .catch(() => undefined);
+};
+
+export const agentCursor: AgentCursor = {
+  move(x, y, durationMs = 600) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return Promise.resolve();
+    }
+
+    const ms = Number.isFinite(durationMs) ? Math.min(2000, Math.max(0, durationMs)) : 600;
+    return cursorCall(`move(${x}, ${y}, ${ms})`);
+  },
+  click() {
+    return cursorCall('click()');
+  },
+  hide() {
+    void cursorCall('hide()');
+  },
+};
+
+// Fades the corner glow in when a web task is on screen, and back out (with the cursor) when it leaves.
+let agentFrameOn = false;
+const syncAgentFrame = (on: boolean) => {
+  if (!glassView || glassView.webContents.isDestroyed() || on === agentFrameOn) {
+    return;
+  }
+
+  agentFrameOn = on;
+
+  if (!on) {
+    agentCursor.hide();
+  }
+
+  void glassView.webContents
+    .executeJavaScript(`(() => {
+      if (!document.getElementById('glow')) throw new Error('no frame');
+      const root = document.documentElement;
+      // The fade-in waits two frames. Remember what's wanted, so an "off" that arrives in between wins
+      // instead of the late "on" turning the glow back on with nothing left to clear it.
+      window.__glowWanted = ${on};
+      if (${on}) requestAnimationFrame(() => requestAnimationFrame(() => { if (window.__glowWanted) root.classList.add('on'); }));
+      else root.classList.remove('on');
+    })()`)
+    .catch(() => {
+      // Only undo our own state: a newer call may already have changed it.
+      if (agentFrameOn === on) agentFrameOn = !on;
+    });
 };
 
 // Puts every view where it belongs: only the active tab is visible, inside the page card,
@@ -191,11 +638,23 @@ const layout = () => {
 
     tab.view.setBounds(contentBounds);
   }
+
+  // The glass covers exactly the page on screen, and only while lockdown is on.
+  const shown = activeTab();
+  const pageVisible = Boolean(shown?.view?.getVisible());
+  glassView?.setVisible(lockdown && pageVisible);
+
+  if (lockdown && pageVisible && shown?.view) {
+    glassView?.setBounds(shown.view.getBounds());
+  }
+
+  placeSpeechPill();
+  syncAgentFrame(Boolean(lockdown && pageVisible && shown?.agentTaskId));
 };
 
 // Typed text → a safe web address. Real http(s) URLs pass through, things that look like a
 // domain get https:// added, and everything else (including file:, javascript:) is searched for.
-const toUrl = (input: unknown) => {
+export const toUrl = (input: unknown) => {
   if (typeof input !== 'string') {
     throw new Error('Address must be text.');
   }
@@ -452,6 +911,7 @@ const wireContents = (tab: Tab, contents: WebContents) => {
 
   contents.on('before-input-event', (event, input) => {
     if (lockdown) {
+      handleTalkKey(input);
       event.preventDefault();
       return;
     }
@@ -468,58 +928,21 @@ const wireContents = (tab: Tab, contents: WebContents) => {
 
     showContextMenu(tab, contents, params);
   });
-  contents.on('did-finish-load', () => {
-    if (lockdown) {
-      void applyLockdownCss(contents);
-    }
-  });
-};
-
-const applyLockdownCss = async (contents: WebContents) => {
-  if (!lockdown || contents.isDestroyed()) {
-    return;
-  }
-
-  const key = await contents.insertCSS(LOCKDOWN_CSS);
-
-  if (!lockdown || contents.isDestroyed()) {
-    await contents.removeInsertedCSS(key).catch(() => undefined);
-    return;
-  }
-
-  const previous = lockdownCssKey.get(contents.id);
-  lockdownCssKey.set(contents.id, key);
-
-  if (previous) {
-    await contents.removeInsertedCSS(previous).catch(() => undefined);
-  }
-};
-
-const clearLockdownCss = async (contents: WebContents) => {
-  const key = lockdownCssKey.get(contents.id);
-  lockdownCssKey.delete(contents.id);
-
-  if (key && !contents.isDestroyed()) {
-    await contents.removeInsertedCSS(key).catch(() => undefined);
-  }
 };
 
 const applyLockdown = (enabled: boolean) => {
   lockdown = enabled;
 
-  for (const tab of tabs) {
-    const contents = tab.view?.webContents;
-
-    if (!contents) {
-      continue;
-    }
-
-    if (enabled) {
-      void applyLockdownCss(contents);
-    } else {
-      void clearLockdownCss(contents);
-    }
+  if (!enabled) {
+    talking = false;
+    talkLatch = false;
+    agentVisible = false;
+    notifySpeechHeld(false);
+    hideSpeechPill();
+    emit();
   }
+
+  layout();
 };
 
 // The user's own choice, from the chrome. It replaces any pending re-lock after sign-in.
@@ -578,6 +1001,7 @@ const createView = (tab: Tab) => {
   view.setBorderRadius(0);
   view.setVisible(false);
   host?.contentView.addChildView(view);
+  raiseGlass();
   tab.view = view;
   wireContents(tab, view.webContents);
 
@@ -632,6 +1056,7 @@ const blankTab = (overrides: Partial<Tab> = {}): Tab => ({
   visitId: null,
   page: 'newtab',
   pageBack: [],
+  agentTaskId: null,
   ...overrides,
 });
 
@@ -716,7 +1141,7 @@ export const moveTab = (id: unknown, toIndex: unknown) => {
   emit();
 };
 
-const cycleTab = (direction: 1 | -1) => {
+export const cycleTab = (direction: 1 | -1) => {
   const index = tabs.findIndex((tab) => tab.id === activeTabId);
   activateTab(tabs[(index + direction + tabs.length) % tabs.length]?.id);
 };
@@ -740,6 +1165,22 @@ export const navigate = (input: unknown) => {
   load(tab, toUrl(input));
   layout();
   emit();
+};
+
+// For the agent: like navigate, but only ever to a website or a search. browsie:// addresses become a
+// search too, so the agent can't open Settings by typing its address.
+export const navigateToWeb = (input: string) => {
+  const tab = activeTab();
+
+  if (!tab) {
+    return false;
+  }
+
+  endGoogleSignIn(tab, false);
+  load(tab, toUrl(input));
+  layout();
+  emit();
+  return true;
 };
 
 // Shows one of Browsie's own pages in this tab, remembering where Back should go: the Browsie page
@@ -777,6 +1218,12 @@ export const openBrowsiePage = (page: unknown) => {
     return;
   }
 
+  showBrowsiePage(page);
+};
+
+// openBrowsiePage without the lockdown check, which is there to stop people, not the agent.
+// The agent's command table only offers history and bookmarks, never settings.
+export const showBrowsiePage = (page: 'history' | 'bookmarks' | 'settings') => {
   const open = tabs.find((tab) => tab.showingNewTab && tab.page === page);
 
   if (open) {
@@ -934,6 +1381,28 @@ const toggleMuteTab = (tab: Tab) => {
   emit();
 };
 
+// The tab menu's actions by tab id, for the agent. False when the tab is gone (or has no page to mute).
+export const duplicateTabById = (id: number) => {
+  const tab = tabs.find((entry) => entry.id === id);
+
+  if (tab) {
+    duplicateTab(tab);
+  }
+
+  return Boolean(tab);
+};
+
+export const toggleMuteTabById = (id: number) => {
+  const tab = tabs.find((entry) => entry.id === id);
+
+  if (!tab || !tabContents(tab)) {
+    return false;
+  }
+
+  toggleMuteTab(tab);
+  return true;
+};
+
 // Right-click on a tab in the chrome. Same native menu as the page context menu.
 export const showTabMenu = (id: unknown) => {
   if (typeof id !== 'number' || lockdown) {
@@ -974,7 +1443,7 @@ const bookmarksBarMode = (): BookmarksBarMode => {
   return value === 'never' || value === 'newtab' ? value : 'always';
 };
 
-const setBookmarksBarMode = (mode: BookmarksBarMode) => {
+export const setBookmarksBarMode = (mode: BookmarksBarMode) => {
   updateData({ settings: { [BOOKMARKS_BAR_SETTING]: mode } });
 };
 
@@ -1069,15 +1538,100 @@ const focusAddressBar = () => {
   host.webContents.send('browser:focus-address');
 };
 
-const zoomActiveTab = (key: string) => {
+export const zoomActiveTab = (key: string) => {
   const contents = activeContents();
 
   if (!contents) {
-    return;
+    return false;
   }
 
   const level = key === '0' ? 0 : contents.getZoomLevel() + (key === '-' ? -ZOOM_STEP : ZOOM_STEP);
   contents.setZoomLevel(clamp(level, MIN_ZOOM, MAX_ZOOM));
+  return true;
+};
+
+// Space while lockdown is on is push-to-talk. Main sees the key whether focus is in the chrome
+// or a website (the website view swallows keys during lockdown). Repeats stay held. Letting go
+// slides the pill away. Lockdown turning off drops it too. Returns true when the key
+// should not reach the page.
+export const handleTalkKey = (input: Input) => {
+  if (input.code !== 'Space' || !lockdown || input.control || input.alt || input.meta || input.shift) {
+    return false;
+  }
+
+  if (input.type === 'keyDown') {
+    // This press already cancelled a request. Chrome and the page can both see the same key, and the
+    // second copy arrives after the request is already idle, which would open the pill and play the cue.
+    if (spaceUsed) {
+      return true;
+    }
+
+    // Stop comes before the cooldown. The cooldown is only there so the pill can't be opened again
+    // the instant it's let go, and that must not swallow Space while a request can still be cut off.
+    if (!talking && input.isAutoRepeat) {
+      return true;
+    }
+
+    // Mashing Space: one press at a time, with a short pause after each.
+    if (!talking && Date.now() < Math.max(talkCooldownUntil, talkReadyAt)) {
+      return true;
+    }
+
+    if (!talking && spaceGate?.()) {
+      spaceUsed = true;
+      talkCooldownUntil = Date.now() + STOP_COOLDOWN_MS;
+
+      if (spaceUsedTimer) {
+        clearTimeout(spaceUsedTimer);
+      }
+
+      spaceUsedTimer = setTimeout(() => {
+        spaceUsed = false;
+        spaceUsedTimer = null;
+      }, 50);
+
+      return true;
+    }
+
+    // Only a fresh press starts talking. A key held through the cooldown (or the launch wait) only
+    // sends repeats, so it stays ignored until it's let go and pressed again.
+    // The last recording is still being heard. Wait for it, rather than stacking a second one on top.
+    if (!talking && talkLatch) {
+      return true;
+    }
+
+    // Repeats while talking keep the watchdog from firing.
+    setTalking(true);
+
+    if (talkWatchdog) {
+      clearTimeout(talkWatchdog);
+    }
+
+    talkWatchdog = setTimeout(() => {
+      talkWatchdog = null;
+      setTalking(false);
+    }, TALK_REPEAT_TIMEOUT_MS);
+
+    return true;
+  }
+
+  if (input.type === 'keyUp') {
+    if (spaceUsed) {
+      spaceUsed = false;
+
+      if (spaceUsedTimer) {
+        clearTimeout(spaceUsedTimer);
+        spaceUsedTimer = null;
+      }
+
+      return true;
+    }
+
+    setTalking(false);
+    return true;
+  }
+
+  return true;
 };
 
 // Browser keyboard shortcuts. Main sees keys before any page does (before-input-event), so they
@@ -1277,18 +1831,92 @@ export const attachTabs = (window: BrowserWindow) => {
   fullscreenTabId = null;
   lockdown = true;
   relockAfterGoogleSignIn = false;
+  talkReadyAt = Infinity;
+  glassView = createGlass();
+  window.contentView.addChildView(glassView);
   openStartTab();
 
   window.on('resize', layout);
+  // Letting go of space can be missed if the window loses focus while it's held.
+  window.on('blur', () => setTalking(false));
   window.on('closed', () => {
     for (const tab of tabs) {
       tab.view?.webContents.close();
     }
 
     tabs = [];
+    speechGeneration += 1;
+    speechView = null;
+    glassView?.webContents.close();
+    glassView = null;
     host = null;
   });
 };
+
+// Messages for the speech view (audio to play) and the chrome (what the voice layer is doing).
+export const sendToSpeechView = (channel: string, ...args: unknown[]) => {
+  const contents = speechView?.webContents;
+
+  if (contents && !contents.isDestroyed()) {
+    contents.send(channel, ...args);
+  }
+};
+
+export const sendToChrome = (channel: string, ...args: unknown[]) => {
+  if (host && !host.isDestroyed()) {
+    host.webContents.send(channel, ...args);
+  }
+};
+
+export const isSpeechViewContents = (contents: WebContents) => speechView?.webContents === contents;
+
+// Tells the chrome which control the agent just used, so it can pulse it for anyone watching.
+export const emitAgentActivity = (activity: AgentUiActivity) => {
+  if (host && !host.isDestroyed()) {
+    host.webContents.send('agent:ui-activity', activity);
+  }
+};
+
+// The agent works on the website in the active tab. One task at a time, and never on Browsie's own pages.
+export const leaseAgentTab = (taskId: string) => {
+  const tab = activeTab();
+
+  if (!tab?.view || tab.showingNewTab || tabs.some((entry) => entry.agentTaskId !== null)) {
+    return undefined;
+  }
+
+  tab.agentTaskId = taskId;
+  emit();
+  layout();
+  return tab.id;
+};
+
+export const releaseAgentTab = (taskId: string) => {
+  for (const tab of tabs) {
+    if (tab.agentTaskId === taskId) {
+      tab.agentTaskId = null;
+    }
+  }
+
+  emit();
+  layout();
+};
+
+// The only way the executor reaches a page: a leased tab's own website view. Never the chrome, a popup or
+// one of Browsie's pages.
+export const agentTabContents = (tabId: number) => {
+  const tab = tabs.find((entry) => entry.id === tabId);
+
+  if (!tab?.view || tab.agentTaskId === null || tab.showingNewTab || tab.view.webContents.isDestroyed()) {
+    return undefined;
+  }
+
+  return tab.view.webContents;
+};
+
+// Whether this page is the website of a tab the agent is working on (for downloads).
+export const isAgentContents = (contents: WebContents | undefined) =>
+  contents !== undefined && tabs.some((tab) => tab.agentTaskId !== null && tab.view?.webContents === contents);
 
 // A different account (or nobody) is signed in now. Every open page belongs to the previous account's
 // web storage, so close them all and start over with one tab in the new account's storage.

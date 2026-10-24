@@ -12,7 +12,10 @@ const auth: BrowsieAuthAPI = {
   signIn: () => ipcRenderer.invoke("auth:sign-in"),
   cancelSignIn: () => ipcRenderer.invoke("auth:cancel-sign-in"),
   completeSetup: () => ipcRenderer.invoke("auth:complete-setup"),
+  connectGoogle: () => ipcRenderer.invoke("auth:connect-google"),
   saveAiKey: (key, cap) => ipcRenderer.invoke("auth:save-ai-key", key, cap),
+  updateAiCap: (cap) => ipcRenderer.invoke("auth:update-ai-cap", cap),
+  replaceManagementKey: (key, cap) => ipcRenderer.invoke("auth:replace-management-key", key, cap),
   signOut: (options) => ipcRenderer.invoke("auth:sign-out", options),
   onSessionChanged: (callback) => {
     // Pass only the session through; the raw IPC event would hand the page a handle to ipcRenderer.
@@ -68,6 +71,7 @@ const browser: BrowsieBrowserAPI = {
   setContentBounds: (bounds) =>
     ipcRenderer.invoke("browser:set-content-bounds", bounds),
   capturePage: () => ipcRenderer.invoke("browser:capture-page"),
+  chromeReady: () => ipcRenderer.invoke("browser:chrome-ready"),
   setOverlayOpen: (open) =>
     ipcRenderer.invoke("browser:set-overlay-open", open),
   setLockdown: (enabled) => ipcRenderer.invoke("browser:set-lockdown", enabled),
@@ -82,6 +86,11 @@ const browser: BrowsieBrowserAPI = {
     return () => ipcRenderer.removeListener("browser:focus-address", listener);
   },
   openPage: (page) => ipcRenderer.invoke("browser:open-page", page),
+  onAgentActivity: (callback) => {
+    const listener = (_event: IpcRendererEvent, activity: AgentUiActivity) => callback(activity);
+    ipcRenderer.on("agent:ui-activity", listener);
+    return () => ipcRenderer.removeListener("agent:ui-activity", listener);
+  },
 };
 
 // Bookmarks and history. Like the tab controls, main only answers the browser window.
@@ -138,5 +147,60 @@ contextBridge.exposeInMainWorld("browsie", {
     ipcRenderer.on("window-maximized-changed", listener);
     return () =>
       ipcRenderer.removeListener("window-maximized-changed", listener);
+  },
+  isSpeechHeld: () => ipcRenderer.invoke("speech:is-held"),
+  onSpeechHeld: (callback: (held: boolean, deviceVolumeDb: number) => void) => {
+    const listener = (
+      _event: IpcRendererEvent,
+      held: boolean,
+      deviceVolumeDb: number,
+    ) =>
+      callback(
+        held === true,
+        typeof deviceVolumeDb === "number" ? deviceVolumeDb : -10,
+      );
+    ipcRenderer.on("speech:held", listener);
+    return () => ipcRenderer.removeListener("speech:held", listener);
+  },
+  session: {
+    get: () => ipcRenderer.invoke("session:get"),
+    clear: () => ipcRenderer.invoke("session:clear"),
+    onChanged: (callback: (turns: SessionTurn[]) => void) => {
+      const listener = (_event: IpcRendererEvent, turns: SessionTurn[]) => callback(turns);
+      ipcRenderer.on("session:changed", listener);
+      return () => ipcRenderer.removeListener("session:changed", listener);
+    },
+  },
+  // The speech view only: main refuses these from anywhere else.
+  voice: {
+    sendAudio: (wav: ArrayBuffer, durationMs: number) => ipcRenderer.invoke("voice:audio", wav, durationMs),
+    reportClips: (ids: string[]) => ipcRenderer.invoke("voice:clips", ids),
+    log: (message: string) => ipcRenderer.invoke("voice:log", message),
+    reportQuiet: (epoch: number, finished: number) => ipcRenderer.invoke("voice:quiet", epoch, finished),
+    onPlay: (callback: (item: VoicePlayItem) => void) => {
+      const listener = (_event: IpcRendererEvent, item: VoicePlayItem) => callback(item);
+      ipcRenderer.on("voice:play", listener);
+      return () => ipcRenderer.removeListener("voice:play", listener);
+    },
+    onStop: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on("voice:stop", listener);
+      return () => ipcRenderer.removeListener("voice:stop", listener);
+    },
+    onPill: (callback: (visible: boolean) => void) => {
+      const listener = (_event: IpcRendererEvent, visible: boolean) => callback(visible === true);
+      ipcRenderer.on("voice:pill", listener);
+      return () => ipcRenderer.removeListener("voice:pill", listener);
+    },
+    onStyle: (callback: (style: { volume: number; rate: number }) => void) => {
+      const listener = (_event: IpcRendererEvent, style: { volume: number; rate: number }) => callback(style);
+      ipcRenderer.on("voice:style", listener);
+      return () => ipcRenderer.removeListener("voice:style", listener);
+    },
+    onStatus: (callback: (mode: VoiceMode) => void) => {
+      const listener = (_event: IpcRendererEvent, mode: VoiceMode) => callback(mode);
+      ipcRenderer.on("voice:status", listener);
+      return () => ipcRenderer.removeListener("voice:status", listener);
+    },
   },
 });

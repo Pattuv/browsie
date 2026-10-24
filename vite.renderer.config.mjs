@@ -5,13 +5,14 @@ import tailwindcss from '@tailwindcss/vite'
 // Content Security Policy for our own pages: everything must come from the app itself.
 // The profile photo arrives as a data: URL from main, so img-src allows data:.
 // style-src needs 'unsafe-inline' for Tailwind's dev <style> tags and React style={{...}}.
+// media-src allows blob: so the speech view can play Browsie's voice, which main sends as bytes.
 const PROD_CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self' data:",
-  "media-src 'self'",
+  "media-src 'self' blob:",
   "connect-src 'self'",
   "object-src 'none'",
   "base-uri 'none'",

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Sign-up form</title><link rel="stylesheet" href="/shared.css"><script src="/shared.js"></script></head>
+<body>
+  <form id="club">
+    <label for="email">Email for the newsletter</label>
+    <input id="email" type="email" autocomplete="email" required>
+    <button>Subscribe</button>
+  </form>
+  <p id="status" class="status" role="status"></p>
+  <script>
+    document.getElementById('club').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const email = document.getElementById('email').value.trim();
+      await report('subscribe', { email });
+      document.getElementById('status').textContent = `Subscribed ${email}`;
+    });
+  </script>
+</body>
+</html>

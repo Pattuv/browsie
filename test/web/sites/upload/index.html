@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Apply · Mug Shop careers</title><link rel="stylesheet" href="/shared.css"></head>
+<body>
+  <main>
+    <h1>Apply for Head Barista</h1>
+    <form id="apply">
+      <label for="resume">Resume</label>
+      <input id="resume" name="resume" type="file" required>
+      <button>Upload</button>
+    </form>
+    <p id="status" class="status" role="status"></p>
+  </main>
+  <script>
+    document.getElementById('apply').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const response = await fetch('/api/upload', { method: 'POST', body: new FormData(event.target) });
+      const { fileName } = await response.json();
+      document.getElementById('status').textContent = `Uploaded ${fileName}`;
+    });
+  </script>
+</body>
+</html>

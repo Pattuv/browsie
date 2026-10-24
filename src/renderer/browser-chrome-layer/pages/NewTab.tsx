@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { HeartHandshake, X } from "lucide-react";
+import { HeartHandshake, History, X } from "lucide-react";
 import DashboardTip, { type Tip } from "../../components/DashboardTip";
-import { useLockdownNotice, useLockdownStore } from "../../stores/browserStore";
+import { useBrowserStore, useLockdownNotice, useLockdownStore } from "../../stores/browserStore";
 import GoogleAppsMenu from "../GoogleAppsMenu";
-import mascot from "../../assets/mascot.svg";
+import Mascot from "../../components/Mascot";
 
 const GUIDE_URL = "https://browsie.org/help-center";
+const RECENT_ACTIVITY = 3;
 
 const MOD = "Ctrl";
 // How long the launch notice stays before it dismisses itself.
@@ -107,11 +108,14 @@ function LockdownNotice({
     }
   }, [noticeOpen]);
 
+  // Unlocking, or starting to talk, dismisses it right away.
+  const talking = useBrowserStore((state) => state.talking);
+
   useEffect(() => {
-    if (present && !locked) {
+    if (present && !leaving && (!locked || talking)) {
       close();
     }
-  }, [locked, present]);
+  }, [locked, talking, present, leaving]);
 
   useEffect(() => {
     if (!present || leaving || !launched) {
@@ -178,6 +182,134 @@ function LockdownNotice({
   );
 }
 
+// "12m ago", "Yesterday", "Apr 22". Older years keep the year so they don't read as this one.
+const whenLabel = (iso: string) => {
+  const date = new Date(iso);
+  const time = date.getTime();
+
+  if (Number.isNaN(time)) {
+    return "";
+  }
+
+  const now = new Date();
+  const elapsed = now.getTime() - time;
+  const minute = 60_000;
+  const hour = 60 * minute;
+
+  if (elapsed < minute) {
+    return "Just now";
+  }
+
+  if (elapsed < hour) {
+    return `${Math.floor(elapsed / minute)}m ago`;
+  }
+
+  if (date.toDateString() === now.toDateString()) {
+    return `${Math.floor(elapsed / hour)}h ago`;
+  }
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+
+  if (date.toDateString() === yesterday.toDateString()) {
+    return "Yesterday";
+  }
+
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(date.getFullYear() !== now.getFullYear() && { year: "numeric" }),
+  });
+};
+
+function RecentActivity({ style }: { style?: CSSProperties }) {
+  const [visits, setVisits] = useState<Visit[] | undefined>(undefined);
+  const browser = window.browsie?.browser;
+  const library = window.browsie?.library;
+
+  useEffect(() => {
+    let live = true;
+
+    const load = () => {
+      if (!library) {
+        setVisits([]);
+        return;
+      }
+
+      void library
+        .listHistory({ limit: RECENT_ACTIVITY })
+        .then((next) => live && setVisits(next))
+        .catch(() => live && setVisits([]));
+    };
+
+    void load();
+    const unsubscribe = library?.onHistoryChanged(() => void load());
+
+    return () => {
+      live = false;
+      unsubscribe?.();
+    };
+  }, [library]);
+
+  const shown = visits?.slice(0, RECENT_ACTIVITY) ?? [];
+  const hasActivity = shown.length > 0;
+
+  return (
+    <section
+      className={`smooth chrome-item mt-[clamp(1.5rem,3vh,2.5rem)] w-full max-w-3xl rounded-2xl border border-zinc-200 bg-zinc-50/60 text-sm tracking-tight ${
+        hasActivity ? "px-6 py-5" : "flex h-40 items-center justify-center text-zinc-400"
+      }`}
+      style={style}
+      aria-labelledby={hasActivity ? "recent-activity-heading" : undefined}
+      aria-label={visits !== undefined && !hasActivity ? "No recent activity" : undefined}
+      aria-busy={visits === undefined || undefined}
+    >
+      {visits === undefined ? (
+        <div className="h-full w-full" aria-busy="true" />
+      ) : hasActivity ? (
+        <>
+          <h2 id="recent-activity-heading" className="flex items-center gap-2 text-[15px] font-[560] tracking-tight text-zinc-900">
+            <History size={16} strokeWidth={2} aria-hidden="true" />
+            Recent activity
+          </h2>
+          <ol className="relative mt-4 ml-1.5 flex flex-col border-l border-zinc-200">
+            {shown.map((visit) => (
+              <li key={visit.id} className="relative">
+                <span
+                  className="absolute top-1/2 left-0 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#9572FF] shadow-[0_0_0_3px_var(--color-zinc-50)]"
+                  aria-hidden="true"
+                />
+                <button
+                  type="button"
+                  role="link"
+                  title={`${visit.title}\n${visit.url}`}
+                  onClick={() => void browser?.navigate(visit.url)}
+                  onAuxClick={(event) => event.button === 1 && void browser?.newTab(visit.url)}
+                  className="group flex w-full cursor-pointer items-center gap-6 py-2.5 pr-1 pl-5 text-left"
+                >
+                  <span className="min-w-0 flex-1 truncate text-[15px] tracking-tight text-zinc-700 transition-colors duration-150 group-hover:text-zinc-900">
+                    {visit.title}
+                  </span>
+                  <span className="shrink-0 text-sm tracking-tight text-zinc-400">{whenLabel(visit.visitedAt)}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+          <button
+            type="button"
+            onClick={() => void browser?.openPage("history")}
+            className="mt-3 ml-6.5 cursor-pointer text-[15px] font-[560] tracking-tight text-zinc-800 transition-colors duration-150 hover:text-black"
+          >
+            See more..
+          </button>
+        </>
+      ) : (
+        "No recent activity"
+      )}
+    </section>
+  );
+}
+
 function NewTab({ entranceDelay: initialDelay, launched }: NewTabProps) {
   // Decided once, on mount: a re-render must never cut off (or restart) an entrance mid-play.
   const [entranceDelay] = useState(initialDelay);
@@ -212,10 +344,8 @@ function NewTab({ entranceDelay: initialDelay, launched }: NewTabProps) {
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center gap-[clamp(0.5rem,1vh,1rem)] pb-16">
-        <img
-          src={mascot}
-          alt=""
-          className="theme-invert chrome-item mb-3 h-28 transition-transform duration-500 ease-out hover:-rotate-3 hover:scale-105"
+        <Mascot
+          className="chrome-item mb-3 h-28 transition-transform duration-500 ease-out hover:-rotate-3 hover:scale-105"
           style={delay(80)}
         />
         <h1
@@ -232,12 +362,7 @@ function NewTab({ entranceDelay: initialDelay, launched }: NewTabProps) {
             ? "Hold the spacebar to talk to Browsie"
             : "Lockdown must be on to talk to Browsie"}
         </p>
-        <div
-          className="chrome-item mt-[clamp(1.5rem,3vh,2.5rem)] flex h-30 w-full max-w-90 items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50/60 text-sm tracking-tight text-zinc-400"
-          style={delay(320)}
-        >
-          No recent activity
-        </div>
+        <RecentActivity style={delay(320)} />
       </div>
 
       <div

@@ -1,6 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import mascot from "../../../assets/mascot.svg";
+import Mascot from "../../../components/Mascot";
 import browserIllustration from "../../../assets/paint-icons/browser.png";
+
+const TERMS_URL = "https://browsie.org/terms";
+const PRIVACY_URL = "https://browsie.org/privacy";
 
 const WHITE_HOLD_MS = 1000;
 const BLUR_MS = 1000;
@@ -202,9 +205,7 @@ function Auth({ playIntro, phase, onPhase }: AuthProps) {
                   : ""
             }`}
           >
-            <img
-              src={mascot}
-              alt=""
+            <Mascot
               className={`h-38.5 mt-[15px] mb-[23px] w-auto ${playIntro && showMascot ? "enter-slide-fade" : ""}`}
             />
 
@@ -265,9 +266,21 @@ function Auth({ playIntro, phase, onPhase }: AuthProps) {
           className={`absolute inset-x-0 bottom-5 z-10 px-6 text-center text-sm font-[500] tracking-tight text-zinc-400 ${playIntro ? "enter-fade-slow" : ""}`}
         >
           By continuing, you agree to the{" "}
-          <span className="underline underline-offset-2">Terms of Service</span>{" "}
+          <button
+            type="button"
+            onClick={() => window.browsie?.openExternal(TERMS_URL)}
+            className="app-region-no-drag cursor-pointer underline underline-offset-2"
+          >
+            Terms of Service
+          </button>{" "}
           and{" "}
-          <span className="underline underline-offset-2">Privacy Policy</span>.
+          <button
+            type="button"
+            onClick={() => window.browsie?.openExternal(PRIVACY_URL)}
+            className="app-region-no-drag cursor-pointer underline underline-offset-2"
+          >
+            Privacy Policy
+          </button>.
         </p>
       )}
     </div>

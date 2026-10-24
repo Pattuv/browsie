@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Mug Club</title><link rel="stylesheet" href="/shared.css"><script src="/config.js"></script></head>
+<body>
+  <main>
+    <h1>Join the Mug Club</h1>
+    <p>Get a new mug every month. Sign up in the box below.</p>
+    <!-- Served from the other origin (localhost vs 127.0.0.1 are different sites), so Chromium gives it its own process. -->
+    <iframe id="club" title="Mug Club sign-up" width="600" height="260"></iframe>
+  </main>
+  <script>
+    document.getElementById('club').src = `${window.MOCK.frameOrigin}/iframe-form/frame.html`;
+  </script>
+</body>
+</html>

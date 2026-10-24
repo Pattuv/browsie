@@ -10,6 +10,8 @@ import { loadLocalStore } from './data/localStore';
 import { startWebTheme } from './browser/webTheme';
 import { startSync } from './data/syncEngine';
 import { registerIpc } from './ipc';
+import { startSystemVolume, stopSystemVolume } from './systemVolume';
+import { startVoice } from './voice';
 import { createWindow, setAppMenu, shouldQuitOnLastWindow } from './windows';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -45,13 +47,16 @@ app.whenReady().then(() => {
     }
   });
   registerIpc();
+  startVoice();
   setAppMenu();
   createWindow();
   startSync();
+  startSystemVolume();
 });
 
 // History saves a few seconds after each visit; don't lose the last few when quitting.
 app.on('will-quit', flushHistory);
+app.on('will-quit', stopSystemVolume);
 
 app.on('window-all-closed', () => {
   // Held false for the beat between the Dashboard closing and the browser opening.

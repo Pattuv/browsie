@@ -11,7 +11,11 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "eval:web": "node test/web/build.mjs && electron .vite/harness/harness.cjs",
+    "eval:web:app-key": "node test/web/build.mjs && electron .vite/harness/withAppKey.cjs",
+    "voice:clips": "esbuild devscripts/clipcreator.ts --bundle --platform=node --format=cjs --log-level=warning --outfile=.vite/devscripts/clipcreator.cjs && node .vite/devscripts/clipcreator.cjs"
   },
   "keywords": [],
   "author": {
@@ -35,8 +39,10 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
     "electron": "43.1.0",
+    "esbuild": "^0.21.5",
     "typescript": "^7.0.2",
-    "vite": "^5.4.21"
+    "vite": "^5.4.21",
+    "vitest": "^3.2.7"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.2",
@@ -46,6 +52,7 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "tailwindcss": "^4.3.2",
+    "zod": "^4.6.7",
     "zustand": "^5.0.15"
   }
 }

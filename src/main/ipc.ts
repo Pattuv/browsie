@@ -1,8 +1,8 @@
 import { BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
-import { cancelSignIn, completeSetup, getAccountId, getSession, signIn, signOut } from './auth/session';
+import { cancelSignIn, completeSetup, connectWorkspace, getAccountId, getSession, signIn, signOut } from './auth/session';
 import { removeWebData } from './browser/webSession';
 import { getData, updateData } from './data/localStore';
-import { removeAiKey, saveAiKey } from './data/aiKey';
+import { removeAiKey, replaceManagementKey, saveAiKey, updateAiCap } from './data/aiKey';
 import { clearAiUsageCache, getAiUsage } from './data/openRouterUsage';
 import { removeLibraryData } from './data/libraryPaths';
 import { getSyncStatus, uploadBeforeRemoving } from './data/syncEngine';
@@ -11,6 +11,8 @@ import {
   captureActivePage,
   closeTab,
   getBrowserState,
+  isTalking,
+  markChromeReady,
   goBack,
   goForward,
   moveTab,
@@ -30,6 +32,7 @@ import { listBookmarks, moveBookmark, removeBookmark, updateBookmark } from './d
 import { clearHistory, listHistory, removeVisit, searchHistory } from './data/history';
 import { changeSitePermission, clearSiteData, getSiteInfo, resetActiveSitePermissions } from './browser/siteInfo';
 import { getSuggestionImage, getSuggestions, warmSuggestions } from './browser/suggestions';
+import { clearSessionTurns, getSessionTurns } from './agent';
 import { bringToFront, getBrowserWindow, isAppUrl, openBrowser, openModePicker } from './windows';
 
 let dashboardAnimatedThisSession = false;
@@ -122,6 +125,8 @@ export const registerIpc = () => {
   handle('browser:launch', () => openBrowser());
   handleFromBrowser('browser:exit', () => getBrowserWindow()?.close());
   handleFromBrowser('browser:get-state', () => getBrowserState());
+  handleFromBrowser('session:get', () => getSessionTurns());
+  handleFromBrowser('session:clear', () => clearSessionTurns());
   handleFromBrowser('browser:new-tab', (_event, url?: unknown) =>
     newTab(typeof url === 'string' ? url : undefined),
   );
@@ -153,6 +158,7 @@ export const registerIpc = () => {
   handleFromBrowser('browser:capture-page', () => captureActivePage());
   handleFromBrowser('browser:set-overlay-open', (_event, open: unknown) => setOverlayOpen(open === true));
   handleFromBrowser('browser:set-lockdown', (_event, enabled: unknown) => setLockdown(enabled === true));
+  handleFromBrowser('browser:chrome-ready', () => markChromeReady());
   handleFromBrowser('browser:get-site-info', () => getSiteInfo());
   handleFromBrowser('browser:clear-site-data', () => clearSiteData());
   handleFromBrowser('browser:set-site-permission', (_event, kind: unknown, setting: unknown) =>
@@ -160,6 +166,7 @@ export const registerIpc = () => {
   );
   handleFromBrowser('browser:reset-site-permissions', () => resetActiveSitePermissions());
 
+  handle('speech:is-held', () => isTalking());
   handle('auth:get-session', () => getSession());
   handle('auth:sign-in', (event) => {
     const requester = BrowserWindow.fromWebContents(event.sender);
@@ -167,11 +174,35 @@ export const registerIpc = () => {
   });
   handle('auth:cancel-sign-in', () => cancelSignIn());
   handle('auth:complete-setup', () => completeSetup());
+  handle('auth:connect-google', (event) => {
+    const requester = BrowserWindow.fromWebContents(event.sender);
+    return connectWorkspace(() => requester && bringToFront(requester));
+  });
   handle('auth:save-ai-key', async (_event, key: unknown, cap: unknown) => {
     const accountId = getAccountId();
     const result = accountId ? await saveAiKey(accountId, key, cap) : 'unavailable';
 
     // A replaced key shows its own usage straight away, not the old key's cached figures.
+    if (result === 'saved') {
+      clearAiUsageCache();
+    }
+
+    return result;
+  });
+  handle('auth:update-ai-cap', async (_event, cap: unknown) => {
+    const accountId = getAccountId();
+    const result = accountId ? await updateAiCap(accountId, cap) : 'unavailable';
+
+    if (result === 'saved') {
+      clearAiUsageCache();
+    }
+
+    return result;
+  });
+  handle('auth:replace-management-key', async (_event, key: unknown, cap: unknown) => {
+    const accountId = getAccountId();
+    const result = accountId ? await replaceManagementKey(accountId, key, cap) : 'unavailable';
+
     if (result === 'saved') {
       clearAiUsageCache();
     }
@@ -205,5 +236,10 @@ export const registerIpc = () => {
     }
 
     await revoked;
+
+    // Factory reset leaves the browser. Closing it opens the main window, which is now the sign-in screen.
+    if (resetSetup) {
+      getBrowserWindow()?.close();
+    }
   });
 };

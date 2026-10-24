@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Shipping · Mug Shop</title><link rel="stylesheet" href="/shared.css"><script src="cart.js"></script></head>
+<body>
+  <main>
+    <h1>Step 1 of 3: Shipping</h1>
+    <form id="shipping">
+      <label for="name">Full name</label>
+      <input id="name" type="text" autocomplete="name" required>
+      <label for="address">Street address</label>
+      <input id="address" type="text" autocomplete="street-address" required>
+      <label for="city">City</label>
+      <input id="city" type="text" autocomplete="address-level2" required>
+      <label for="speed">Delivery</label>
+      <select id="speed">
+        <option>Standard</option>
+        <option>Express</option>
+      </select>
+      <button>Continue</button>
+    </form>
+  </main>
+  <script>
+    document.getElementById('shipping').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const value = (id) => document.getElementById(id).value.trim();
+      save('order', { ...order(), name: value('name'), address: value('address'), city: value('city'), speed: value('speed') });
+      location.href = 'payment.html';
+    });
+  </script>
+</body>
+</html>

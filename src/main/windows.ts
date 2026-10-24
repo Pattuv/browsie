@@ -3,11 +3,12 @@ import {
   BrowserWindow,
   Menu,
   screen,
+  WebContentsView,
   type BrowserWindowConstructorOptions,
 } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { attachTabs, handleShortcut } from "./browser/tabs";
+import { attachSpeechOverlay, attachTabs, handleShortcut, handleTalkKey } from "./browser/tabs";
 import { getData } from "./data/localStore";
 
 const disableZoom = (webContents: Electron.WebContents) => {
@@ -88,20 +89,27 @@ const lockNavigation = (webContents: Electron.WebContents) => {
   webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 };
 
-const loadRenderer = (
-  window: BrowserWindow,
-  windowKind?: "menu-picker" | "browser",
+const loadContents = (
+  contents: Electron.WebContents,
+  windowKind?: "menu-picker" | "browser" | "speech",
 ) => {
   const search = windowKind ? `?window=${windowKind}` : "";
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    window.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}${search}`);
+    void contents.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}${search}`);
     return;
   }
 
-  window.loadFile(rendererIndexPath(), {
+  void contents.loadFile(rendererIndexPath(), {
     search: search.replace(/^\?/, ""),
   });
+};
+
+const loadRenderer = (
+  window: BrowserWindow,
+  windowKind?: "menu-picker" | "browser",
+) => {
+  loadContents(window.webContents, windowKind);
 };
 
 const wireWindowStateEvents = (window: BrowserWindow) => {
@@ -223,6 +231,71 @@ export const openModePicker = () => {
 // How long the desktop stays up after the Dashboard has closed, before the browser is created.
 const BROWSER_HANDOFF_MS = 400;
 
+// The speech pill and the browser chrome share this session. Websites live on another session, so
+// this does not grant them a mic. Only an audio request from the chrome or the pill is allowed.
+let chromeContentsId = -1;
+let speechContentsId = -1;
+
+const mayUseMicrophone = (webContents: Electron.WebContents | null | undefined) =>
+  webContents?.id === chromeContentsId || webContents?.id === speechContentsId;
+
+const allowChromeMicrophone = (contents: Electron.WebContents) => {
+  chromeContentsId = contents.id;
+
+  contents.session.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    if (!mayUseMicrophone(webContents) || permission !== "media" || !("mediaTypes" in details)) {
+      callback(false);
+      return;
+    }
+
+    const types = details.mediaTypes ?? [];
+    callback(types.length > 0 && types.every((type) => type === "audio"));
+  });
+
+  // A media check has to pass too, or getUserMedia never reaches the request above.
+  // Other permissions keep the default check.
+  const previous = contents.session.setPermissionCheckHandler;
+  void previous;
+  contents.session.setPermissionCheckHandler((webContents, permission, _origin, details) => {
+    if (permission !== "media") {
+      return true;
+    }
+
+    return mayUseMicrophone(webContents) && details.mediaType === "audio";
+  });
+};
+
+const allowSpeechMicrophone = (contents: Electron.WebContents) => {
+  speechContentsId = contents.id;
+};
+
+// Its own view, above every page. The chrome page cannot paint over a website view, and reserving
+// a slot under the page would reflow it. This view only covers the pill, so the page stays put.
+const mountSpeechOverlay = () => {
+  const view = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      webviewTag: false,
+      autoplayPolicy: "no-user-gesture-required",
+      backgroundThrottling: false,
+    },
+  });
+
+  disableZoom(view.webContents);
+  lockNavigation(view.webContents);
+  allowSpeechMicrophone(view.webContents);
+  // Focus sits here while space is held. Space is never blocked in this view: blocking a keyDown
+  // makes Chromium drop the keyUp after it, and the keyUp is how main hears the release.
+  view.webContents.on("before-input-event", (_event, input) => {
+    handleTalkKey(input);
+  });
+  loadContents(view.webContents, "speech");
+  attachSpeechOverlay(view);
+};
+
 // The browser: one frameless window that fills the display and cannot be resized or moved.
 // Its own page is the chrome (tabs, address bar), which is trusted and gets the preload.
 // Websites are separate views on top (see browser/tabs.ts).
@@ -266,8 +339,9 @@ const createBrowserWindow = (display: Electron.Display) => {
 
   disableZoom(window.webContents);
   lockNavigation(window.webContents);
+  allowChromeMicrophone(window.webContents);
   window.webContents.on("before-input-event", (event, input) => {
-    if (handleShortcut(input, "chrome")) {
+    if (handleTalkKey(input) || handleShortcut(input, "chrome")) {
       event.preventDefault();
     }
   });
@@ -343,6 +417,7 @@ const createBrowserWindow = (display: Electron.Display) => {
   });
 
   attachTabs(window);
+  mountSpeechOverlay();
 
   window.once("ready-to-show", () => {
     // First frame is the deep gray splash and the spinner.

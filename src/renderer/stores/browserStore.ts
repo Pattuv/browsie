@@ -6,6 +6,7 @@ export const useBrowserStore = create<BrowserState>()(() => ({
   activeTabId: 0,
   lockdown: true,
   lockdownNotice: 0,
+  talking: false,
 }));
 
 // Every window bundles this file, but only the browser window may ask main about tabs.
