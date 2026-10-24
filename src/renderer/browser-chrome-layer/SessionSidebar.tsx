@@ -27,7 +27,6 @@ const FALLBACK_NOTE: Record<FallbackId, string> = {
   unclear: 'Fallback: not sure what you meant',
   restricted: 'Fallback: that stays in Settings',
   stopped: 'Fallback: stopped',
-  not_allowed: 'Fallback: not allowed',
   info_unavailable: 'Fallback: email, calendar and files unavailable',
   no_key: 'Fallback: AI key is not set up',
   offline: 'Fallback: offline',

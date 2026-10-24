@@ -157,14 +157,6 @@ describe('runTurn', () => {
     expect(t.said()).toEqual([{ type: 'say', text: 'I opened a new tab and searched for ChatGPT Atlas. The Images tab is open.' }]);
   });
 
-  it('refuses adult requests before any model call', async () => {
-    const t = setup([]);
-    await t.run('search for naked girls');
-    expect(t.deps.llm).not.toHaveBeenCalled();
-    expect(t.deps.runTask).not.toHaveBeenCalled();
-    expect(t.said()).toEqual([{ type: 'say', clip: 'not_allowed' }]);
-  });
-
   it('names the Google service that is switched off', async () => {
     const t = setup(['{"label":"INFO","confidence":0.9}'], [result({ lane: 'INFO', ok: false, error: "The Google Calendar API isn't turned on for Browsie's Google Cloud project. Enable it…" })]);
     await t.run('check my calendar');

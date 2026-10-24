@@ -2,7 +2,6 @@ import { FALLBACKS, type FallbackId } from '../shared/agent/fallbacks';
 import type { AgentLane, TaskResult, TurnContext, TurnEvent, TurnLabel } from '../shared/agent/protocol';
 import { packSession, SESSION_TURN_LIMIT, type SessionTask, type SessionTurn } from '../shared/agent/session';
 import type { PlannedTask } from '../shared/agent/tasks';
-import { isAdultContent } from '../shared/safety/contentPolicy';
 import { classify, type Llm } from './classifier';
 import { chat, help } from './lanes/talk';
 import { planTasks } from './orchestrator';
@@ -87,14 +86,6 @@ export const runTurn = async (turnId: string, transcript: string, context: TurnC
   try {
     publishPending();
     const history = remembered();
-    // Refused before any model sees it. Main refuses the searches and pages too, whatever a lane tries.
-    if (isAdultContent(transcript)) {
-      label = 'RESTRICTED';
-      routed(1, []);
-      sayClip('not_allowed');
-      deps.emit({ type: 'done', ok: true });
-      return;
-    }
     const classification = await classify(deps.llm, transcript, context, history);
     label = classification.label;
 
@@ -104,7 +95,7 @@ export const runTurn = async (turnId: string, transcript: string, context: TurnC
       sayClip(clip);
     } else if (label === 'CHAT' || label === 'HELP') {
       routed(classification.confidence, []);
-      say((label === 'CHAT' ? await chat(deps.llm, transcript, history) : await help(deps.llm, transcript, history)) || "Sorry, I don't have an answer for that.");
+      say((label === 'CHAT' ? await chat(deps.llm, transcript, history) : await help(deps.llm, transcript, history)) || "Sorry, I can't help with that one.");
     } else {
       // Every other label was handled above, so this is UI, WEB or INFO.
       const single: PlannedTask[] = [{ lane: label as 'UI' | 'WEB' | 'INFO', goal: transcript }];

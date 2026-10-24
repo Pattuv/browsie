@@ -13,14 +13,13 @@ export type ToolRisk = 'read' | 'write' | 'confirm';
 
 const id = z.string().trim().min(1).max(200);
 const email = z.string().trim().email().max(320);
-// "2026-10-24T17:00:00" (in the user's time zone) or "2026-10-24" for all-day.
 const when = z
   .string()
   .trim()
   .regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?([.]\d+)?(Z|[+-]\d{2}:?\d{2})?)?$/, 'Use 2026-10-24T17:00:00, or 2026-10-24 for all day.');
 
 export const GOOGLE_TOOLS = {
-  // --- Gmail ---
+  //Gmail
   gmail_search: {
     service: 'gmail',
     risk: 'read',
@@ -74,7 +73,7 @@ export const GOOGLE_TOOLS = {
     input: z.strictObject({ ids: z.array(id).min(1).max(50) }),
   },
 
-  // --- Google Calendar ---
+  //Google Calendar
   calendar_list: {
     service: 'calendar',
     risk: 'read',
@@ -116,7 +115,7 @@ export const GOOGLE_TOOLS = {
     input: z.strictObject({ id }),
   },
 
-  // --- Google Drive ---
+  //Google Drive
   drive_search: {
     service: 'drive',
     risk: 'read',

@@ -359,7 +359,6 @@ type SessionTurn = {
     | 'unclear'
     | 'restricted'
     | 'stopped'
-    | 'not_allowed'
     | 'info_unavailable'
     | 'no_key'
     | 'offline'

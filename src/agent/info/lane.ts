@@ -2,7 +2,11 @@ import { z } from 'zod';
 import type { ChatMessage, LlmResponse, Tier, ToolDef } from '../../shared/agent/llm';
 import type { GoogleContext, Source, TaskEventBody, TaskResult } from '../../shared/agent/protocol';
 import { GOOGLE_TOOL_NAMES, GOOGLE_TOOLS, type GoogleCallResult } from '../../shared/google/tools';
-import SYSTEM_PROMPT from './prompt.md?raw';
+import LANE_PROMPT from './prompt.md?raw';
+import SAFETY from '../prompts/safety.md?raw';
+
+const SYSTEM_PROMPT = `${LANE_PROMPT}
+${SAFETY}`;
 
 // info lane: basis on which google tools can be called to provide user information.
 // Consists of a tool-calling loop where the model calls tools, reads the results, and finishes with what to say.

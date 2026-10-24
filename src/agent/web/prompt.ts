@@ -1,10 +1,11 @@
 import type { ToolDef } from '../../shared/agent/llm';
+import SAFETY from '../prompts/safety.md?raw';
 import type { Observation, Source } from '../../shared/agent/protocol';
 import { KEYS } from '../../shared/web/actions';
 
 //web lane system prompt and configuration
 
-export const SYSTEM_PROMPT = `You operate a web browser for someone who controls it by voice and may not be able to see the screen well. You act on one tab to get done exactly what they asked, and nothing else.
+const LANE_PROMPT = `You operate a web browser for someone who controls it by voice and may not be able to see the screen well. You act on one tab to get done exactly what they asked, and nothing else.
 
 How you see the page:
 - Each observation is the page's accessibility tree as lines like: e12 button "Checkout" disabled. Indentation shows nesting.
@@ -24,6 +25,10 @@ How you act:
 - If you're stuck or the request is unclear, use ask_user with a short question.
 
 Speak plainly and briefly in summaries and questions: they're read aloud.`;
+
+export const SYSTEM_PROMPT = `${LANE_PROMPT}
+
+${SAFETY}`;
 
 const ACTION_TYPES = ['click', 'type', 'press', 'select', 'scroll', 'goto', 'back', 'wait', 'request_help', 'ask_user', 'finish'];
 

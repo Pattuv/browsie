@@ -17,7 +17,7 @@ import {
   setBookmarksBarMode,
   showBrowsiePage,
   toggleMuteTabById,
-  toSafeUrl,
+  toUrl,
   zoomActiveTab,
 } from '../browser/tabs';
 import type { ChromeOperations } from './chromeApi';
@@ -34,7 +34,7 @@ export const chromeOperations: ChromeOperations = {
 
   // What the agent says may be a domain or a search, like the address bar. toUrl makes it a safe web
   // address either way, so newTab never gets something it would silently drop.
-  openTab: (url) => newTab(url ? toSafeUrl(url) : undefined),
+  openTab: (url) => newTab(url ? toUrl(url) : undefined),
 
   switchTab: (target) => {
     const { tabs } = state();

@@ -654,12 +654,6 @@ const layout = () => {
 
 // Typed text → a safe web address. Real http(s) URLs pass through, things that look like a
 // domain get https:// added, and everything else (including file:, javascript:) is searched for.
-// For the agent's searches: Google's SafeSearch on, so results pages filter explicit content too.
-export const toSafeUrl = (input: unknown) => {
-  const url = toUrl(input);
-  return url.startsWith(SEARCH_URL) ? `${url}&safe=active` : url;
-};
-
 export const toUrl = (input: unknown) => {
   if (typeof input !== 'string') {
     throw new Error('Address must be text.');
@@ -1183,7 +1177,7 @@ export const navigateToWeb = (input: string) => {
   }
 
   endGoogleSignIn(tab, false);
-  load(tab, toSafeUrl(input));
+  load(tab, toUrl(input));
   layout();
   emit();
   return true;

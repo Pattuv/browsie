@@ -1,6 +1,12 @@
 import type { Llm } from '../classifier';
-import CHAT_PROMPT from '../prompts/chat.md?raw';
-import HELP_PROMPT from '../prompts/help.md?raw';
+import CHAT_TEXT from '../prompts/chat.md?raw';
+import HELP_TEXT from '../prompts/help.md?raw';
+import SAFETY from '../prompts/safety.md?raw';
+
+const CHAT_PROMPT = `${CHAT_TEXT}
+${SAFETY}`;
+const HELP_PROMPT = `${HELP_TEXT}
+${SAFETY}`;
 import { renderHistory, type TurnRecord } from '../sessionStore';
 
 // chat and help lanes: very light and tool-free so it can quickly answer user's questions.

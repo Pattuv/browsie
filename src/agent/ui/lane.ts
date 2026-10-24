@@ -2,7 +2,11 @@ import { z } from 'zod';
 import type { ChatMessage, LlmResponse, Tier, ToolDef } from '../../shared/agent/llm';
 import type { ChromeResponse, Source, TaskEventBody, TaskResult } from '../../shared/agent/protocol';
 import { type ChromeAction, describe, parseChromeAction } from '../../shared/chrome/actions';
-import SYSTEM_PROMPT from './prompt.md?raw';
+import LANE_PROMPT from './prompt.md?raw';
+import SAFETY from '../prompts/safety.md?raw';
+
+const SYSTEM_PROMPT = `${LANE_PROMPT}
+${SAFETY}`;
 
 // ui lane: this controls the browser chrome through the command table in shared/chrome/actions.ts. It has no page access or real GUI interaction.
 // This is usually a one model call ("open a new tab"), sometimes multiple when it has to look  for information first

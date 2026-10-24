@@ -34,3 +34,4 @@ await build({ ...common, entryPoints: ['test/web/withAppKey.ts'], outfile: '.vit
 // Prints the real classifier's raw replies (run with --script through withAppKey).
 await build({ ...common, entryPoints: ['test/web/classifyProbe.ts'], outfile: '.vite/harness/classifyProbe.cjs' });
 await build({ ...common, entryPoints: ['test/web/infoProbe.ts'], outfile: '.vite/harness/infoProbe.cjs' });
+await build({ ...common, entryPoints: ['test/web/safetyProbe.ts'], outfile: '.vite/harness/safetyProbe.cjs' });
