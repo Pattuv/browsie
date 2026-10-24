@@ -15,7 +15,7 @@
     "test": "vitest run",
     "eval:web": "node test/web/build.mjs && electron .vite/harness/harness.cjs",
     "eval:web:app-key": "node test/web/build.mjs && electron .vite/harness/withAppKey.cjs",
-    "voice:clips": "esbuild scripts/voiceClips.ts --bundle --platform=node --format=cjs --log-level=warning --outfile=.vite/scripts/voiceClips.cjs && node .vite/scripts/voiceClips.cjs"
+    "voice:clips": "esbuild devscripts/clipcreator.ts --bundle --platform=node --format=cjs --log-level=warning --outfile=.vite/devscripts/clipcreator.cjs && node .vite/devscripts/clipcreator.cjs"
   },
   "keywords": [],
   "author": {
