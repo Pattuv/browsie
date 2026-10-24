@@ -22,8 +22,8 @@ import {
 } from '../browser/tabs';
 import type { ChromeOperations } from './chromeApi';
 
-// The real browser behind chromeApi. These call tabs.ts's agent-facing functions, which skip the lockdown
-// checks meant for people. Each returns false when there was nothing to do, so the agent hears about it.
+// The real browser behind chromeApi. These call tabs.ts's agent-facing functions, which skip the lockdown checks meant for people.
+// Each returns false when there was nothing to do, so the agent hears about it.
 
 const state = () => getBrowserState();
 const hasTab = (id: number) => state().tabs.some((tab) => tab.id === id);
