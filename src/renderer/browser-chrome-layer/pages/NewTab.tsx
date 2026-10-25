@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { HeartHandshake, History, X } from "lucide-react";
+import { History, X } from "lucide-react";
 import DashboardTip, { type Tip } from "../../components/DashboardTip";
 import { useBrowserStore, useLockdownNotice, useLockdownStore } from "../../stores/browserStore";
 import GoogleAppsMenu from "../GoogleAppsMenu";
@@ -373,16 +373,6 @@ function NewTab({ entranceDelay: initialDelay, launched }: NewTabProps) {
       </div>
 
       <LockdownNotice locked={locked} launched={launched} onUnlock={toggleLock} />
-
-      {/* The tutorial lands later; the button is here so the layout is final. */}
-      <button
-        type="button"
-        className="chrome-item absolute bottom-3 right-3 flex h-10 items-center gap-2 rounded-xl bg-(--chrome-tint) px-4 text-[0.9375rem] tracking-tight text-[#9572FF] transition-[background-color,transform,box-shadow] duration-200 ease-out hover:-translate-y-px hover:bg-(--chrome-tint-hover) hover:shadow-[0_6px_16px_rgba(149,114,255,0.18)] active:translate-y-0 active:scale-[0.98]"
-        style={delay(440)}
-      >
-        <HeartHandshake size={17} aria-hidden="true" />
-        Interactive Tutorial
-      </button>
     </div>
   );
 }
