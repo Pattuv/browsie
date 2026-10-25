@@ -76,20 +76,20 @@ export type ActResponse = {
   observation: Observation;
 };
 
-// --- Turns: one thing the user said, from transcript to spoken reply ---
+//Turns: one thing the user said, from transcript to spoken reply
 
 // What the classifier can decide. CONTROL words never get this far: main handles them first.
 export const TURN_LABELS = ['CHAT', 'HELP', 'INFO', 'UI', 'WEB', 'RESTRICTED', 'UNCLEAR'] as const;
 export type TurnLabel = (typeof TURN_LABELS)[number];
 
-// What a turn wants said. `clip` lines are prerecorded; `text` is spoken live.
+// What a turn wants said. clip lines are prerecorded and text is spoken live.
 export type TurnEvent =
   | { turnId: string; type: 'say'; text?: string; clip?: FallbackId }
   | { turnId: string; type: 'routed'; label: TurnLabel; confidence?: number; tasks: { lane: AgentLane; goal: string }[] }
   | { turnId: string; type: 'done'; ok: boolean };
 
-// What the UI lane gets back from a browser command. `data` holds tab titles, bookmark names and history
-// entries, which websites wrote: the lane treats it as information, never instructions.
+// What the UI lane gets back from a browser command. data holds tab titles, bookmark names and history
+// entries, which websites wrote, the lane treats it as information, never instructions.
 export type ChromeResponse =
   | { ok: true; phrase: string; data?: unknown }
   | { ok: false; error: string; message: string; limit?: boolean };
