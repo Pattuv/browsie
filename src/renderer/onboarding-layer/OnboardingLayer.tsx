@@ -91,8 +91,8 @@ function OnboardingLayer() {
   // menu on a short window) adds scrollbars, which narrow the viewport and reflow the whole Dashboard.
   return (
     <div className="relative h-screen min-h-full overflow-hidden">
-      {/* Spans Dashboard's top-4 h-8 bar (48px); pt-4 keeps icons centered on that bar */}
-      <TitleBar controlsClassName="h-12 *:pt-4" />
+      {/* Drag strip to the right of the traffic lights. Dashboard and Setup paint their own top row on top of it. */}
+      <TitleBar />
       <div className="h-full min-h-full">
         {/* LOADING renders nothing (setup also starts on white), so setup never flashes for a signed-in user. */}
         {showDashboard && <Dashboard />}

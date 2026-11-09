@@ -14,7 +14,7 @@ export type VaultContents = {
 
 const vaultPath = () => path.join(app.getPath('userData'), 'session.bin');
 
-// safeStorage borrows a key from Windows DPAPI.
+// safeStorage borrows a key from the macOS Keychain (DPAPI on Windows).
 export const canPersistSecrets = () => safeStorage.isEncryptionAvailable();
 
 export const readVault = (): VaultContents | null => {

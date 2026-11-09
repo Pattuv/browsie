@@ -10,7 +10,7 @@ function SetupGuide({ onContinue }: SetupGuideProps) {
   return (
     <div className="relative z-10 h-full min-h-full">
       <div className="enter-blur flex h-full flex-col items-center justify-center px-6">
-        <h1 className="bric text-center text-5xl font-medium tracking-tighter">
+        <h1 className="bric text-center text-5xl font-normal tracking-tighter">
           Let’s get you set up.
         </h1>
         <p className="mt-6 max-w-[38rem] text-center text-2xl font-medium tracking-tight text-zinc-500">

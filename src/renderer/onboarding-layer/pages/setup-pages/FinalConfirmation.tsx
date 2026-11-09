@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fadeOutSetupSoundtrack } from "../../setupSoundtrack";
 
 // Last setup step. "Go to Browsie" is what finishes setup: main checks the steps' results (the keys are
 // stored), records the account, saves the sign-in, and pushes the session; the gate swaps setup for the
@@ -14,6 +15,9 @@ function FinalConfirmation() {
 
     setFinishing(true);
     setFailed(false);
+    // Start the fade on the click. Waiting for Setup to unmount left the loop running
+    // when that unmount's fade lost track of the element.
+    fadeOutSetupSoundtrack();
 
     try {
       await window.browsie?.auth.completeSetup();
@@ -26,7 +30,7 @@ function FinalConfirmation() {
   return (
     <div className="relative z-10 h-full min-h-full">
       <div className="enter-blur flex h-full flex-col items-center justify-center px-6">
-        <h1 className="bric text-center text-5xl font-medium tracking-tighter">
+        <h1 className="bric text-center text-5xl font-normal tracking-tighter">
           You’re all set!
         </h1>
 

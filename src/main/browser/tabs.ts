@@ -1641,7 +1641,10 @@ export const handleShortcut = (input: Input, source: 'chrome' | 'tab') => {
     return false;
   }
 
-  const ctrl = input.control;
+  // Command on macOS, Control elsewhere. Command-H is Hide, so History is Command-Y on the Mac (same as Chrome).
+  const command = process.platform === 'darwin' ? input.meta : input.control;
+  // Command-Tab is the app switcher. Cycling tabs stays on Control-Tab.
+  const cycle = process.platform === 'darwin' ? input.control && !input.meta : input.control;
   const key = input.key.toLowerCase();
   const run = (action: () => void) => {
     action();
@@ -1653,7 +1656,7 @@ export const handleShortcut = (input: Input, source: 'chrome' | 'tab') => {
   // swallowed, so they don't leak through to the page either.
   const once = (action: () => void) => (input.isAutoRepeat ? true : run(action));
 
-  if (ctrl && !input.shift && key === 't') {
+  if (command && !input.shift && key === 't') {
     return once(() => {
       newTab();
       focusAddressBar();
@@ -1661,63 +1664,69 @@ export const handleShortcut = (input: Input, source: 'chrome' | 'tab') => {
   }
 
   // Bookmark the page on screen, like the star.
-  if (ctrl && !input.shift && !input.alt && key === 'd') {
+  if (command && !input.shift && !input.alt && key === 'd') {
     return once(bookmarkFromShortcut);
   }
 
   // History and Bookmarks pages, with Chrome's keys.
-  if (ctrl && !input.shift && !input.alt && key === 'h') {
+  if (command && !input.shift && !input.alt && key === (process.platform === 'darwin' ? 'y' : 'h')) {
     return once(() => openBrowsiePage('history'));
   }
 
-  if (ctrl && input.shift && !input.alt && key === 'o') {
+  if (command && input.shift && !input.alt && key === 'o') {
     return once(() => openBrowsiePage('bookmarks'));
   }
 
   // Show or hide the bookmarks bar. The way back after choosing "Always hide", since a hidden bar
   // can't be right-clicked.
-  if (ctrl && input.shift && !input.alt && key === 'b') {
+  if (command && input.shift && !input.alt && key === 'b') {
     return once(() => setBookmarksBarMode(bookmarksBarMode() === 'never' ? 'always' : 'never'));
   }
 
-  // Ctrl+1 to Ctrl+8 jump to that tab; Ctrl+9 always jumps to the last one.
-  if (ctrl && !input.shift && !input.alt && /^[1-9]$/.test(key)) {
+  // Command-1 to Command-8 jump to that tab; Command-9 always jumps to the last one.
+  if (command && !input.shift && !input.alt && /^[1-9]$/.test(key)) {
     return run(() => activateTab((key === '9' ? tabs.at(-1) : tabs[Number(key) - 1])?.id));
   }
 
-  if (ctrl && key === 'w') {
+  if (command && key === 'w') {
     return once(() => closeTab(activeTabId));
   }
 
-  if ((ctrl && key === 'l') || key === 'f6' || (input.alt && key === 'd')) {
+  if ((command && key === 'l') || key === 'f6' || (input.alt && key === 'd')) {
     return run(focusAddressBar);
   }
 
-  if (input.alt && key === 'arrowleft') {
+  const macHistoryNav = process.platform === 'darwin' && input.meta && !input.shift && !input.alt;
+
+  if ((input.alt && key === 'arrowleft') || (macHistoryNav && (key === 'arrowleft' || key === '['))) {
     return run(goBack);
   }
 
-  if (input.alt && key === 'arrowright') {
+  if ((input.alt && key === 'arrowright') || (macHistoryNav && (key === 'arrowright' || key === ']'))) {
     return run(goForward);
   }
 
-  if (key === 'f5' || (ctrl && key === 'r')) {
+  if (key === 'f5' || (command && key === 'r')) {
     return run(reload);
   }
 
-  if (ctrl && key === 'tab') {
+  if (cycle && key === 'tab') {
     return run(() => cycleTab(input.shift ? -1 : 1));
   }
 
   // The keyboard version of dragging a tab along the strip. Page Up/Down, so it doesn't steal
-  // Ctrl+Shift+arrows from text (those select a word in the address bar and on websites).
-  if (ctrl && input.shift && !input.alt && (key === 'pageup' || key === 'pagedown')) {
+  // Command-Shift-arrows from text (those select a word in the address bar and on websites).
+  if (command && input.shift && !input.alt && (key === 'pageup' || key === 'pagedown')) {
     const index = tabs.findIndex((tab) => tab.id === activeTabId);
     return run(() => moveTab(activeTabId, index + (key === 'pageup' ? -1 : 1)));
   }
 
   // Developer tools for the website on screen, in development builds only (same as Inspect in the context menu).
-  if (source === 'tab' && !app.isPackaged && (key === 'f12' || (ctrl && input.shift && key === 'i'))) {
+  const inspect = process.platform === 'darwin'
+    ? input.meta && input.alt && !input.shift && key === 'i'
+    : command && input.shift && key === 'i';
+
+  if (source === 'tab' && !app.isPackaged && (key === 'f12' || inspect)) {
     return run(() => activeContents()?.toggleDevTools());
   }
 
@@ -1727,7 +1736,7 @@ export const handleShortcut = (input: Input, source: 'chrome' | 'tab') => {
   }
 
   // Page zoom matters a lot for low-vision users. Browsie's own UI keeps its fixed size.
-  if (source === 'tab' && ctrl && ['=', '+', '-', '0'].includes(key)) {
+  if (source === 'tab' && command && ['=', '+', '-', '0'].includes(key)) {
     return run(() => zoomActiveTab(key));
   }
 

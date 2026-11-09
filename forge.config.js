@@ -6,15 +6,14 @@ const ICONS_DIR = 'src/renderer/assets/icons';
 module.exports = {
   packagerConfig: {
     asar: true,
-    icon: `${ICONS_DIR}/windows/icon.ico`,
+    icon: `${ICONS_DIR}/macos/icon`,
+    appCategoryType: 'public.app-category.productivity',
   },
   rebuildConfig: {},
   makers: [
     {
-      name: '@electron-forge/maker-squirrel',
-      config: {
-        setupIcon: `${ICONS_DIR}/windows/icon.ico`,
-      },
+      name: '@electron-forge/maker-zip',
+      platforms: ['darwin'],
     },
   ],
   plugins: [

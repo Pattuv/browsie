@@ -27,8 +27,8 @@ function MenuPickerLayer() {
 
   return (
     <div className="relative flex h-screen min-h-full flex-col bg-white px-8 pb-7 pt-14">
-      <TitleBar maximizable={false} offsetClassName="top-2">
-        <img src={wordmark} alt="Browsie" className="h-5" />
+      <TitleBar offsetClassName="top-1">
+        <img src={wordmark} alt="Browsie" className="pointer-events-none ml-4 h-5" />
       </TitleBar>
 
       <div className="app-region-no-drag mt-8 flex flex-1 flex-col items-center gap-8">

@@ -76,7 +76,7 @@ function KeySetup({ onContinue }: KeySetupProps) {
         onSubmit={handleSubmit}
         className="enter-blur flex h-full flex-col items-center justify-center px-6"
       >
-        <h1 className="bric text-center text-5xl font-medium tracking-tighter">
+        <h1 className="bric text-center text-5xl font-normal tracking-tighter">
           AI Usage Key
         </h1>
         <p className="mt-5 max-w-[28rem] text-center text-lg font-medium leading-snug tracking-tight text-zinc-500">

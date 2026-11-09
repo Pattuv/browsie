@@ -158,7 +158,7 @@ function Auth({ playIntro, phase, onPhase }: AuthProps) {
     <div className="relative z-10 h-full min-h-full">
       <div className="flex h-full flex-col items-center justify-center px-6">
         {showHello && (
-          <p className="bric flex justify-center text-6xl font-medium tracking-tighter">
+          <p className="bric flex justify-center text-6xl font-normal tracking-tighter">
             {HELLO_TEXT.split("").map((char, index) => (
               <span
                 key={`${char}-${index}`}
@@ -176,7 +176,7 @@ function Auth({ playIntro, phase, onPhase }: AuthProps) {
         {signInView === "browser" && (
           <div className="enter-blur flex flex-col items-center">
             <img src={browserIllustration} alt="" className="h-28 w-auto" />
-            <h1 className="bric mt-2 text-center text-5xl font-medium tracking-tighter">
+            <h1 className="bric mt-2 text-center text-5xl font-normal tracking-tighter">
               Finish signing in from your
               <br />
               existing browser.
@@ -212,7 +212,7 @@ function Auth({ playIntro, phase, onPhase }: AuthProps) {
             {showScene && (
               <div className="flex flex-col items-center gap-9">
                 <h1
-                  className={`bric text-center text-6xl font-medium tracking-tighter ${playIntro ? "enter-blur" : ""}`}
+                  className={`bric text-center text-6xl font-normal tracking-tighter ${playIntro ? "enter-blur" : ""}`}
                   style={
                     playIntro
                       ? {

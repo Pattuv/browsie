@@ -50,7 +50,7 @@ function GoogleSetup({ onContinue }: GoogleSetupProps) {
   return (
     <div className="relative z-10 h-full min-h-full">
       <div className="enter-blur flex h-full flex-col items-center justify-center px-6">
-        <h1 className="bric text-center text-5xl font-medium tracking-tighter">
+        <h1 className="bric text-center text-5xl font-normal tracking-tighter">
           Connect Google.
         </h1>
         <p className="mt-4 max-w-[36rem] text-center text-lg font-medium tracking-tight text-zinc-500">

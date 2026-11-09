@@ -5,6 +5,7 @@ import {
   screen,
   WebContentsView,
   type BrowserWindowConstructorOptions,
+  type MenuItemConstructorOptions,
 } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,8 +22,10 @@ const disableZoom = (webContents: Electron.WebContents) => {
     }
 
     const isZoomKey = ["+", "-", "=", "0", "Plus", "Minus"].includes(input.key);
+    // Command on macOS. Control is the Windows/Linux equivalent, and must not zoom this shell either.
+    const zoomModifier = process.platform === "darwin" ? input.meta || input.control : input.control;
 
-    if (input.control && isZoomKey) {
+    if (zoomModifier && isZoomKey) {
       event.preventDefault();
     }
   });
@@ -34,20 +37,45 @@ const DEV_ICONS_DIR = "src/renderer/assets/icons";
 const devIconPath = (file: string) =>
   app.isPackaged ? undefined : path.join(app.getAppPath(), DEV_ICONS_DIR, file);
 
-/** Shared chrome: hidden title bar, custom caption buttons in the renderer. */
+/**
+ * Hidden title bar with the native traffic lights.
+ * y:20 sits the lights on the same row as the wordmark (its center is about 28px down).
+ * The renderer keeps the left 5rem clear of them (Tailwind left-20 / pl-20).
+ */
 const windowChromeOptions = (): Partial<BrowserWindowConstructorOptions> => ({
   titleBarStyle: "hidden",
+  trafficLightPosition: { x: 16, y: 20 },
   backgroundColor: "#ffffff",
-  icon: devIconPath("windows/icon.ico"),
-  autoHideMenuBar: true,
+  icon: devIconPath("macos/icon.icns"),
   minimizable: true,
   maximizable: true,
   resizable: true,
+  // Green button zooms the window. Full screen is reserved for the browser.
   fullscreenable: false,
 });
 
 export const setAppMenu = () => {
-  Menu.setApplicationMenu(null);
+  const template: MenuItemConstructorOptions[] = [
+    {
+      label: app.name,
+      submenu: [
+        { role: "about" },
+        { type: "separator" },
+        { role: "services" },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    },
+    // Without this, Command-C / Command-V do nothing in text fields.
+    { role: "editMenu" },
+    { role: "windowMenu" },
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 };
 
 // __dirname is .vite/build at runtime (Vite bundles main there), so this path
@@ -55,7 +83,7 @@ export const setAppMenu = () => {
 const rendererIndexPath = () =>
   path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`);
 
-// Windows paths are case-insensitive and the drive letter's case varies (C: vs c:), so compare normalized.
+// Default macOS volumes are case-insensitive, so compare normalized paths.
 const isSamePath = (a: string, b: string) =>
   path.normalize(a).toLowerCase() === path.normalize(b).toLowerCase();
 
@@ -210,8 +238,7 @@ export const bringToFront = (window: BrowserWindow) => {
     window.restore();
   }
 
-  // Windows blocks background apps from taking focus (it just flashes the taskbar), but it will
-  // raise an always-on-top window, so toggle that around focus().
+  // Raising an always-on-top window is what actually takes focus after sign-in in the system browser.
   window.setAlwaysOnTop(true);
   window.show();
   window.focus();
@@ -304,7 +331,7 @@ const createBrowserWindow = (display: Electron.Display) => {
   const window = new BrowserWindow({
     ...display.bounds,
     // Hidden until the splash has painted, so the first thing on screen is the spinner.
-    // Not created fullscreen: Windows ignores `show: false` and plays the fullscreen animation immediately.
+    // Shown only after the first frame, so the open does not animate across the desktop.
     show: false,
     frame: false,
     fullscreenable: true,
@@ -314,14 +341,11 @@ const createBrowserWindow = (display: Electron.Display) => {
     movable: false,
     minimizable: false,
     maximizable: false,
-    autoHideMenuBar: true,
-    thickFrame: false,
     hasShadow: false,
-    roundedCorners: false,
     paintWhenInitiallyHidden: true,
     // Solid. A transparent window on a second monitor is what flickered.
     backgroundColor: "#111111",
-    icon: devIconPath("windows/icon.ico"),
+    icon: devIconPath("macos/icon.icns"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       sandbox: true,
@@ -366,12 +390,12 @@ const createBrowserWindow = (display: Electron.Display) => {
     window.setMaximizable(false);
   };
 
-  // Armed once the open transition has finished. Forcing kiosk back during show() makes
-  // Windows leave and re-enter it, which flashes the whole display.
+  // Armed once the open transition has finished. Forcing kiosk back during show()
+  // leaves and re-enters it, which flashes the whole display.
   let enforceFullscreen = false;
   let enteringFullscreen = false;
 
-  // Cover the whole display, including the taskbar, then freeze the size.
+  // Cover the whole display, including the menu bar and Dock, then freeze the size.
   // Resizable has to stay on until that cover happens (see the constructor note).
   const enterExclusiveFullscreen = () => {
     if (window.isDestroyed() || enteringFullscreen) {
@@ -430,7 +454,7 @@ const createBrowserWindow = (display: Electron.Display) => {
     window.focus();
 
     // A kiosk request made while the window was hidden can be dropped.
-    // Enter once more only if it never took, so Windows does not leave and re-enter.
+    // Enter once more only if it never took, so the display does not leave and re-enter kiosk.
     if (!window.isKiosk()) {
       enterExclusiveFullscreen();
     }

@@ -79,7 +79,7 @@ function Setup({ playIntro, step }: SetupProps) {
           type="button"
           aria-label="Back"
           onClick={goBack}
-          className={`smooth app-region-no-drag absolute top-4 z-20 flex size-11 cursor-pointer items-center justify-center rounded-2xl border border-[#cccccc] bg-white text-[#243746] transition-transform duration-300 ease-out hover:scale-105 active:scale-95 ${playIntro ? "left-[4.75rem]" : "left-5"}`}
+          className="smooth app-region-no-drag absolute top-4 left-20 z-20 flex size-11 cursor-pointer items-center justify-center rounded-2xl border border-[#cccccc] bg-white text-[#243746] transition-transform duration-300 ease-out hover:scale-105 active:scale-95"
         >
           <ArrowLeft size={20} strokeWidth={2} aria-hidden="true" />
         </button>
@@ -91,7 +91,7 @@ function Setup({ playIntro, step }: SetupProps) {
           aria-label={soundtrackMuted ? "Unmute soundtrack" : "Mute soundtrack"}
           aria-pressed={soundtrackMuted}
           onClick={toggleSoundtrack}
-          className="smooth app-region-no-drag absolute top-4 left-5 z-20 flex size-11 cursor-pointer items-center justify-center rounded-2xl border border-[#cccccc] bg-transparent text-[#243746] transition-transform duration-300 ease-out hover:scale-105 active:scale-95"
+          className="smooth app-region-no-drag absolute top-4 right-5 z-20 flex size-11 cursor-pointer items-center justify-center rounded-2xl border border-[#cccccc] bg-transparent text-[#243746] transition-transform duration-300 ease-out hover:scale-105 active:scale-95"
         >
           <SoundtrackIcon size={20} strokeWidth={2} aria-hidden="true" />
         </button>

@@ -3,91 +3,100 @@ import setupSoundtrackUrl from '../assets/setupsoundtrack.mp3';
 const FADE_MS = 2000;
 const FADE_STEPS = 40;
 
-let current: HTMLAudioElement | null = null;
-let fadeTimer: ReturnType<typeof setInterval> | null = null;
-let hardStopTimer: ReturnType<typeof setTimeout> | null = null;
+type Track = {
+  audio: HTMLAudioElement;
+  fadeTimer: ReturnType<typeof setInterval> | null;
+  stopTimer: ReturnType<typeof setTimeout> | null;
+  fading: boolean;
+};
 
-const clearFadeTimers = () => {
-  if (fadeTimer !== null) {
-    clearInterval(fadeTimer);
-    fadeTimer = null;
+// On globalThis so a hot reload still sees the element that's actually playing.
+const slot: { track: Track | null } = ((globalThis as typeof globalThis & {
+  __browsieSetupSoundtrack?: { track: Track | null };
+}).__browsieSetupSoundtrack ??= { track: null });
+
+const clearTimers = (item: Track) => {
+  if (item.fadeTimer !== null) {
+    clearInterval(item.fadeTimer);
+    item.fadeTimer = null;
   }
 
-  if (hardStopTimer !== null) {
-    clearTimeout(hardStopTimer);
-    hardStopTimer = null;
+  if (item.stopTimer !== null) {
+    clearTimeout(item.stopTimer);
+    item.stopTimer = null;
   }
 };
 
-const hardStop = (audio: HTMLAudioElement) => {
-  clearFadeTimers();
+const silence = (item: Track) => {
+  clearTimers(item);
+  const { audio } = item;
+  audio.loop = false;
+  audio.volume = 0;
 
   try {
     audio.pause();
-    audio.removeAttribute('src');
-    audio.load();
+    audio.src = '';
   } catch {
     // Element may already be torn down.
   }
 
-  if (current === audio) {
-    current = null;
+  if (slot.track === item) {
+    slot.track = null;
   }
 };
 
-export const getSetupSoundtrack = () => current;
+export const getSetupSoundtrack = () => slot.track?.audio ?? null;
 
 export const playSetupSoundtrack = () => {
-  // Drop any leftover instance from a previous setup visit / Strict Mode remount.
-  if (current) {
-    hardStop(current);
+  if (slot.track) {
+    silence(slot.track);
   }
 
   const audio = new Audio(setupSoundtrackUrl);
   audio.loop = true;
-  current = audio;
+  audio.volume = 1;
+  const item: Track = { audio, fadeTimer: null, stopTimer: null, fading: false };
+  slot.track = item;
   void audio.play();
   return audio;
 };
 
 /** Ease volume down, then force-stop so a failed volume assign can't leave it looping. */
 export const fadeOutSetupSoundtrack = (durationMs = FADE_MS) => {
-  const audio = current;
+  const item = slot.track;
 
-  if (!audio) {
+  if (!item || item.fading) {
     return;
   }
 
-  // Detach first so Auth remounts / a second fade call don't touch this element.
-  current = null;
-  clearFadeTimers();
+  item.fading = true;
 
-  if (audio.muted || audio.paused) {
-    hardStop(audio);
+  if (item.audio.muted || item.audio.paused) {
+    silence(item);
     return;
   }
 
-  const startVolume = audio.volume;
+  const startVolume = item.audio.volume;
   const stepMs = durationMs / FADE_STEPS;
   let step = 0;
 
-  fadeTimer = setInterval(() => {
+  item.fadeTimer = setInterval(() => {
     step += 1;
     const t = Math.min(1, step / FADE_STEPS);
     const eased = 1 - (1 - t) ** 2;
 
     try {
-      audio.volume = startVolume * (1 - eased);
+      item.audio.volume = startVolume * (1 - eased);
     } catch {
-      hardStop(audio);
+      silence(item);
       return;
     }
 
     if (t >= 1) {
-      hardStop(audio);
+      silence(item);
     }
   }, stepMs);
 
-  // Belt and suspenders: always stop even if the interval is throttled or volume throws.
-  hardStopTimer = setTimeout(() => hardStop(audio), durationMs + 150);
+  // Always stop, even if the interval is throttled or a later call would have cleared it.
+  item.stopTimer = setTimeout(() => silence(item), durationMs + 150);
 };

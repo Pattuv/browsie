@@ -27,8 +27,8 @@ type LiveSession = {
   vault: VaultContents;
   accessToken?: string;
   accessTokenExpiresAt?: number;
-  // False when this sign-in won't survive a restart: setup isn't finished yet, or Windows DPAPI
-  // could not save the vault.
+  // False when this sign-in won't survive a restart: setup isn't finished yet, or the
+  // Keychain could not save the vault.
   persisted: boolean;
 };
 
