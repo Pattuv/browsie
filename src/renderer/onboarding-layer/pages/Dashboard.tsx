@@ -7,6 +7,7 @@ import {
 } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import Boiler from "../../components/Boiler";
+import { isMac } from "../../platform";
 import DashboardTip from "../../components/DashboardTip";
 import ProfileMenu from "../../components/ProfileMenu";
 import SettingsDialog from "../../components/SettingsDialog";
@@ -258,12 +259,12 @@ function Dashboard() {
   return (
     <Boiler>
       <div
-        className={`absolute inset-x-0 top-4 z-20 flex h-8 items-center justify-between pl-5 pr-40 ${revealClass(shouldAnimate.current, showTopBar)}`}
+        className={`absolute top-4 z-20 flex h-8 items-center justify-between ${isMac ? "app-region-drag right-0 left-20 pr-5" : "inset-x-0 pl-5 pr-40"} ${revealClass(shouldAnimate.current, showTopBar)}`}
       >
         <img
           src={wordmark}
           alt="Browsie"
-          className="theme-invert pointer-events-none h-5 -translate-y-1"
+          className="theme-invert pointer-events-none h-5 -translate-y-1 mac:ml-4"
         />
         <div className="flex items-center gap-2">
           <button

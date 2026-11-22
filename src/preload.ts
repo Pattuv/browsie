@@ -137,6 +137,7 @@ contextBridge.exposeInMainWorld("browsie", {
   getAiUsage: () => ipcRenderer.invoke("ai:get-usage"),
   shouldAnimateDashboard: () => ipcRenderer.invoke("should-animate-dashboard"),
   markDashboardPlayed: () => ipcRenderer.invoke("mark-dashboard-played"),
+  platform: process.platform,
   minimizeWindow: () => ipcRenderer.invoke("window-minimize"),
   toggleMaximizeWindow: () => ipcRenderer.invoke("window-toggle-maximize"),
   closeWindow: () => ipcRenderer.invoke("window-close"),
