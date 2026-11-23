@@ -43,53 +43,6 @@ function openGuide() {
   window.browsie?.openExternal(GUIDE_URL);
 }
 
-type ActionLinesProps = {
-  className?: string;
-  mirrored?: boolean;
-};
-
-function ActionLines({ className, mirrored = false }: ActionLinesProps) {
-  return (
-    <svg
-      width="28"
-      height="44"
-      viewBox="0 0 28 44"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={`pointer-events-none shrink-0 ${mirrored ? "scale-x-[-1]" : ""} ${className ?? ""}`}
-      aria-hidden="true"
-    >
-      <line
-        x1="24"
-        y1="5"
-        x2="3"
-        y2="1"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <line
-        x1="24"
-        y1="22"
-        x2="1"
-        y2="22"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <line
-        x1="24"
-        y1="39"
-        x2="3"
-        y2="43"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 const NOTCH_EAR_SIZE = 10;
 
 function notchEarStyle(side: "left" | "right") {
@@ -319,7 +272,6 @@ function Dashboard() {
           <div
             className={`group relative inline-flex items-center my-[clamp(2.5rem,5vh,5rem)] text-black transition-all duration-300 ease-out hover:scale-110 has-active:scale-100 ${revealClass(shouldAnimate.current, showButton)}`}
           >
-            <ActionLines className="absolute right-full mr-10" />
             <button
               data-click-sound="heavy"
               onClick={() => {
@@ -330,7 +282,6 @@ function Dashboard() {
             >
               Open browser for {firstName}
             </button>
-            <ActionLines className="absolute left-full ml-10" mirrored />
           </div>
         )}
 
@@ -346,7 +297,7 @@ function Dashboard() {
                 openGuide();
               }
             }}
-            className={`relative flex w-full max-w-[30rem] min-h-42 items-center overflow-hidden rounded-[2rem] border border-zinc-300 bg-zinc-50 px-8 py-8 mb-[clamp(3rem,6vh,6rem)] cursor-pointer ${revealClass(shouldAnimate.current, showCard)}`}
+            className={`smooth relative flex w-full max-w-[30rem] min-h-42 items-center overflow-hidden rounded-[2rem] border border-zinc-300 bg-zinc-50 px-8 py-8 mb-[clamp(3rem,6vh,6rem)] cursor-pointer ${revealClass(shouldAnimate.current, showCard)}`}
           >
             <div className="relative z-10 max-w-[55%] flex flex-col gap-1.5">
               <h2 className="text-[1.375rem] tracking-tight font-medium">

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Mascot from "../../../components/Mascot";
+import { useAuthStore } from "../../../stores/authStore";
 import browserIllustration from "../../../assets/paint-icons/browser.png";
 
 const TERMS_URL = "https://browsie.org/terms";
@@ -41,6 +42,8 @@ function Auth({ playIntro, phase, onPhase }: AuthProps) {
   const [signInView, setSignInView] = useState<SignInView>("welcome");
   const [hasTriedSignIn, setHasTriedSignIn] = useState(false);
   const [signInFailed, setSignInFailed] = useState(false);
+  // Google ended the last session (expired or revoked), so say why we're back here.
+  const sessionExpired = useAuthStore((state) => state.signedOutReason === "expired");
   const stackRef = useRef<HTMLDivElement>(null);
   const stackStartTop = useRef<number | null>(null);
   const welcomeExitTimer = useRef<number | undefined>(undefined);
@@ -249,11 +252,16 @@ function Auth({ playIntro, phase, onPhase }: AuthProps) {
                       Continue with Google
                     </span>
                   </button>
-                  {signInFailed && (
-                    <p className="absolute top-full mt-4 whitespace-nowrap text-base tracking-tight text-zinc-600">
-                      Something went wrong signing in. Please try again.
-                    </p>
-                  )}
+                  <p
+                    role="status"
+                    className="absolute top-full mt-4 whitespace-nowrap text-base tracking-tight text-zinc-600"
+                  >
+                    {signInFailed
+                      ? "Something went wrong signing in. Please try again."
+                      : sessionExpired
+                        ? "Your Google sign-in expired. Sign in again to pick up where you left off."
+                        : ""}
+                  </p>
                 </div>
               </div>
             )}
