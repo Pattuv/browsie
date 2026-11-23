@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Bookmark, ChevronDown } from 'lucide-react';
+import { Bookmark, ChevronDown } from '../icons';
 import DropdownMenu from '../components/DropdownMenu';
 import PrimaryButton from '../components/PrimaryButton';
 import { trackChromeMenu } from '../stores/browserStore';

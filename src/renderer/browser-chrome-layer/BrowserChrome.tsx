@@ -28,7 +28,30 @@ const LAUNCH_PAGE_DELAY = 520;
 // splash (glass over the blurred wallpaper, no chrome) → loaded (the chrome's empty frame scales and
 // blurs in behind the glass) → reveal (sound, glass clearing, contents fading in)
 // → ready (safe to measure the page area for websites).
-type Phase = 'splash' | 'loaded' | 'reveal' | 'ready';
+// restoring: this page reloaded under a browser that already launched (see alreadyLaunched); it waits
+// for the same data, then goes straight to ready with no splash, sound or entrance.
+type Phase = 'restoring' | 'splash' | 'loaded' | 'reveal' | 'ready';
+
+// The launch sequence plays once per browser window. This page can reload under an open window: in
+// `npm start` the dev server reloads it when its connection comes back after the computer sleeps.
+// sessionStorage belongs to this window's page, so it survives a reload but not a new browser window.
+const LAUNCHED_KEY = 'browsie-browser-launched';
+
+const alreadyLaunched = () => {
+  try {
+    return sessionStorage.getItem(LAUNCHED_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const rememberLaunched = () => {
+  try {
+    sessionStorage.setItem(LAUNCHED_KEY, '1');
+  } catch {
+    // A blocked store only means a later reload plays the launch again.
+  }
+};
 
 const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
@@ -42,12 +65,24 @@ const loadChrome = () =>
     document.fonts.load('400 16px "Bricolage Grotesque"'),
   ]);
 
-function useLaunchSequence() {
-  const [phase, setPhase] = useState<Phase>('splash');
+function useLaunchSequence(restored: boolean) {
+  const [phase, setPhase] = useState<Phase>(restored ? 'restoring' : 'splash');
 
   useEffect(() => {
     let cancelled = false;
     const timers: number[] = [];
+
+    if (restored) {
+      void loadChrome().then(() => {
+        if (!cancelled) {
+          setPhase('ready');
+        }
+      });
+
+      return () => {
+        cancelled = true;
+      };
+    }
 
     // The chrome starts coming in late enough that it lands right as the minimum splash ends,
     // so the glass and spinner hold first and the sound follows the chrome without a gap.
@@ -73,7 +108,7 @@ function useLaunchSequence() {
       cancelled = true;
       timers.forEach(window.clearTimeout);
     };
-  }, []);
+  }, [restored]);
 
   return phase;
 }
@@ -108,15 +143,18 @@ function useReportContentBounds(ref: RefObject<HTMLDivElement | null>, enabled: 
 
 /** The browser window's own page: splash on launch, then the tab strip and page card. */
 function BrowserChrome() {
-  const phase = useLaunchSequence();
+  const [restored] = useState(alreadyLaunched);
+  const phase = useLaunchSequence(restored);
   const activeTab = useActiveTab();
   const pageSnapshot = usePageSnapshot((state) => state.src);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [sessionOpen, setSessionOpen] = useState(false);
-  const showChrome = phase !== 'splash';
+  const showChrome = phase !== 'splash' && phase !== 'restoring';
 
   // Tabs whose New Tab page has already been on screen. A fresh tab fades in; switching back to one doesn't.
   const shownNewTabs = useRef(new Set<number>());
+  // After a reload, the New Tab already on screen was seen before, so it doesn't fade in again.
+  const restoringNewTab = useRef(restored);
 
   useReportContentBounds(viewportRef, phase === 'ready');
 
@@ -126,12 +164,19 @@ function BrowserChrome() {
     if (phase === 'ready') {
       document.documentElement.dataset.chromeReady = 'true';
       void window.browsie?.browser?.chromeReady();
+      rememberLaunched();
+      restoringNewTab.current = false;
     }
   }, [phase]);
 
   // Claim the id during render so switching back (or activating while dragging) never replays the fade.
   const newTabEntranceDelay = (tabId: number) => {
     if (shownNewTabs.current.has(tabId)) {
+      return null;
+    }
+
+    if (restoringNewTab.current) {
+      shownNewTabs.current.add(tabId);
       return null;
     }
 
@@ -143,7 +188,11 @@ function BrowserChrome() {
   return (
     // Solid gray at first. Once loaded, the chrome's frame scales and blurs in behind the splash.
     // chrome-waiting freezes every entrance inside it until the glass starts clearing.
-    <div className={`browser-chrome relative h-screen overflow-hidden ${phase === 'loaded' ? 'chrome-waiting' : ''}`}>
+    <div
+      className={`browser-chrome relative h-screen overflow-hidden ${phase === 'loaded' ? 'chrome-waiting' : ''} ${
+        restored ? 'chrome-restored' : ''
+      }`}
+    >
       {showChrome && (
         <div className="chrome-materialize absolute inset-0 bg-(--chrome-bar)">
           <AgentHighlight />
@@ -161,7 +210,7 @@ function BrowserChrome() {
             <BookmarksBar style={{ animationDelay: `${TOOLBAR_DELAY + 60}ms` }} />
             {/* The page area shrinks when the session sidebar is open. Websites are laid exactly over it. */}
             <div className="flex min-h-0 flex-1">
-              <div ref={viewportRef} className="relative min-h-0 min-w-0 flex-1">
+              <div ref={viewportRef} className="browser-viewport relative min-h-0 min-w-0 flex-1">
                 {/* Keyed by tab, so each tab gets its own page. */}
                 {activeTab?.url === null && activeTab.page === 'history' && <HistoryPage key={activeTab.id} />}
                 {activeTab?.url === null && activeTab.page === 'bookmarks' && <BookmarksPage key={activeTab.id} />}
@@ -189,7 +238,7 @@ function BrowserChrome() {
         </div>
       )}
 
-      {phase !== 'ready' && <SplashScreen leaving={phase === 'reveal'} />}
+      {phase !== 'ready' && phase !== 'restoring' && <SplashScreen leaving={phase === 'reveal'} />}
     </div>
   );
 }

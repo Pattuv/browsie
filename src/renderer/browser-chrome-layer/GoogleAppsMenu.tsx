@@ -1,5 +1,5 @@
 import DropdownMenu from '../components/DropdownMenu';
-import { Grip } from 'lucide-react';
+import { Grip } from '../icons';
 import searchIcon from '../assets/google-apps/search.png';
 import gmailIcon from '../assets/google-apps/gmail.png';
 import mapsIcon from '../assets/google-apps/maps.png';

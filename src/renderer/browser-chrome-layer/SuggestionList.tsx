@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Globe, Search } from "lucide-react";
+import { Globe, Search } from "../icons";
 import { prettyUrl } from "./prettyUrl";
 
 const MAX_CACHED_IMAGES = 200;

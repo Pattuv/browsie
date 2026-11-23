@@ -5,7 +5,7 @@ import {
   MessagesSquare,
   RotateCw,
   X,
-} from "lucide-react";
+} from "../icons";
 import IconButton from "./IconButton";
 import BookmarkMenu from "./BookmarkMenu";
 import SiteInfoMenu from "./SiteInfoMenu";
@@ -222,7 +222,7 @@ function Toolbar({ tab, entranceDelay, sessionOpen, onToggleSession }: ToolbarPr
 
   return (
     <div
-      className={`relative flex h-12 shrink-0 items-center border-b border-zinc-300/80 px-2.5 ${locked ? "pointer-events-none" : ""}`}
+      className={`relative flex h-12 shrink-0 items-center border-b border-zinc-200/70 px-2.5 ${locked ? "pointer-events-none" : ""}`}
     >
       <div className="chrome-item flex items-center gap-0.5" style={delay(0)}>
         <IconButton

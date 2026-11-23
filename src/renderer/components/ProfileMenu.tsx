@@ -1,5 +1,5 @@
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { AlertCircle, ArrowUpRight, Check, Gauge, Info, Lock, LogOut, Settings } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, Check, Gauge, Info, Lock, LockFilled, LogOut, Settings } from '../icons';
 import { useAuthStore } from '../stores/authStore';
 import { useLockdownStore } from '../stores/browserStore';
 import { playClick } from '../sounds';
@@ -255,7 +255,11 @@ function LockdownRow() {
     >
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-2 text-[15px] font-[460] tracking-tight">
-          <Lock size={20} strokeWidth={1.75} aria-hidden="true" />
+          {enabled ? (
+            <LockFilled size={20} strokeWidth={1.75} aria-hidden="true" />
+          ) : (
+            <Lock size={20} strokeWidth={1.75} aria-hidden="true" />
+          )}
           <span className="flex items-center gap-1.5">
             Lockdown Mode
             {/* Settings panel lands later. */}

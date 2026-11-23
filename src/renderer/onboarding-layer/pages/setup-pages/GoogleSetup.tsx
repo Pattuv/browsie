@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Calendar, Check, HardDrive, Mail } from "lucide-react";
+import { Calendar, Check, HardDrive, Mail } from "../../../icons";
 import { useAuthStore } from "../../../stores/authStore";
 
 // Connect step: lets Browsie read and change the account's Gmail, Google Calendar and Google Drive, so it

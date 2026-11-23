@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Calendar, Check, HardDrive, Mail, RotateCcw } from "lucide-react";
+import { Calendar, Check, HardDrive, Mail, RotateCcw } from "../icons";
 import { SAFE_SEARCH_SETTING } from "../../shared/web/safeSearch";
 import { useAuthStore } from "../stores/authStore";
 import { useDataStore } from "../stores/dataStore";

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
-import { ChevronsRight, Globe } from 'lucide-react';
+import { ChevronsRight, Globe } from '../icons';
 import DropdownMenu, { MenuItem } from '../components/DropdownMenu';
 import SiteIcon from './SiteIcon';
 import { trackChromeMenu, useActiveTab, useLockdownStore } from '../stores/browserStore';
@@ -81,7 +81,7 @@ function BookmarksBar({ style }: { style?: CSSProperties }) {
     <nav
       aria-label="Bookmarks bar"
       onContextMenu={(event) => showMenu(event)}
-      className="chrome-item relative flex h-9 shrink-0 items-center border-b border-zinc-300/80 px-2.5"
+      className="chrome-item relative flex h-9 shrink-0 items-center border-b border-zinc-200/70 px-2.5"
       style={style}
     >
       <div ref={rowRef} className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">

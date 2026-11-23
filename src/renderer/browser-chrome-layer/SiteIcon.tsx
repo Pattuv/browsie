@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Globe } from 'lucide-react';
+import { Globe } from '../icons';
 
 // A site's icon (a data: URL), or the globe when there isn't one or it won't decode.
 function SiteIcon({ src, size = 16 }: { src?: string | null; size?: number }) {

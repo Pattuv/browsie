@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeft, Volume2, VolumeX } from "../../icons";
 import cloudGraphic from "../../assets/cloudgraphic.png";
 import {
   fadeOutSetupSoundtrack,

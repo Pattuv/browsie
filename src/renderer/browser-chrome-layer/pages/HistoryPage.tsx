@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Globe, Search, X } from 'lucide-react';
+import { Globe, Search, X } from '../../icons';
 import { prettyUrl } from '../prettyUrl';
 import { useLockdownStore } from '../../stores/browserStore';
 

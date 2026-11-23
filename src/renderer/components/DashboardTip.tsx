@@ -59,7 +59,7 @@ function DashboardTip({ className = "", tips = TIPS, muted = false }: DashboardT
       className={`text-center tracking-tight ${muted ? "text-[0.6875rem] text-zinc-500" : "text-xs text-zinc-600"} ${phase === "shown" ? "tip-in" : "tip-out"} ${className}`}
     >
       {tip.before}{" "}
-      <span className={`mx-0.5 rounded-md border border-zinc-300 bg-zinc-100 px-1 py-0.5 font-medium ${muted ? "text-zinc-600" : "text-zinc-800"}`}>
+      <span className={`glass mx-0.5 rounded-md border px-1 py-0.5 font-medium ${muted ? "text-zinc-600" : "text-zinc-800"}`}>
         {tip.highlight}
       </span>{" "}
       {tip.after}

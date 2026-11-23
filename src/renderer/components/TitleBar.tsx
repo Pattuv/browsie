@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Copy, Minus, Square, X, type LucideIcon } from 'lucide-react';
+import { Copy, Minus, Square, X, type IconComponent } from '../icons';
 import { isMac } from '../platform';
 
 type CaptionButtonProps = {
   label: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   iconSize: number;
   danger?: boolean;
   onClick: () => void;

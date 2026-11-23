@@ -102,6 +102,16 @@ let lockdown = true;
 let relockAfterGoogleSignIn = false;
 // Bumped each time lockdown comes back on after Google sign-in, so the chrome shows its notice again.
 let lockdownNotice = 0;
+// Whether the person has lockdown on. Google sign-in's temporary unlock still counts as on: it happens
+// inside Browsie and lockdown comes back after. The browser window keeps macOS kiosk mode (no switching
+// apps or desktops) only while this is true.
+export const lockdownChosen = () => lockdown || relockAfterGoogleSignIn;
+const lockdownChosenListeners = new Set<() => void>();
+export const onLockdownChosenChange = (listener: () => void) => {
+  lockdownChosenListeners.add(listener);
+  return () => lockdownChosenListeners.delete(listener);
+};
+const notifyLockdownChosen = () => lockdownChosenListeners.forEach((listener) => listener());
 // Space held while lockdown is on. A view of its own draws the speech pill from this, above every page.
 let talking = false;
 // The first tab of a window or account, while we're still waiting to hear whether Google is logged in.
@@ -943,6 +953,7 @@ const applyLockdown = (enabled: boolean) => {
   }
 
   layout();
+  notifyLockdownChosen();
 };
 
 // The user's own choice, from the chrome. It replaces any pending re-lock after sign-in.
@@ -981,6 +992,8 @@ const endGoogleSignIn = (tab: Tab, finished: boolean) => {
   }
 
   relockAfterGoogleSignIn = false;
+  // Sign-in abandoned: lockdown stays off, which is now the person's choice.
+  notifyLockdownChosen();
 };
 
 const createView = (tab: Tab) => {

@@ -5,7 +5,7 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal } from "../../icons";
 import Boiler from "../../components/Boiler";
 import { isMac } from "../../platform";
 import DashboardTip from "../../components/DashboardTip";
