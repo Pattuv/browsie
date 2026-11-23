@@ -6,10 +6,10 @@ import {
   Globe,
   History,
   Info,
-  Lock,
+  LockFilled,
   Settings,
-  type LucideIcon,
-} from 'lucide-react';
+  type IconComponent,
+} from '../icons';
 import DropdownMenu, { MenuDivider, MenuGroup, MenuItem } from '../components/DropdownMenu';
 import { useLockdownStore } from '../stores/browserStore';
 import { inPlace, useBookmarksStore } from '../stores/libraryStore';
@@ -33,7 +33,7 @@ const Note = ({ children }: { children: ReactNode }) => (
 );
 
 type HoverRowProps = {
-  icon: LucideIcon;
+  icon: IconComponent;
   label: string;
   disabled: boolean;
   /** Clicking the row itself: opens the full page. */
@@ -258,7 +258,7 @@ function UtilityMenu({ onOpenChange }: UtilityMenuProps) {
               <>
                 <MenuDivider />
                 <p className="smooth flex items-center gap-2 rounded-[16px] bg-zinc-100 px-3.5 py-2.5 text-[13px] tracking-tight text-zinc-600">
-                  <Lock size={16} strokeWidth={1.75} aria-hidden="true" />
+                  <LockFilled size={16} strokeWidth={1.75} aria-hidden="true" />
                   Lockdown Mode is on
                 </p>
               </>

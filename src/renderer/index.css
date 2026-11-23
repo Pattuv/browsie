@@ -556,8 +556,72 @@
     animation-play-state: paused;
   }
 
+  /* Frosted glass: blurs whatever is behind it (the New Tab and Dashboard art). Recent activity and the
+     tips' highlighted words. High contrast stays solid, since see-through surfaces cost legibility there. */
+  .glass {
+    background-color: rgb(255 255 255 / 0.42);
+    border-color: rgb(255 255 255 / 0.75);
+    -webkit-backdrop-filter: blur(18px) saturate(1.6);
+    backdrop-filter: blur(18px) saturate(1.6);
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / 0.04),
+      0 12px 32px -18px rgb(60 40 110 / 0.3),
+      inset 0 1px 0 rgb(255 255 255 / 0.7);
+  }
+
+  html[data-theme="dark"] .glass {
+    background-color: rgb(48 46 54 / 0.42);
+    border-color: rgb(255 255 255 / 0.1);
+    box-shadow:
+      0 12px 32px -18px rgb(0 0 0 / 0.6),
+      inset 0 1px 0 rgb(255 255 255 / 0.07);
+  }
+
+  /* A clearer pane (Recent activity): more of the art shows through, softly blurred. */
+  .glass.glass-clear {
+    background-color: rgb(255 255 255 / 0.2);
+    -webkit-backdrop-filter: blur(10px) saturate(1.4);
+    backdrop-filter: blur(10px) saturate(1.4);
+  }
+
+  html[data-theme="dark"] .glass.glass-clear {
+    background-color: rgb(48 46 54 / 0.22);
+  }
+
+  html[data-theme="high-contrast"] .glass {
+    background-color: var(--color-white);
+    border-color: var(--color-zinc-300);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+
+  /* New Tab background. The art fills the width with its bottom edge on the window's bottom edge: a short
+     window crops the plain top, and a tall one shows the art's own top color above it, so there's no seam.
+     High contrast keeps a plain background, since decoration behind text works against it. */
+  .newtab-backdrop {
+    background: #fefefe url("./assets/backgrounds/light.png") center bottom / 100% auto no-repeat;
+  }
+
+  html[data-theme="dark"] .newtab-backdrop {
+    background-color: #212021;
+    background-image: url("./assets/backgrounds/dark.png");
+  }
+
+  html[data-theme="high-contrast"] .newtab-backdrop {
+    background: none;
+  }
+
   /* Opt a subtree out of the entrance (New Tab pages opened after launch). */
   .no-entrance .chrome-item {
+    animation: none;
+  }
+
+  /* The page reloaded under a browser that already launched (BrowserChrome): the chrome is simply
+     there again. New Tab pages opened afterwards, inside the page area, keep their fade. */
+  .chrome-restored .chrome-materialize,
+  .chrome-restored .chrome-drop,
+  .chrome-restored .chrome-item:not(.browser-viewport *) {
     animation: none;
   }
 

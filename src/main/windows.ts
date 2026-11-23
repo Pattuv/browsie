@@ -9,7 +9,14 @@ import {
 } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { attachSpeechOverlay, attachTabs, handleShortcut, handleTalkKey } from "./browser/tabs";
+import {
+  attachSpeechOverlay,
+  attachTabs,
+  handleShortcut,
+  handleTalkKey,
+  lockdownChosen,
+  onLockdownChosenChange,
+} from "./browser/tabs";
 
 const isMac = process.platform === "darwin";
 
@@ -363,6 +370,12 @@ const createBrowserWindow = (display: Electron.Display) => {
   let enforceFullscreen = false;
   let enteringFullscreen = false;
 
+  // Kiosk mode locks the person in: on macOS it blocks switching apps and desktops. That's for lockdown.
+  // With lockdown off, macOS gets ordinary full screen instead, so Command-Tab and switching desktops work.
+  // Windows stays in kiosk either way.
+  const lockedIn = () => !isMac || lockdownChosen();
+  const isCovering = () => (lockedIn() ? window.isKiosk() : window.isFullScreen());
+
   // Cover the whole display, including the taskbar (or the macOS menu bar and Dock), then freeze the size.
   // Resizable has to stay on until that cover happens (see the constructor note).
   const enterExclusiveFullscreen = () => {
@@ -370,7 +383,7 @@ const createBrowserWindow = (display: Electron.Display) => {
       return;
     }
 
-    if (window.isKiosk()) {
+    if (isCovering()) {
       lockChrome();
       return;
     }
@@ -382,15 +395,36 @@ const createBrowserWindow = (display: Electron.Display) => {
 
       const target = screen.getDisplayMatching(window.getBounds());
       window.setBounds(target.bounds);
-      window.setKiosk(true);
 
-      if (window.isKiosk()) {
+      if (lockedIn()) {
+        window.setKiosk(true);
+      } else {
+        window.setFullScreen(true);
+      }
+
+      if (isCovering()) {
         lockChrome();
       }
     } finally {
       enteringFullscreen = false;
     }
   };
+
+  // Lockdown switched while the browser is open (macOS): move between kiosk and ordinary full screen.
+  // Leaving kiosk also leaves full screen, so ask for full screen again; macOS runs the two in turn.
+  const followLockdown = () => {
+    if (window.isDestroyed() || !enforceFullscreen) {
+      return;
+    }
+
+    if (lockedIn() && !window.isKiosk()) {
+      enterExclusiveFullscreen();
+    } else if (!lockedIn() && window.isKiosk()) {
+      window.setKiosk(false);
+      window.setFullScreen(true);
+    }
+  };
+  const stopFollowingLockdown = onLockdownChosenChange(followLockdown);
 
   window.on("enter-full-screen", lockChrome);
   window.on("leave-full-screen", () => {
@@ -403,7 +437,7 @@ const createBrowserWindow = (display: Electron.Display) => {
       return;
     }
 
-    if (!window.isKiosk()) {
+    if (!isCovering()) {
       enterExclusiveFullscreen();
     }
   });
@@ -423,7 +457,7 @@ const createBrowserWindow = (display: Electron.Display) => {
 
     // A kiosk request made while the window was hidden can be dropped.
     // Enter once more only if it never took, so the display does not leave and re-enter kiosk.
-    if (!window.isKiosk()) {
+    if (!isCovering()) {
       enterExclusiveFullscreen();
     }
 
@@ -434,6 +468,8 @@ const createBrowserWindow = (display: Electron.Display) => {
 
       enforceFullscreen = true;
       enterExclusiveFullscreen();
+      // Lockdown may have been switched off during the open transition.
+      followLockdown();
     }, 700);
   });
 
@@ -445,6 +481,7 @@ const createBrowserWindow = (display: Electron.Display) => {
     }
   });
   window.on("closed", () => {
+    stopFollowingLockdown();
     browserWindow = null;
   });
 

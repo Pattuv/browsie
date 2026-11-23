@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Info } from "lucide-react";
+import { Info } from "../icons";
 import PrimaryButton from "./PrimaryButton";
 
 type SignOutDialogProps = {

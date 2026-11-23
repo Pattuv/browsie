@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "../../../icons";
 
 const ERRORS = {
   invalid: "That doesn’t look like an OpenRouter key. It should start with sk-or-.",

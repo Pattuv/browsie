@@ -14,8 +14,8 @@ import {
   Settings2,
   Trash2,
   Video,
-  type LucideIcon,
-} from 'lucide-react';
+  type IconComponent,
+} from '../icons';
 import DropdownMenu, { MenuDivider, MenuGroup, MenuItem } from '../components/DropdownMenu';
 import { trackChromeMenu } from '../stores/browserStore';
 
@@ -35,7 +35,7 @@ const Note = ({ children }: { children: ReactNode }) => (
   <p className="px-3.5 text-[13px] leading-snug tracking-tight text-zinc-500">{children}</p>
 );
 
-const PERMISSION_ROWS: Record<SitePermissionKind, { label: string; icon: LucideIcon }> = {
+const PERMISSION_ROWS: Record<SitePermissionKind, { label: string; icon: IconComponent }> = {
   geolocation: { label: 'Location', icon: MapPin },
   camera: { label: 'Camera', icon: Video },
   microphone: { label: 'Microphone', icon: Mic },

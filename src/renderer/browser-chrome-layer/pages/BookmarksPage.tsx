@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, ArrowRightLeft, ChevronDown, Pencil, Search, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowRightLeft, ChevronDown, Pencil, Search, Trash2 } from '../../icons';
 import SiteIcon from '../SiteIcon';
 import { prettyUrl } from '../prettyUrl';
 import { useLockdownStore } from '../../stores/browserStore';

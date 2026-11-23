@@ -1,4 +1,4 @@
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight } from "../../../icons";
 
 const SETUP_GUIDE_URL = "https://browsie.org/setup-guide";
 

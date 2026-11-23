@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
-import { Globe, LockOpen, Plus, VolumeX, X } from "lucide-react";
+import { Globe, LockFilled, LockOpen, Plus, VolumeX, X } from "../icons";
 import IconButton from "./IconButton";
 import VoiceStatus from "./VoiceStatus";
 import ProfileMenu from "../components/ProfileMenu";
@@ -573,40 +573,17 @@ function TabStrip({ style }: TabStripProps) {
         </IconButton>
       </div>
 
-      <div className="mb-1.5 mr-2 flex items-center gap-1">
+      <div className="mb-1.5 mr-2 flex items-center gap-2">
         <VoiceStatus />
+        {/* Sized to the lock itself (it's a status, not a button), so the visible gaps either side of it
+            match the one between the menu's dots and the avatar (about 22.5px with gap-2). */}
         <span
           aria-label={locked ? "Lockdown on" : "Lockdown off"}
           title={locked ? "Lockdown on" : "Lockdown off"}
-          className={`flex h-8 w-8 items-center justify-center ${locked ? "text-[#9572FF]" : "text-zinc-600"}`}
+          className={`-mr-0.5 flex h-8 w-4 items-center justify-center ${locked ? "text-[#9572FF]" : "text-zinc-600"}`}
         >
           {locked ? (
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              aria-hidden="true"
-            >
-              <rect
-                x="3"
-                y="11"
-                width="18"
-                height="11"
-                rx="2"
-                fill="currentColor"
-                stroke="currentColor"
-                strokeWidth="1.75"
-              />
-              <path
-                d="M7 11V7a5 5 0 0 1 10 0v4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.75"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <LockFilled size={16} strokeWidth={1.75} aria-hidden="true" />
           ) : (
             <LockOpen size={16} strokeWidth={1.75} aria-hidden="true" />
           )}

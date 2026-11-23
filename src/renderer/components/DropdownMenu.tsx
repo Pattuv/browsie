@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import type { LucideIcon } from 'lucide-react';
+import type { IconComponent } from '../icons';
 
 type MenuItemProps = {
   /** A Lucide icon, or an image URL for a brand icon (e.g. the Google Workspace ones). */
-  icon: LucideIcon | string;
+  icon: IconComponent | string;
   label: string;
   disabled?: boolean;
   danger?: boolean;

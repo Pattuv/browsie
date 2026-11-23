@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "../icons";
 import { useAuthStore } from "../stores/authStore";
 
 const ERRORS = {

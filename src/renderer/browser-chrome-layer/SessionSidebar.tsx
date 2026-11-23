@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pencil, X } from 'lucide-react';
+import { Pencil, X } from '../icons';
 import { FALLBACKS, type FallbackId } from '../../shared/agent/fallbacks';
 import { SESSION_TURN_LIMIT, type SessionTurn } from '../../shared/agent/session';
 import spinner from '../assets/spinner.svg';

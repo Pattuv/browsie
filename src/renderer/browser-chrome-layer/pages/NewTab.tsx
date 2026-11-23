@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { History, X } from "lucide-react";
+import { History, LockFilled, X } from "../../icons";
 import DashboardTip, { type Tip } from "../../components/DashboardTip";
 import { useBrowserStore, useLockdownNotice, useLockdownStore } from "../../stores/browserStore";
 import GoogleAppsMenu from "../GoogleAppsMenu";
@@ -63,23 +63,6 @@ type NewTabProps = {
   /** True once the splash has finished and the chrome is on screen. */
   launched: boolean;
 };
-
-/** Browsie's own New Tab page. Drawn by the chrome itself, so no website process is involved. */
-function LockGlyph() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect x="3" y="11" width="18" height="11" rx="2" fill="currentColor" stroke="currentColor" strokeWidth="1.75" />
-      <path
-        d="M7 11V7a5 5 0 0 1 10 0v4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 function LockdownNotice({
   locked,
@@ -156,7 +139,7 @@ function LockdownNotice({
         }}
       >
         <span className="text-[#9572FF]">
-          <LockGlyph />
+          <LockFilled size={15} strokeWidth={1.75} aria-hidden="true" />
         </span>
         <span className="text-sm tracking-tight">Lockdown mode is on</span>
         <button
@@ -256,7 +239,7 @@ function RecentActivity({ style }: { style?: CSSProperties }) {
 
   return (
     <section
-      className={`smooth chrome-item mt-[clamp(1.5rem,3vh,2.5rem)] w-full max-w-3xl rounded-2xl border border-zinc-200 bg-zinc-50/60 text-sm tracking-tight ${
+      className={`smooth chrome-item mt-[clamp(1.5rem,3vh,2.5rem)] glass glass-clear w-full max-w-md rounded-[1.75rem] border text-sm tracking-tight ${
         hasActivity ? "px-6 py-5" : "flex h-40 items-center justify-center text-zinc-400"
       }`}
       style={style}
@@ -300,7 +283,7 @@ function RecentActivity({ style }: { style?: CSSProperties }) {
             onClick={() => void browser?.openPage("history")}
             className="mt-3 ml-6.5 cursor-pointer text-[15px] font-[560] tracking-tight text-zinc-800 transition-colors duration-150 hover:text-black"
           >
-            See more..
+            See more
           </button>
         </>
       ) : (
@@ -310,6 +293,7 @@ function RecentActivity({ style }: { style?: CSSProperties }) {
   );
 }
 
+/** Browsie's own New Tab page. Drawn by the chrome itself, so no website process is involved. */
 function NewTab({ entranceDelay: initialDelay, launched }: NewTabProps) {
   // Decided once, on mount: a re-render must never cut off (or restart) an entrance mid-play.
   const [entranceDelay] = useState(initialDelay);
@@ -321,58 +305,62 @@ function NewTab({ entranceDelay: initialDelay, launched }: NewTabProps) {
   });
 
   return (
-    <div
-      className={`absolute inset-0 flex flex-col items-center overflow-y-auto px-6 ${
-        entranceDelay === null ? "no-entrance" : ""
-      } ${locked ? "pointer-events-none" : ""}`}
-    >
-      <button
-        type="button"
-        role="link"
-        onClick={() => browser?.newTab(GUIDE_URL)}
-        className="chrome-item absolute left-4 top-4 text-xs text-zinc-500 underline underline-offset-2 transition-colors duration-150 hover:text-zinc-900"
-        style={delay(0)}
-      >
-        Need help?
-      </button>
+    <div className={`absolute inset-0 ${entranceDelay === null ? "no-entrance" : ""} ${locked ? "pointer-events-none" : ""}`}>
+      {/* The art on its own layer behind the content: it fades in first, the same way the rest does, and
+          stays on the window's bottom edge because it isn't part of the scrolling content. */}
+      <div aria-hidden="true" className="newtab-backdrop chrome-item pointer-events-none absolute inset-0" style={delay(0)} />
 
-      <div
-        className="chrome-item absolute right-4 top-3 flex items-center gap-1"
-        style={delay(40)}
-      >
-        <GoogleAppsMenu />
-      </div>
-
-      <div className="flex flex-1 flex-col items-center justify-center gap-[clamp(0.5rem,1vh,1rem)] pb-16">
-        <Mascot
-          className="chrome-item mb-3 h-28 transition-transform duration-500 ease-out hover:-rotate-3 hover:scale-105"
-          style={delay(80)}
-        />
-        <h1
-          className="chrome-item bric text-center text-[2.6rem] tracking-tighter text-black"
-          style={delay(160)}
+      <div className="absolute inset-0 flex flex-col items-center overflow-y-auto px-6">
+        <button
+          type="button"
+          role="link"
+          onClick={() => browser?.newTab(GUIDE_URL)}
+          className="chrome-item absolute left-4 top-4 text-xs text-zinc-500 underline underline-offset-2 transition-colors duration-150 hover:text-zinc-900"
+          style={delay(0)}
         >
-          Where to today?
-        </h1>
-        <p
-          className="chrome-item text-[1.0625rem] tracking-tight text-zinc-600"
-          style={delay(240)}
+          Need help?
+        </button>
+
+        <div
+          className="chrome-item absolute right-4 top-3 flex items-center gap-1"
+          style={delay(40)}
         >
-          {locked
-            ? "Hold the spacebar to talk to Browsie"
-            : "Lockdown must be on to talk to Browsie"}
-        </p>
-        <RecentActivity style={delay(320)} />
-      </div>
+          <GoogleAppsMenu />
+        </div>
 
-      <div
-        className="chrome-item absolute inset-x-0 bottom-6 flex justify-center px-48"
-        style={delay(360)}
-      >
-        <DashboardTip tips={BROWSER_TIPS} muted />
-      </div>
+        {/* w-full: without it this column shrinks to its widest child, so Recent activity's width followed
+            whatever titles it was showing. Now the card is always max-w-3xl (or the window, if narrower). */}
+        <div className="flex w-full flex-1 flex-col items-center justify-center gap-[clamp(0.5rem,1vh,1rem)] pb-16">
+          <Mascot
+            className="chrome-item mb-3 h-28 transition-transform duration-500 ease-out hover:-rotate-3 hover:scale-105"
+            style={delay(80)}
+          />
+          <h1
+            className="chrome-item bric text-center text-[2.6rem] tracking-tighter text-black"
+            style={delay(160)}
+          >
+            Where to today?
+          </h1>
+          <p
+            className="chrome-item text-[1.0625rem] tracking-tight text-zinc-600"
+            style={delay(240)}
+          >
+            {locked
+              ? "Hold the spacebar to talk to Browsie"
+              : "Lockdown must be on to talk to Browsie"}
+          </p>
+          <RecentActivity style={delay(320)} />
+        </div>
 
-      <LockdownNotice locked={locked} launched={launched} onUnlock={toggleLock} />
+        <div
+          className="chrome-item absolute inset-x-0 bottom-6 flex justify-center px-48"
+          style={delay(360)}
+        >
+          <DashboardTip tips={BROWSER_TIPS} muted />
+        </div>
+
+        <LockdownNotice locked={locked} launched={launched} onUnlock={toggleLock} />
+      </div>
     </div>
   );
 }
