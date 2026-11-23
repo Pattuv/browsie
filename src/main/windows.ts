@@ -10,7 +10,6 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { attachSpeechOverlay, attachTabs, handleShortcut, handleTalkKey } from "./browser/tabs";
-import { getData } from "./data/localStore";
 
 const isMac = process.platform === "darwin";
 
@@ -131,7 +130,7 @@ const lockNavigation = (webContents: Electron.WebContents) => {
 
 const loadContents = (
   contents: Electron.WebContents,
-  windowKind?: "menu-picker" | "browser" | "speech",
+  windowKind?: "browser" | "speech",
 ) => {
   const search = windowKind ? `?window=${windowKind}` : "";
 
@@ -147,7 +146,7 @@ const loadContents = (
 
 const loadRenderer = (
   window: BrowserWindow,
-  windowKind?: "menu-picker" | "browser",
+  windowKind?: "browser",
 ) => {
   loadContents(window.webContents, windowKind);
 };
@@ -163,7 +162,6 @@ const wireWindowStateEvents = (window: BrowserWindow) => {
 
 // At most one of each. Kept so "Change mode" can reuse them instead of stacking duplicates.
 let mainWindow: BrowserWindow | null = null;
-let menuPickerWindow: BrowserWindow | null = null;
 let browserWindow: BrowserWindow | null = null;
 // Set once the whole app is quitting, so closing the browser doesn't reopen the Dashboard on the way out.
 let quitting = false;
@@ -177,8 +175,6 @@ app.on("before-quit", () => {
 });
 
 export const getBrowserWindow = () => browserWindow;
-
-const hasUserMode = () => getData().userMode !== null;
 
 export const createMainWindow = () => {
   mainWindow = new BrowserWindow({
@@ -206,40 +202,6 @@ export const createMainWindow = () => {
   return mainWindow;
 };
 
-const createMenuPickerWindow = () => {
-  menuPickerWindow = new BrowserWindow({
-    width: 640,
-    height: 500,
-    minWidth: 640,
-    minHeight: 570,
-    ...windowChromeOptions(),
-    // A small picker, not a workspace. Also stops double-clicking the drag region from maximizing it.
-    maximizable: false,
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-    },
-  });
-
-  disableZoom(menuPickerWindow.webContents);
-  lockNavigation(menuPickerWindow.webContents);
-  wireWindowStateEvents(menuPickerWindow);
-  loadRenderer(menuPickerWindow, "menu-picker");
-
-  // Create main before this window finishes closing so window-all-closed
-  // does not quit the app during the handoff.
-  // Opened from "Change mode", main is already there, so don't make a second one.
-  menuPickerWindow.on("close", () => {
-    if (hasUserMode() && !mainWindow) {
-      createMainWindow();
-    }
-  });
-  menuPickerWindow.on("closed", () => {
-    menuPickerWindow = null;
-  });
-
-  return menuPickerWindow;
-};
-
 // Pull a window back in front of the browser after sign-in.
 export const bringToFront = (window: BrowserWindow) => {
   if (window.isDestroyed()) {
@@ -257,16 +219,6 @@ export const bringToFront = (window: BrowserWindow) => {
   window.show();
   window.focus();
   window.setAlwaysOnTop(false);
-};
-
-// "Change mode" in the profile menu: bring up the picker (or the one already open).
-export const openModePicker = () => {
-  if (menuPickerWindow) {
-    menuPickerWindow.focus();
-    return;
-  }
-
-  createMenuPickerWindow();
 };
 
 // How long the desktop stays up after the Dashboard has closed, before the browser is created.
@@ -538,10 +490,5 @@ export const openBrowser = () => {
 };
 
 export const createWindow = () => {
-  if (!hasUserMode()) {
-    createMenuPickerWindow();
-    return;
-  }
-
   createMainWindow();
 };

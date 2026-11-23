@@ -101,7 +101,8 @@ function Dashboard() {
   const [showButton, setShowButton] = useState(false);
   const [showCard, setShowCard] = useState(false);
   const [showNotch, setShowNotch] = useState(false);
-  const mode = useDataStore((state) => state.userMode);
+  // Caretaker is the only mode (the picker is gone); older installs may have it saved, new ones have null.
+  const mode = useDataStore((state) => state.userMode) ?? "caretaker";
   const firstName = useAuthStore((state) => state.firstName);
   const googleServices = useAuthStore((state) => state.googleServices);
   const googleMissing = Boolean(googleServices) && !Object.values(googleServices ?? {}).every(Boolean);

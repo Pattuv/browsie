@@ -1,16 +1,11 @@
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { AlertCircle, ArrowUpRight, Check, Gauge, Info, Lock, LogOut, Settings, Users } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, Check, Gauge, Info, Lock, LogOut, Settings } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useLockdownStore } from '../stores/browserStore';
 import { playClick } from '../sounds';
 import DropdownMenu, { MenuDivider, MenuGroup, MenuItem } from './DropdownMenu';
 import PrimaryButton from './PrimaryButton';
 import SignOutDialog from './SignOutDialog';
-
-const changeMode = (close: () => void) => {
-  close();
-  window.browsie?.openModePicker();
-};
 
 const OPENROUTER_BILLING_URL = 'https://openrouter.ai/settings/credits';
 // Where the user edits their key's spending cap.
@@ -314,7 +309,7 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
   const firstName = useAuthStore((state) => state.firstName);
   const email = useAuthStore((state) => state.email);
   const pictureDataUrl = useAuthStore((state) => state.pictureDataUrl);
-  // Lockdown only exists in the chrome; there it locks billing, Change mode and Quit.
+  // Lockdown only exists in the chrome; there it locks billing and Quit.
   const locked = useLockdownStore((state) => state.enabled) && Boolean(quit);
   // Outside the menu, so the dialog stays up after the menu closes.
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
@@ -374,7 +369,6 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
                 <LockdownRow />
                 <MenuDivider />
                 <MenuGroup>
-                  <MenuItem icon={Users} label="Change mode" disabled={locked} onClick={() => changeMode(close)} />
                   <MenuItem
                     icon={LogOut}
                     label={quit.label ?? 'Quit'}
@@ -390,7 +384,6 @@ function ProfileMenu({ triggerClassName = 'h-7 w-7', onOpenChange, quit, panelTa
             ) : (
               <>
                 <MenuGroup>
-                  <MenuItem icon={Users} label="Change mode" onClick={() => changeMode(close)} />
                   <MenuItem
                     icon={Settings}
                     label="Settings"

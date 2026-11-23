@@ -386,7 +386,6 @@ interface BrowsieAPI {
   browser: BrowsieBrowserAPI;
   library: BrowsieLibraryAPI;
   session: BrowsieSessionAPI;
-  openModePicker: () => Promise<void>;
   openExternal: (url: string) => Promise<void>;
   // Asks OpenRouter at most once a minute; the menu can call it every time it opens.
   getAiUsage: () => Promise<AiUsage>;

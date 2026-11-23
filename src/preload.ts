@@ -132,7 +132,6 @@ contextBridge.exposeInMainWorld("browsie", {
   data,
   browser,
   library,
-  openModePicker: () => ipcRenderer.invoke("open-mode-picker"),
   openExternal: (url: string) => ipcRenderer.invoke("open-external", url),
   getAiUsage: () => ipcRenderer.invoke("ai:get-usage"),
   shouldAnimateDashboard: () => ipcRenderer.invoke("should-animate-dashboard"),
