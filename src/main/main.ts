@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import started from 'electron-squirrel-startup';
-import { getAccountId, loadSession, onSessionChange } from './auth/session';
+import { getAccountId, getSession, loadSession, onSessionChange, verifySession } from './auth/session';
 import { migrateSitePermissions } from './browser/sitePermissions';
 import { resetTabsForAccount } from './browser/tabs';
 import { configureWebSession, setWebAccount } from './browser/webSession';
@@ -12,7 +12,7 @@ import { startSync } from './data/syncEngine';
 import { registerIpc } from './ipc';
 import { startSystemVolume, stopSystemVolume } from './systemVolume';
 import { startVoice } from './voice';
-import { createWindow, setAppMenu, shouldQuitOnLastWindow } from './windows';
+import { createWindow, getBrowserWindow, setAppMenu, shouldQuitOnLastWindow } from './windows';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -45,12 +45,19 @@ app.whenReady().then(() => {
     if (setWebAccount(getAccountId())) {
       resetTabsForAccount();
     }
+
+    // Google ended the session (expired or revoked). Signed out, the browser can't do anything with the
+    // account and has no way to sign back in, so leave it: closing it opens the main window on sign-in.
+    if (getSession().signedOutReason === 'expired') {
+      getBrowserWindow()?.close();
+    }
   });
   registerIpc();
   startVoice();
   setAppMenu();
   createWindow();
   startSync();
+  verifySession();
   startSystemVolume();
 });
 

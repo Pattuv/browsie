@@ -284,6 +284,15 @@ export const getAccessToken = async () => {
   return inFlightRefresh;
 };
 
+// Cold start trusts the vault (loadSession) so the app boots offline. Once it's running, ask Google once,
+// so a dead refresh token (revoked, or the 7-day expiry while the OAuth app is in Testing) signs out now
+// instead of halfway through a task. invalid_grant signs out in refresh(); a network error changes nothing.
+export const verifySession = () => {
+  if (current) {
+    void getAccessToken().catch(() => undefined);
+  }
+};
+
 // Drive said 401 (e.g. access was revoked): forget the cached token so the next call refreshes,
 // which either gets a fresh one or hits invalid_grant and signs out.
 export const invalidateAccessToken = () => {
