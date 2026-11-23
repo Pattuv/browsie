@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "bootstrap-icons/font/bootstrap-icons.css";
 
+/* macOS-only styles, e.g. `left-5 mac:left-20` to clear the traffic lights. index.tsx sets data-platform. */
+@custom-variant mac (&:where([data-platform="darwin"], [data-platform="darwin"] *));
+
 @font-face {
   font-family: "Inter";
   src: url("./assets/fonts/Inter/Inter-VariableFont_opsz,wght.ttf")

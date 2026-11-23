@@ -91,7 +91,8 @@ function OnboardingLayer() {
   // menu on a short window) adds scrollbars, which narrow the viewport and reflow the whole Dashboard.
   return (
     <div className="relative h-screen min-h-full overflow-hidden">
-      {/* Spans Dashboard's top-4 h-8 bar (48px); pt-4 keeps icons centered on that bar */}
+      {/* Spans Dashboard's top-4 h-8 bar (48px); pt-4 keeps the Windows caption buttons centered on that bar.
+          On macOS it's a drag strip to the right of the traffic lights. */}
       <TitleBar controlsClassName="h-12 *:pt-4" />
       <div className="h-full min-h-full">
         {/* LOADING renders nothing (setup also starts on white), so setup never flashes for a signed-in user. */}

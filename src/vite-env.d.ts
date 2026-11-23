@@ -52,7 +52,7 @@ type AuthSession = {
   // Which of the account's Google services Browsie may read and change (Connect Google in setup).
   googleServices?: { gmail: boolean; calendar: boolean; drive: boolean };
   // False when the sign-in isn't saved, so it ends when the app quits: setup isn't finished yet,
-  // or Windows DPAPI could not save it.
+  // or the OS key store (Windows DPAPI, macOS Keychain) could not save it.
   rememberedOnDevice?: boolean;
   // Whether this account has finished setup on this device. False sends it through the setup steps, not the Dashboard.
   setupComplete?: boolean;
@@ -72,8 +72,8 @@ interface BrowsieAuthAPI {
   // Hands the signed-in account's OpenRouter management key to main. Main checks it with OpenRouter, makes
   // Browsie its own AI key with it (capped at `cap`), and stores both encrypted. Never read back.
   // invalid: not shaped like a key. invalid-cap: cap not between $0 and $10,000. rejected: OpenRouter doesn't
-  // know the key. not-management: a regular key. unavailable: couldn't be stored (not signed in, or Windows
-  // can't encrypt it).
+  // know the key. not-management: a regular key. unavailable: couldn't be stored (not signed in, or the OS
+  // key store can't encrypt it).
   saveAiKey: (
     key: string,
     cap: { limit: number; reset: AiResets | null },
@@ -386,12 +386,13 @@ interface BrowsieAPI {
   browser: BrowsieBrowserAPI;
   library: BrowsieLibraryAPI;
   session: BrowsieSessionAPI;
-  openModePicker: () => Promise<void>;
   openExternal: (url: string) => Promise<void>;
   // Asks OpenRouter at most once a minute; the menu can call it every time it opens.
   getAiUsage: () => Promise<AiUsage>;
   shouldAnimateDashboard: () => Promise<boolean>;
   markDashboardPlayed: () => Promise<void>;
+  // process.platform: 'darwin' on macOS, 'win32' on Windows.
+  platform: string;
   minimizeWindow: () => Promise<void>;
   toggleMaximizeWindow: () => Promise<void>;
   closeWindow: () => Promise<void>;

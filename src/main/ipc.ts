@@ -33,7 +33,7 @@ import { clearHistory, listHistory, removeVisit, searchHistory } from './data/hi
 import { changeSitePermission, clearSiteData, getSiteInfo, resetActiveSitePermissions } from './browser/siteInfo';
 import { getSuggestionImage, getSuggestions, warmSuggestions } from './browser/suggestions';
 import { clearSessionTurns, getSessionTurns } from './agent';
-import { bringToFront, getBrowserWindow, isAppUrl, openBrowser, openModePicker } from './windows';
+import { bringToFront, getBrowserWindow, isAppUrl, openBrowser } from './windows';
 
 let dashboardAnimatedThisSession = false;
 
@@ -92,7 +92,6 @@ export const registerIpc = () => {
   handle('mark-dashboard-played', () => {
     dashboardAnimatedThisSession = true;
   });
-  handle('open-mode-picker', () => openModePicker());
 
   handle('window-minimize', (event) => {
     BrowserWindow.fromWebContents(event.sender)?.minimize();

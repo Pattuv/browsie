@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Copy, Minus, Square, X, type LucideIcon } from 'lucide-react';
+import { isMac } from '../platform';
 
 type CaptionButtonProps = {
   label: string;
@@ -86,9 +87,20 @@ type TitleBarProps = {
 };
 
 /**
- * Drag region for the hidden title bar. Stops short of the custom caption buttons.
+ * Drag region for the hidden title bar.
+ * Windows: stops short of the custom caption buttons drawn here.
+ * macOS: the native traffic lights stand in for them, so the region starts at left-20 to stay clear
+ * of them (see trafficLightPosition in main).
  */
 function TitleBar({ children, controlsClassName, maximizable = true, offsetClassName = 'top-0' }: TitleBarProps) {
+  if (isMac) {
+    return (
+      <header className={`app-region-drag absolute right-0 left-20 z-10 flex h-12 items-center ${offsetClassName}`}>
+        {children}
+      </header>
+    );
+  }
+
   // Each caption button is w-12 (3rem).
   const controlsInset = maximizable ? 'right-36' : 'right-24';
 

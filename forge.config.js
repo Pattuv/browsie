@@ -6,15 +6,24 @@ const ICONS_DIR = 'src/renderer/assets/icons';
 module.exports = {
   packagerConfig: {
     asar: true,
-    icon: `${ICONS_DIR}/windows/icon.ico`,
+    // No extension: the packager adds .icns on macOS and .ico on Windows.
+    icon: process.platform === 'darwin' ? `${ICONS_DIR}/macos/icon` : `${ICONS_DIR}/windows/icon`,
+    // macOS only (Finder / App Store category). Ignored on Windows.
+    appCategoryType: 'public.app-category.productivity',
   },
   rebuildConfig: {},
+  // `npm run make` builds the installer for the OS it runs on.
   makers: [
     {
       name: '@electron-forge/maker-squirrel',
+      platforms: ['win32'],
       config: {
         setupIcon: `${ICONS_DIR}/windows/icon.ico`,
       },
+    },
+    {
+      name: '@electron-forge/maker-zip',
+      platforms: ['darwin'],
     },
   ],
   plugins: [

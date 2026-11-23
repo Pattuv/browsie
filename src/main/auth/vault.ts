@@ -14,7 +14,7 @@ export type VaultContents = {
 
 const vaultPath = () => path.join(app.getPath('userData'), 'session.bin');
 
-// safeStorage borrows a key from Windows DPAPI.
+// safeStorage borrows a key from Windows DPAPI or the macOS Keychain.
 export const canPersistSecrets = () => safeStorage.isEncryptionAvailable();
 
 export const readVault = (): VaultContents | null => {
@@ -26,7 +26,7 @@ export const readVault = (): VaultContents | null => {
   }
 };
 
-// Returns false when nothing was written (DPAPI unavailable), so the caller knows the session won't survive a restart.
+// Returns false when nothing was written (no OS key store: DPAPI or Keychain), so the caller knows the session won't survive a restart.
 export const writeVault = (contents: VaultContents) => {
   if (!canPersistSecrets()) {
     return false;

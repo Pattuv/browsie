@@ -27,8 +27,8 @@ type LiveSession = {
   vault: VaultContents;
   accessToken?: string;
   accessTokenExpiresAt?: number;
-  // False when this sign-in won't survive a restart: setup isn't finished yet, or Windows DPAPI
-  // could not save the vault.
+  // False when this sign-in won't survive a restart: setup isn't finished yet, or the OS key store
+  // (Windows DPAPI, macOS Keychain) could not save the vault.
   persisted: boolean;
 };
 
@@ -133,7 +133,7 @@ const runSignIn = async (onBrowserReturned?: () => void): Promise<AuthSession> =
     };
     rememberAccessToken(live, tokens);
 
-    // 5. Lock the refresh token in the vault. If DPAPI cannot encrypt it we skip writing,
+    // 5. Lock the refresh token in the vault. If the OS key store cannot encrypt it we skip writing,
     //    so the session lasts for this run only.
     //    An account that hasn't finished setup here isn't saved until it does (completeSetup), so an
     //    abandoned setup doesn't leave someone signed in on this device. Clear any older vault too,
