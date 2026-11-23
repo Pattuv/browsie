@@ -318,9 +318,11 @@ export const completeSetup = () => {
 export const getAccountId = () => current?.vault.sub ?? null;
 
 // Local wipe first, so signing out works offline and the next person on a shared device sees nothing.
-// Then best-effort revoke, so the token is also dead on Google's side.
 // The account's setup record is kept, so signing back in skips setup; `resetSetup` (factory reset) clears it.
-export const signOut = async ({ resetSetup = false } = {}) => {
+// `revoke` also tells Google to drop Browsie's access. Only for factory reset and "remove my data": revoking
+// removes every permission the account gave Browsie (so Gmail, Calendar and Drive must be reconnected) and
+// signs it out on every other device too. A plain sign-out only forgets the token on this device.
+export const signOut = async ({ resetSetup = false, revoke = false } = {}) => {
   const live = current;
 
   if (live && resetSetup) {
@@ -331,7 +333,7 @@ export const signOut = async ({ resetSetup = false } = {}) => {
   signedOutReason = undefined;
   setSession(null);
 
-  if (live) {
+  if (live && revoke) {
     await revokeToken(live.vault.refreshToken).catch(() => undefined);
   }
 };

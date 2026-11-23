@@ -61,7 +61,9 @@ export const buildAuthUrl = (params: {
     redirect_uri: params.redirectUri,
     response_type: 'code',
     scope: [...SCOPES, ...(params.extraScopes ?? [])].join(' '),
-    ...(params.extraScopes?.length && { include_granted_scopes: 'true' }),
+    // Always: a returning user's new token also covers what they granted before (Gmail, Calendar,
+    // Drive), so signing back in doesn't make them reconnect Google Workspace.
+    include_granted_scopes: 'true',
     ...(params.loginHint && { login_hint: params.loginHint }),
     code_challenge: params.codeChallenge,
     code_challenge_method: 'S256',
