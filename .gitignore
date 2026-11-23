@@ -100,3 +100,6 @@ out/
 # Eval traces (keep hand-picked ones in fixtures/ for replay in CI)
 /test/web/traces/*
 !/test/web/traces/fixtures/
+
+# Freebuff project file (local tool state)
+.freebuff/

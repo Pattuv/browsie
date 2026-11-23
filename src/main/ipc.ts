@@ -221,9 +221,10 @@ export const registerIpc = () => {
       await uploadBeforeRemoving();
     }
 
-    // signOut switches the tabs, bookmarks and history off this account straight away, then waits on
-    // Google to revoke the token. Don't make the device wipe wait for the network.
-    const revoked = signOut({ resetSetup });
+    // signOut switches the tabs, bookmarks and history off this account straight away. Only factory reset
+    // revokes Browsie's Google access ("remove my data" is about this device only). Revoking waits on the
+    // network, so don't make the device wipe wait for it.
+    const revoked = signOut({ resetSetup, revoke: resetSetup });
 
     if (accountId && removeDeviceData) {
       await removeWebData(accountId);
