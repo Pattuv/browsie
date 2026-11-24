@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import path from 'node:path';
-import { connectWorkspace, getAccessToken, getAccountId, getSession, invalidateAccessToken, workspaceAccess } from '../auth/session';
+import { connectWorkspace, getAccessToken, getAccountId, getSession, invalidateAccessToken, onSessionChange, workspaceAccess } from '../auth/session';
 import { createGoogleTools } from '../google/tools';
 import { bringToFront, getBrowserWindow } from '../windows';
 import { agentCursor, agentTabContents, isAgentContents, leaseAgentTab, releaseAgentTab, sendToChrome } from '../browser/tabs';
@@ -10,6 +10,7 @@ import { createBroker } from './broker';
 import { createChromeApi } from './chromeApi';
 import { chromeOperations } from './chromeOperations';
 import { type AgentHost, createAgentHost } from './host';
+import { watchAccount } from './accountScope';
 
 // The app's one agent host, wired to the real tabs, the account's OpenRouter key and its downloads folder.
 // Created the first time something needs it (the voice layer, from phase 6 on), so the agent process
@@ -57,6 +58,14 @@ export const getAgentHost = () => {
   });
 
   host.onSession((turns) => sendToChrome('session:changed', turns));
+
+  // Signed out (factory reset included) or a different account: nothing the last account said may be used
+  // as context for the next. Stopping restarts the agent process, so a turn still running can't write its
+  // record back into memory after a plain clear, and main's copy is emptied with it.
+  watchAccount(getAccountId, onSessionChange, () => {
+    host?.stop();
+    host?.clearSession();
+  });
 
   app.once('will-quit', () => host?.stop());
   return host;
