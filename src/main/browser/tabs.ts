@@ -252,6 +252,29 @@ let spaceGate: (() => boolean) | null = null;
 // same keydown. Cleared on release, or shortly after, in case blocking the keydown drops the keyup.
 let spaceUsed = false;
 let spaceUsedTimer: ReturnType<typeof setTimeout> | null = null;
+// A press that cut Browsie off and is still held. Tap = only the cut-off; keep holding past HOLD_TO_TALK_MS
+// and it opens the mic for a new request. The release can be lost (see above), so the hold is read from
+// the key's repeats instead, and it's forgotten when they stop coming.
+const HOLD_TO_TALK_MS = 300;
+let cutOffAt = 0;
+let cutOffWatch: ReturnType<typeof setTimeout> | null = null;
+
+const endCutOff = () => {
+  cutOffAt = 0;
+
+  if (cutOffWatch) {
+    clearTimeout(cutOffWatch);
+    cutOffWatch = null;
+  }
+};
+
+const watchCutOff = () => {
+  if (cutOffWatch) {
+    clearTimeout(cutOffWatch);
+  }
+
+  cutOffWatch = setTimeout(endCutOff, TALK_REPEAT_TIMEOUT_MS);
+};
 // Space was let go and the recording hasn't been settled yet. Keeps the pill from sliding away, and keeps
 // Space from opening the mic again until that recording is dealt with.
 let talkLatch = false;
@@ -1579,20 +1602,38 @@ export const handleTalkKey = (input: Input) => {
       return true;
     }
 
-    // Stop comes before the cooldown. The cooldown is only there so the pill can't be opened again
-    // the instant it's let go, and that must not swallow Space while a request can still be cut off.
-    if (!talking && input.isAutoRepeat) {
+    // Still holding the press that cut Browsie off: once it's clearly a hold, it talks. Until then (and
+    // for a tap) the cut-off is all it does.
+    const heldPastCutOff = !talking && cutOffAt > 0 && input.isAutoRepeat;
+
+    if (heldPastCutOff && Date.now() - cutOffAt < HOLD_TO_TALK_MS) {
+      watchCutOff();
       return true;
     }
 
-    // Mashing Space: one press at a time, with a short pause after each.
-    if (!talking && Date.now() < Math.max(talkCooldownUntil, talkReadyAt)) {
-      return true;
+    if (heldPastCutOff) {
+      endCutOff();
+      // The stop's cooldown and its leftover latch are for fresh presses, not this one.
+      talkCooldownUntil = 0;
+      settleTalkLatch();
+    } else {
+      // Stop comes before the cooldown. The cooldown is only there so the pill can't be opened again
+      // the instant it's let go, and that must not swallow Space while a request can still be cut off.
+      if (!talking && input.isAutoRepeat) {
+        return true;
+      }
+
+      // Mashing Space: one press at a time, with a short pause after each.
+      if (!talking && Date.now() < Math.max(talkCooldownUntil, talkReadyAt)) {
+        return true;
+      }
     }
 
-    if (!talking && spaceGate?.()) {
+    if (!talking && !heldPastCutOff && spaceGate?.()) {
       spaceUsed = true;
       talkCooldownUntil = Date.now() + STOP_COOLDOWN_MS;
+      cutOffAt = Date.now();
+      watchCutOff();
 
       if (spaceUsedTimer) {
         clearTimeout(spaceUsedTimer);
@@ -1629,6 +1670,9 @@ export const handleTalkKey = (input: Input) => {
   }
 
   if (input.type === 'keyUp') {
+    // Let go before it became a hold: that press was only a cut-off.
+    endCutOff();
+
     if (spaceUsed) {
       spaceUsed = false;
 
