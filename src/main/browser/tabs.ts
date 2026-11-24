@@ -21,6 +21,7 @@ import { recordVisit, updateVisitTitle } from '../data/history';
 import { clearFaviconCache, resolveFavicon } from './favicons';
 import { getGoogleLogin, googleSignInUrl, isGoogleAccountsUrl, onGoogleLoginChange } from './googleWebLogin';
 import { clearGoogleRejectionCookies, getWebPartition, isGoogleSignInRejection, isWebUrl } from './webSession';
+import { matchGoogleTheme } from './webTheme';
 
 // One tab. The chrome draws Browsie's own New Tab page itself; a website only gets a view
 // (its own sandboxed process) once one is opened.
@@ -893,6 +894,7 @@ const wireContents = (tab: Tab, contents: WebContents) => {
   contents.on('will-navigate', blockNonWeb);
   contents.on('will-redirect', blockNonWeb);
 
+  matchGoogleTheme(contents);
   contents.on('did-start-loading', emit);
   contents.on('did-stop-loading', () => {
     faviconFallback(tab, contents);
