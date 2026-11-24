@@ -17,6 +17,13 @@ const auth: BrowsieAuthAPI = {
   updateAiCap: (cap) => ipcRenderer.invoke("auth:update-ai-cap", cap),
   replaceManagementKey: (key, cap) => ipcRenderer.invoke("auth:replace-management-key", key, cap),
   signOut: (options) => ipcRenderer.invoke("auth:sign-out", options),
+  getGoogleWebLogin: () => ipcRenderer.invoke("auth:google-web-login"),
+  signInToGoogleWeb: () => ipcRenderer.invoke("auth:google-web-sign-in"),
+  onGoogleWebLoginChanged: (callback) => {
+    const listener = (_event: IpcRendererEvent, signedIn: boolean) => callback(signedIn);
+    ipcRenderer.on("auth:google-web-login-changed", listener);
+    return () => ipcRenderer.removeListener("auth:google-web-login-changed", listener);
+  },
   onSessionChanged: (callback) => {
     // Pass only the session through; the raw IPC event would hand the page a handle to ipcRenderer.
     const listener = (_event: IpcRendererEvent, session: AuthSession) =>
@@ -134,6 +141,11 @@ contextBridge.exposeInMainWorld("browsie", {
   library,
   openExternal: (url: string) => ipcRenderer.invoke("open-external", url),
   getAiUsage: () => ipcRenderer.invoke("ai:get-usage"),
+  mic: {
+    status: () => ipcRenderer.invoke("mic:status"),
+    request: () => ipcRenderer.invoke("mic:request"),
+    openSettings: () => ipcRenderer.invoke("mic:open-settings"),
+  },
   shouldAnimateDashboard: () => ipcRenderer.invoke("should-animate-dashboard"),
   markDashboardPlayed: () => ipcRenderer.invoke("mark-dashboard-played"),
   platform: process.platform,

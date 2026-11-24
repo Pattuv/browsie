@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
 import { cancelSignIn, completeSetup, connectWorkspace, getAccountId, getSession, signIn, signOut } from './auth/session';
 import { removeDownloads, removeWebData } from './browser/webSession';
+import { getMicAccess, openMicSettings, requestMicAccess } from './microphone';
 import { getData, updateData } from './data/localStore';
 import { removeAiKey, replaceManagementKey, saveAiKey, updateAiCap } from './data/aiKey';
 import { clearAiUsageCache, getAiUsage } from './data/openRouterUsage';
@@ -27,7 +28,9 @@ import {
   stop,
   bookmarkActivePage,
   openBrowsiePage,
+  openGoogleSignInTab,
 } from './browser/tabs';
+import { getGoogleLogin, onGoogleLoginChange } from './browser/googleWebLogin';
 import { listBookmarks, moveBookmark, removeBookmark, updateBookmark } from './data/bookmarks';
 import { clearHistory, listHistory, removeVisit, searchHistory } from './data/history';
 import { changeSitePermission, clearSiteData, getSiteInfo, resetActiveSitePermissions } from './browser/siteInfo';
@@ -88,6 +91,9 @@ const openWebLink = (rawUrl: string) => {
 // Every IPC channel lives here, so there is one place to audit what the renderer can ask for.
 export const registerIpc = () => {
   handle('open-external', (_event, url: string) => openWebLink(url));
+  handle('mic:status', () => getMicAccess());
+  handle('mic:request', () => requestMicAccess());
+  handle('mic:open-settings', () => openMicSettings());
   handle('should-animate-dashboard', () => !dashboardAnimatedThisSession);
   handle('mark-dashboard-played', () => {
     dashboardAnimatedThisSession = true;
@@ -207,6 +213,27 @@ export const registerIpc = () => {
     }
 
     return result;
+  });
+  // Whether this account's browser is signed in to Google websites (true, false, or null while unknown).
+  // Separate from the Google permissions above: those are for Browsie's own Gmail, Calendar and Drive use.
+  handle('auth:google-web-login', () => getGoogleLogin());
+  onGoogleLoginChange((signedIn) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('auth:google-web-login-changed', signedIn);
+    }
+  });
+  // Settings' "Sign in" for Google, from the Dashboard or the browser. With no browser open, opening one is
+  // enough: its first tab is Google's sign-in page when the browser isn't signed in to Google.
+  handle('auth:google-web-sign-in', () => {
+    const window = getBrowserWindow();
+
+    if (!window) {
+      openBrowser();
+      return;
+    }
+
+    bringToFront(window);
+    openGoogleSignInTab();
   });
   // Any of our windows: the profile menu (and its usage card) is on the Dashboard and in the browser.
   handle('ai:get-usage', () => getAiUsage());

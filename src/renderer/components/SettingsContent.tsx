@@ -153,16 +153,20 @@ function ConnectButton({
   waiting,
   disabled,
   onClick,
+  label = "Connect",
+  doneLabel = "Connected",
 }: {
   connected: boolean;
   waiting: boolean;
   disabled?: boolean;
   onClick: () => void;
+  label?: string;
+  doneLabel?: string;
 }) {
   if (connected) {
     return (
       <span className="flex shrink-0 items-center gap-1 text-xs font-medium tracking-tight text-[#6b4fd8]">
-        <Check size={14} strokeWidth={2.5} aria-hidden="true" /> Connected
+        <Check size={14} strokeWidth={2.5} aria-hidden="true" /> {doneLabel}
       </span>
     );
   }
@@ -174,7 +178,7 @@ function ConnectButton({
       onClick={onClick}
       className="smooth h-9 shrink-0 cursor-pointer rounded-[14px] bg-black px-4 text-sm font-medium tracking-tight text-white transition-transform duration-150 ease-out enabled:hover:scale-[1.02] enabled:active:scale-[0.98] disabled:cursor-default disabled:opacity-60"
     >
-      {waiting ? "Waiting…" : "Connect"}
+      {waiting ? "Waiting…" : label}
     </button>
   );
 }
@@ -186,6 +190,45 @@ function Integrations() {
   const workspaceConnected = Boolean(services) && Object.values(services ?? {}).every(Boolean);
   const [workspaceStatus, setWorkspaceStatus] = useState<ConnectStatus>("idle");
   const [driveStatus, setDriveStatus] = useState<ConnectStatus>("idle");
+  // Browsie's browser signed in to Google websites: what the sign-in tab on first launch is for.
+  const [webLogin, setWebLogin] = useState<boolean | null>(null);
+  const [webStatus, setWebStatus] = useState<"idle" | "opened" | "failed">("idle");
+
+  useEffect(() => {
+    const auth = window.browsie?.auth;
+    if (!auth) return undefined;
+    let current = true;
+    auth
+      .getGoogleWebLogin()
+      .then((signedIn) => {
+        if (current) setWebLogin(signedIn);
+      })
+      .catch(() => undefined);
+    const off = auth.onGoogleWebLoginChanged((signedIn) => {
+      setWebLogin(signedIn);
+      if (signedIn) setWebStatus("idle");
+    });
+    return () => {
+      current = false;
+      off();
+    };
+  }, []);
+
+  const signInToGoogleWeb = async () => {
+    try {
+      await window.browsie?.auth.signInToGoogleWeb();
+      setWebStatus("opened");
+    } catch {
+      setWebStatus("failed");
+    }
+  };
+
+  const webNote =
+    webStatus === "opened"
+      ? "Google’s sign-in page is open in a Browsie tab."
+      : webStatus === "failed"
+        ? "That didn’t work. Please try again."
+        : "";
 
   const connectWorkspace = async () => {
     if (workspaceStatus === "waiting") return;
@@ -230,7 +273,8 @@ function Integrations() {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm tracking-tight text-zinc-500">
-        What Browsie can use from your Google account. Each one opens Google’s permission page in your browser.
+        What Browsie can use from your Google account. Google Workspace and Drive backup open Google’s permission
+        page in your browser.
       </p>
       <div className="flex flex-col gap-2">
         <div className="flex flex-col gap-3 rounded-2xl border border-zinc-200 px-4 py-3">
@@ -268,6 +312,26 @@ function Integrations() {
           <p role="status" className="min-h-5 text-sm tracking-tight text-zinc-600">
             {!signedIn ? "Sign in to connect this." : workspaceNote}
           </p>
+        </div>
+
+        <div className="flex items-center gap-4 rounded-2xl border border-zinc-200 px-4 py-3">
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium tracking-tight text-black">Google sign-in in Browsie</span>
+            <span className="mt-0.5 block text-sm tracking-tight text-zinc-500">
+              So Gmail, YouTube and other Google sites open signed in. Opens Google’s sign-in page in a Browsie tab.
+            </span>
+            <span role="status" className="mt-1 block min-h-5 text-sm tracking-tight text-zinc-600">
+              {!signedIn ? "Sign in to connect this." : webNote}
+            </span>
+          </span>
+          <ConnectButton
+            connected={webLogin === true}
+            waiting={false}
+            disabled={!signedIn}
+            onClick={() => void signInToGoogleWeb()}
+            label="Sign in"
+            doneLabel="Signed in"
+          />
         </div>
 
         <div className="flex items-center gap-4 rounded-2xl border border-zinc-200 px-4 py-3">
