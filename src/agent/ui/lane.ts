@@ -31,7 +31,7 @@ const COMMANDS = [
   'tabs.list', 'tabs.open', 'tabs.switch', 'tabs.close', 'tabs.move', 'tabs.mute', 'tabs.duplicate',
   'nav.go', 'nav.back', 'nav.forward', 'nav.reload', 'nav.stop',
   'view.zoom', 'page.open',
-  'bookmarks.add', 'bookmarks.remove', 'bookmarks.open', 'bookmarks.list', 'history.search', 'bookmarksBar.set',
+  'bookmarks.add', 'bookmarks.remove', 'bookmarks.open', 'bookmarks.list', 'history.search',
   'state.read',
 ];
 
@@ -65,7 +65,6 @@ export const UI_TOOL: ToolDef = {
               direction: { type: 'string', enum: ['in', 'out', 'reset'], description: 'view.zoom.' },
               page: { type: 'string', enum: ['history', 'bookmarks'], description: 'page.open.' },
               query: { type: 'string', description: 'history.search.' },
-              visible: { type: 'boolean', description: 'bookmarksBar.set.' },
             },
           },
         },

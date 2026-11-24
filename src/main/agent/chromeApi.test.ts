@@ -38,7 +38,6 @@ const fakeOperations = (overrides: Partial<ChromeOperations> = {}): ChromeOperat
   openBookmark: vi.fn(() => true),
   listBookmarks: () => [],
   searchHistory: () => [],
-  setBookmarksBarVisible: vi.fn(() => true),
   readState: () => ({ tabs, activeTabId: 1, lockdown: true, lockdownNotice: 0, talking: false }),
   emitActivity: vi.fn(),
   ...overrides,

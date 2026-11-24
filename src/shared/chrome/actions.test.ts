@@ -21,7 +21,6 @@ const samples: ChromeAction[] = [
   ChromeAction.parse({ type: 'bookmarks.open', id: 'bookmark-1' }),
   ChromeAction.parse({ type: 'bookmarks.list' }),
   ChromeAction.parse({ type: 'history.search', query: 'Browsie' }),
-  ChromeAction.parse({ type: 'bookmarksBar.set', visible: true }),
   ChromeAction.parse({ type: 'state.read' }),
 ];
 
@@ -33,6 +32,12 @@ suite('ChromeAction', () => {
   it('rejects non-chrome commands and unknown fields', () => {
     expect(parseChromeAction({ type: 'settings.open' }).success).toBe(false);
     expect(parseChromeAction({ type: 'tabs.close', id: 4, force: true }).success).toBe(false);
+  });
+
+  it('has no command that changes Browsie settings', () => {
+    // The bookmarks bar setting is synced app settings, which only the person may change.
+    expect(parseChromeAction({ type: 'bookmarksBar.set', visible: false }).success).toBe(false);
+    expect(parseChromeAction({ type: 'page.open', page: 'settings' }).success).toBe(false);
   });
 
   it('requires an explicit, valid tab switch target', () => {
