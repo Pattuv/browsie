@@ -69,8 +69,8 @@ export const createCalendar = (client: GoogleClient) => ({
   async create(args: GoogleToolArgs<'calendar_create'>) {
     const zone = client.timeZone();
     const url = new URL(API);
-    // Google emails the invitations itself.
-    if (args.attendees?.length) url.searchParams.set('sendUpdates', 'all');
+    // Google emails the invitations itself. Always set, so Google's default never decides who hears.
+    url.searchParams.set('sendUpdates', args.attendees?.length ? 'all' : 'none');
     const event = (await client.send('calendar', url.toString(), 'POST', {
       summary: args.title,
       start: toEventTime(args.start, zone),
@@ -85,6 +85,8 @@ export const createCalendar = (client: GoogleClient) => ({
   async update({ id, ...fields }: GoogleToolArgs<'calendar_update'>) {
     const zone = client.timeZone();
     const url = new URL(`${API}/${encodeURIComponent(id)}`);
+    // Anyone invited hears about the change. With other people invited, the user has said yes to that first
+    // (tools.ts needsConfirm).
     url.searchParams.set('sendUpdates', 'all');
     const event = (await client.send('calendar', url.toString(), 'PATCH', {
       ...(fields.title && { summary: fields.title }),

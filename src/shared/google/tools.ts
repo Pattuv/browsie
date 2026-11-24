@@ -98,7 +98,8 @@ export const GOOGLE_TOOLS = {
   calendar_update: {
     service: 'calendar',
     risk: 'write',
-    description: 'Change an event (id from calendar_list): its title, times, location or description. Only the fields given change.',
+    description:
+      'Change an event (id from calendar_list): its title, times, location or description. Only the fields given change. If other people are invited, Google emails them the change, so the user is asked to confirm first.',
     input: z.strictObject({
       id,
       title: z.string().trim().min(1).max(300).optional(),

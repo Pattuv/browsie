@@ -352,7 +352,7 @@ export const createAgentHost = (deps: HostDeps) => {
 
     const key = callKey(name, args);
     try {
-      if (g.tools.needsConfirm(name, args)) {
+      if (await g.tools.needsConfirm(name, args)) {
         if (task.googleGrant !== key) {
           const confirm = await g.tools.confirmation(name, args);
           task.pendingGoogleGrant = key;
