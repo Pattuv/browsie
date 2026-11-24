@@ -25,6 +25,11 @@ export const PRICES: Record<Tier, { input: number; output: number }> = {
 // Most one WEB task may spend before it's stopped.
 export const TASK_SPEND_CAP_USD = 0.75;
 
+// Sent as `provider` on every OpenRouter request (chat, transcription, speech). Routes only to providers
+// that don't store user data or train on it (data_collection), and only to Zero Data Retention endpoints
+// (zdr). When no provider for a model qualifies, OpenRouter refuses the request rather than routing around it.
+export const PROVIDER_PREFERENCES = { data_collection: 'deny', zdr: true } as const;
+
 // A model call slower than this is given up on. OpenRouter's usual 8s timeout is far too short for an agent step.
 export const LLM_TIMEOUT_MS = 90_000;
 

@@ -1,5 +1,5 @@
 import { LlmRequest, type LlmResponse, type LlmUsage, type Tier } from '../../shared/agent/llm';
-import { LLM_TIMEOUT_MS, MODELS, OPENROUTER_CHAT_URL, PRICES } from './config';
+import { LLM_TIMEOUT_MS, MODELS, OPENROUTER_CHAT_URL, PRICES, PROVIDER_PREFERENCES } from './config';
 
 // The only way the agent reaches a model. The agent process has no key: it sends the request here, main
 // checks it, picks the model for the tier, adds the account's OpenRouter key, and keeps count of what each
@@ -83,6 +83,8 @@ export const createBroker = ({ getKey, url = OPENROUTER_CHAT_URL, fetchImpl = fe
       max_tokens: request.maxTokens ?? 4_000,
       // Ask OpenRouter to report the real cost of the call.
       usage: { include: true },
+      // No provider that keeps or trains on what's sent.
+      provider: PROVIDER_PREFERENCES,
     };
 
     let response: Response | undefined;

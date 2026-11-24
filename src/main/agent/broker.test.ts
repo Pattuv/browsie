@@ -32,6 +32,8 @@ describe('broker', () => {
     expect(body.model).toBe(MODELS.main);
     expect(body.tool_choice).toBe('auto');
     expect(body.usage).toEqual({ include: true });
+    // Only providers that neither keep nor train on what's sent.
+    expect(body.provider).toEqual({ data_collection: 'deny', zdr: true });
   });
 
   it('returns tool calls and keeps count of what each task spent', async () => {
