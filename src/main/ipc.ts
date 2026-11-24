@@ -212,8 +212,9 @@ export const registerIpc = () => {
   handle('ai:get-usage', () => getAiUsage());
   handle('auth:sign-out', async (_event, options: unknown) => {
     const accountId = getAccountId();
-    const removeDeviceData = (options as { removeDeviceData?: unknown } | null)?.removeDeviceData === true;
     const resetSetup = (options as { resetSetup?: unknown } | null)?.resetSetup === true;
+    // Factory reset always wipes this device too, whatever the renderer asked for.
+    const removeDeviceData = (options as { removeDeviceData?: unknown } | null)?.removeDeviceData === true || resetSetup;
 
     // Bookmarks and history are about to be deleted here; make sure Drive has the latest first.
     if (accountId && removeDeviceData) {
