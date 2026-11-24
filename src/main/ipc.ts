@@ -1,6 +1,6 @@
 import { BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
 import { cancelSignIn, completeSetup, connectWorkspace, getAccountId, getSession, signIn, signOut } from './auth/session';
-import { removeWebData } from './browser/webSession';
+import { removeDownloads, removeWebData } from './browser/webSession';
 import { getData, updateData } from './data/localStore';
 import { removeAiKey, replaceManagementKey, saveAiKey, updateAiCap } from './data/aiKey';
 import { clearAiUsageCache, getAiUsage } from './data/openRouterUsage';
@@ -221,14 +221,15 @@ export const registerIpc = () => {
       await uploadBeforeRemoving();
     }
 
-    // signOut switches the tabs, bookmarks and history off this account straight away. Only factory reset
-    // revokes Browsie's Google access ("remove my data" is about this device only). Revoking waits on the
-    // network, so don't make the device wipe wait for it.
-    const revoked = signOut({ resetSetup, revoke: resetSetup });
+    // signOut switches the tabs, bookmarks and history off this account straight away. Removing data (factory
+    // reset included) also revokes Browsie's Google access, so the token can't be used again from anywhere.
+    // Revoking waits on the network, so don't make the device wipe wait for it.
+    const revoked = signOut({ resetSetup, revoke: removeDeviceData });
 
     if (accountId && removeDeviceData) {
       await removeWebData(accountId);
       removeLibraryData(accountId);
+      removeDownloads(accountId);
     }
 
     // The OpenRouter key spends the user's money, so it goes with any wipe, factory reset included.
