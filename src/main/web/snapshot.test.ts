@@ -151,6 +151,27 @@ describe('what the model sees', () => {
     expect(snap.full).not.toContain('123456');
   });
 
+  it('shows only the last four digits of a card-number-like value, in any field', () => {
+    const snap = snapshotOf(
+      page([
+        node('textbox', 'Notes', [], { value: 'card 4242 4242 4242 4242 exp 12/29' }),
+        node('textbox', 'Number', [], { value: '5555-5555-5555-4444' }),
+        node('textbox', 'Phone', [], { value: '+1 555 123 4567' }),
+      ]),
+    );
+    expect(lines(snap.full)).toEqual([
+      'e1 textbox "Notes" value="card •••• 4242 exp 12/29"',
+      'e2 textbox "Number" value="•••• 4444"',
+      'e3 textbox "Phone" value="+1 555 123 4567"',
+    ]);
+    expect(snap.full).not.toContain('4242 4242');
+  });
+
+  it('masks a card number before cutting a long value short', () => {
+    const snap = snapshotOf(page([node('textbox', 'Pay', [], { value: `${'x'.repeat(70)} 4111111111111111` })]));
+    expect(snap.full).not.toMatch(/\d{5}/);
+  });
+
   it('folds a closed dropdown’s options into one line', () => {
     const countries = Array.from({ length: 200 }, (_, i) => node('option', `Country ${i}`, [], { dom: 'none' }));
     const snap = snapshotOf(
