@@ -31,7 +31,6 @@ export type ChromeOperations = {
   openBookmark: (id: string) => boolean;
   listBookmarks: () => Bookmark[];
   searchHistory: (query: string) => Visit[];
-  setBookmarksBarVisible: (visible: boolean) => boolean;
   readState: () => BrowserState;
   emitActivity: (activity: ChromeActivity) => void;
 };
@@ -65,7 +64,6 @@ const activityFor = (action: ChromeActionValue): ChromeActivity => {
     case 'bookmarks.remove':
     case 'bookmarks.open':
     case 'bookmarks.list':
-    case 'bookmarksBar.set':
       return { target: 'bookmarks', label: action.type };
     case 'history.search':
       return { target: 'history', label: action.type };
@@ -131,8 +129,6 @@ export const createChromeApi = (operations: ChromeOperations) => {
         return done(operations.listBookmarks());
       case 'history.search':
         return done(operations.searchHistory(action.query));
-      case 'bookmarksBar.set':
-        return operations.setBookmarksBarVisible(action.visible) ? done() : unavailable('Unable to change the bookmarks bar.');
       case 'state.read':
         return done(operations.readState());
     }

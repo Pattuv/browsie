@@ -47,9 +47,14 @@ export const createGoogleTools = (deps: GoogleDeps) => {
     drive_trash: drive.trash,
   };
 
-  // Sends, deletes, and anything that emails other people.
-  const needsConfirm = (name: GoogleToolName, args: Record<string, unknown>) =>
-    GOOGLE_TOOLS[name].risk === 'confirm' || (name === 'calendar_create' && Array.isArray(args.attendees) && args.attendees.length > 0);
+  // Sends, deletes, and anything that emails other people. Changing an event that has other people invited
+  // emails them too, so that's read from the real event, not from what the model says about it.
+  const needsConfirm = async (name: GoogleToolName, args: Record<string, unknown>) => {
+    if (GOOGLE_TOOLS[name].risk === 'confirm') return true;
+    if (name === 'calendar_create') return Array.isArray(args.attendees) && args.attendees.length > 0;
+    if (name === 'calendar_update') return Boolean((await calendar.get((args as GoogleToolArgs<'calendar_update'>).id)).attendees?.length);
+    return false;
+  };
 
   // What's read aloud before asking. Built from Google's own data (the real event, the real email), not
   // from how the model described it.
@@ -89,6 +94,23 @@ export const createGoogleTools = (deps: GoogleDeps) => {
           button: 'Invite',
           summary: `I'm about to add "${a.title}" on ${spokenTime(a.start, zone)} to your calendar and email an invitation to ${list(a.attendees)}.`,
           fields: [],
+        };
+      }
+      case 'calendar_update': {
+        const a = args as GoogleToolArgs<'calendar_update'>;
+        const event = await calendar.get(a.id);
+        const changes = [
+          a.title !== undefined && { label: 'New title', value: a.title },
+          a.start !== undefined && { label: 'New start', value: spokenTime(a.start, zone) },
+          a.end !== undefined && { label: 'New end', value: spokenTime(a.end, zone) },
+          a.location !== undefined && { label: 'New location', value: a.location || '(none)' },
+          a.description !== undefined && { label: 'New description', value: clip(a.description, 200) || '(none)' },
+        ].filter((field): field is { label: string; value: string } => Boolean(field));
+        return {
+          origin: 'https://calendar.google.com',
+          button: 'Save',
+          summary: `I'm about to change "${event.title}" on ${spokenTime(event.start, zone)} and email the change to the ${event.attendees?.length ?? 0} other people invited.`,
+          fields: changes,
         };
       }
       case 'calendar_delete': {

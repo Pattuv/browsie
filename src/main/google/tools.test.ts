@@ -71,22 +71,47 @@ describe('google tools', () => {
     expect(parseGoogleCall('calendar_create', { title: 'Bro', start: '2026-10-24T17:00:00', end: '2026-10-24T18:00:00' }).ok).toBe(true);
   });
 
-  it('asks before sending, deleting or inviting, not before reading or plain changes', () => {
+  it('asks before sending, deleting or inviting, not before reading or plain changes', async () => {
     const { tools } = setup(() => json({}));
-    expect(tools.needsConfirm('gmail_send', {})).toBe(true);
-    expect(tools.needsConfirm('calendar_delete', {})).toBe(true);
-    expect(tools.needsConfirm('drive_trash', {})).toBe(true);
-    expect(tools.needsConfirm('calendar_create', { attendees: ['a@b.com'] })).toBe(true);
-    expect(tools.needsConfirm('calendar_create', {})).toBe(false);
-    expect(tools.needsConfirm('gmail_search', {})).toBe(false);
-    expect(tools.needsConfirm('gmail_modify', {})).toBe(false);
+    expect(await tools.needsConfirm('gmail_send', {})).toBe(true);
+    expect(await tools.needsConfirm('calendar_delete', {})).toBe(true);
+    expect(await tools.needsConfirm('drive_trash', {})).toBe(true);
+    expect(await tools.needsConfirm('calendar_create', { attendees: ['a@b.com'] })).toBe(true);
+    expect(await tools.needsConfirm('calendar_create', {})).toBe(false);
+    expect(await tools.needsConfirm('gmail_search', {})).toBe(false);
+    expect(await tools.needsConfirm('gmail_modify', {})).toBe(false);
+  });
+
+  it('asks before changing an event only when other people are invited to it', async () => {
+    const shared = setup(() => json({ id: 'e1', summary: 'Standup', attendees: [{ email: 'me@x.com', self: true }, { email: 'sam@x.com' }] }));
+    expect(await shared.tools.needsConfirm('calendar_update', { id: 'e1', title: 'Moved' })).toBe(true);
+
+    const mine = setup(() => json({ id: 'e1', summary: 'Gym', attendees: [{ email: 'me@x.com', self: true }] }));
+    expect(await mine.tools.needsConfirm('calendar_update', { id: 'e1', title: 'Moved' })).toBe(false);
+  });
+
+  it('reads the real event and the change back for an update confirmation', async () => {
+    const { tools } = setup(() =>
+      json({ id: 'e1', summary: 'Standup', start: { dateTime: '2026-10-24T17:00:00-04:00' }, attendees: [{ email: 'sam@x.com' }, { email: 'kim@x.com' }] }),
+    );
+    const confirm = await tools.confirmation('calendar_update', { id: 'e1', start: '2026-10-24T18:00:00' });
+    expect(confirm.summary).toBe('I\'m about to change "Standup" on Saturday, October 24 at 5:00 PM and email the change to the 2 other people invited.');
+    expect(confirm.fields).toEqual([{ label: 'New start', value: 'Saturday, October 24 at 6:00 PM' }]);
+  });
+
+  it('says whether Google emails anyone, every time', async () => {
+    const { tools, fetchImpl } = setup(() => json({ id: 'e1', summary: 'Bro' }));
+    await tools.run('calendar_create', { title: 'Bro', start: '2026-10-24T17:00:00', end: '2026-10-24T18:00:00', attendees: ['a@b.com'] });
+    await tools.run('calendar_update', { id: 'e1', title: 'Bro 2' });
+    await tools.run('calendar_delete', { id: 'e1' });
+    expect(fetchImpl.mock.calls.map(([url]) => new URL(String(url)).searchParams.get('sendUpdates'))).toEqual(['all', 'all', 'all']);
   });
 
   it('creates an event on the primary calendar in the user’s zone', async () => {
     const { tools, fetchImpl } = setup(() => json({ id: 'e1', summary: 'Bro', start: { dateTime: '2026-10-24T17:00:00-04:00' }, end: { dateTime: '2026-10-24T18:00:00-04:00' } }));
     const created = await tools.run('calendar_create', { title: 'Bro', start: '2026-10-24T17:00:00', end: '2026-10-24T18:00:00' });
     const [url, init = {}] = fetchImpl.mock.calls[0];
-    expect(url).toBe('https://www.googleapis.com/calendar/v3/calendars/primary/events');
+    expect(url).toBe('https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=none');
     expect(JSON.parse(String(init.body))).toEqual({
       summary: 'Bro',
       start: { dateTime: '2026-10-24T17:00:00', timeZone: 'America/New_York' },

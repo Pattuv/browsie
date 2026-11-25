@@ -10,6 +10,10 @@ module.exports = {
     icon: process.platform === 'darwin' ? `${ICONS_DIR}/macos/icon` : `${ICONS_DIR}/windows/icon`,
     // macOS only (Finder / App Store category). Ignored on Windows.
     appCategoryType: 'public.app-category.productivity',
+    // macOS: the line shown in the microphone prompt. Without it, macOS refuses the mic outright.
+    extendInfo: {
+      NSMicrophoneUsageDescription: 'Browsie listens while you hold the spacebar, so you can tell it what to do.',
+    },
   },
   rebuildConfig: {},
   // `npm run make` builds the installer for the OS it runs on.

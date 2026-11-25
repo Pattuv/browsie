@@ -223,6 +223,11 @@ const downloadsFolderFor = (partition: string) =>
 
 export const getDownloadsFolder = () => downloadsFolderFor(webPartition);
 
+// "Remove my data from this device" (and factory reset): the files downloaded for this account.
+export const removeDownloads = (accountId: string) => {
+  fs.rmSync(downloadsFolderFor(partitionFor(accountId)), { recursive: true, force: true });
+};
+
 // Points websites at this account's storage (null = signed out). Returns true if that changed, so the
 // caller can close tabs still attached to the previous account's storage.
 export const setWebAccount = (accountId: string | null) => {

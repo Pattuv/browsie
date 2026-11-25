@@ -2,6 +2,7 @@ import {
   AUDIO_TIMEOUT_MS,
   OPENROUTER_SPEECH_URL,
   OPENROUTER_TRANSCRIBE_URL,
+  PROVIDER_PREFERENCES,
   TRANSCRIBE_MODEL,
   TTS_MODEL,
   TTS_VOICE,
@@ -67,7 +68,7 @@ export const createSpeechApi = ({ getKey, fetchImpl = fetch }: Deps) => {
   const transcribe = async (wav: Uint8Array, signal?: AbortSignal) => {
     const response = await post(
       OPENROUTER_TRANSCRIBE_URL,
-      { model: TRANSCRIBE_MODEL, input_audio: { data: Buffer.from(wav).toString('base64'), format: 'wav' } },
+      { model: TRANSCRIBE_MODEL, input_audio: { data: Buffer.from(wav).toString('base64'), format: 'wav' }, provider: PROVIDER_PREFERENCES },
       signal,
     );
     if (!response.ok) throw await failure(response);
@@ -84,7 +85,11 @@ export const createSpeechApi = ({ getKey, fetchImpl = fetch }: Deps) => {
     if (cached) return cached;
 
     // Eleven v4 Turbo rejects a speed setting: slower and faster are applied when playing instead.
-    const response = await post(OPENROUTER_SPEECH_URL, { model: TTS_MODEL, input, voice: TTS_VOICE, response_format: 'mp3' }, signal);
+    const response = await post(
+      OPENROUTER_SPEECH_URL,
+      { model: TTS_MODEL, input, voice: TTS_VOICE, response_format: 'mp3', provider: PROVIDER_PREFERENCES },
+      signal,
+    );
     if (!response.ok) throw await failure(response);
     const audio = new Uint8Array(await response.arrayBuffer());
     if (audio.byteLength === 0) throw new SpeechError('bad-response', 'The speech had no audio.');

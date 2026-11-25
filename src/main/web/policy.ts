@@ -26,6 +26,16 @@ export type PolicyContext = {
   grant?: ConfirmGrant;
   // Only the mock-site harness turns this on, since its sites are served on 127.0.0.1.
   allowPrivateNetwork?: boolean;
+  // Where a goto may lead (see checkGotoProvenance). Main always passes it. Without it that check is skipped.
+  goto?: GotoContext;
+};
+
+export type GotoContext = {
+  // The user's own words this task: what they said, facts they confirmed, their answers. Never a goal the
+  // model wrote, and never page or Google text.
+  said: readonly string[];
+  // Addresses this task's tab has already shown (by clicking a link, say), without their #fragment.
+  visitedUrls: ReadonlySet<string>;
 };
 
 export type ConfirmGrant = { snap: number; ref: string };
@@ -87,6 +97,61 @@ export const checkUrl = (rawUrl: string, allowPrivateNetwork = false): string | 
   // https://bank.com@evil.example looks like the bank but isn't.
   if (url.username || url.password) return "Addresses with a username or password in them can't be opened.";
   if (!allowPrivateNetwork && isPrivateHost(url.hostname)) return "Addresses on this computer or local network can't be opened.";
+
+  return undefined;
+};
+
+// --- 2b. Where a goto's address came from ---
+
+// The same address, ignoring the #fragment.
+export const urlKey = (url: string) => url.split('#')[0];
+
+// Parts of an address that say nothing about where it goes or what it carries.
+const URL_FILLER = new Set(['www', 'com', 'org', 'net', 'edu', 'gov', 'co', 'uk', 'io', 'app', 'dev', 'html', 'htm', 'php', 'aspx', 'index']);
+
+const squashWords = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+// `minLength` 2 for the path and query, where one letter ("q", "s") is a parameter name, not something carried.
+const wordsOf = (text: string, minLength = 1) =>
+  text
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((word) => word.length >= minLength && !URL_FILLER.has(word));
+
+const decoded = (text: string) => {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+};
+
+// A goto can carry what the agent read on a page or in an email out to any site, in the address itself.
+// So it may only open an address this task already reached, or one whose host and every word of whose
+// path, query and fragment the user actually said or confirmed. Otherwise the agent has to click a link
+// on the page or ask the user.
+export const checkGotoProvenance = (rawUrl: string, ctx: GotoContext): string | undefined => {
+  if (ctx.visitedUrls.has(urlKey(rawUrl))) return undefined;
+
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return 'That address is not valid.';
+  }
+
+  // Spoken words lose their dots and spaces ("you tube"), so compare without them.
+  const said = squashWords(ctx.said.join(' '));
+  const host = url.hostname.toLowerCase();
+  const hostWords = wordsOf(host);
+  if (hostWords.length === 0 || hostWords.some((word) => !said.includes(word))) {
+    return `The user didn't name ${host.replace(/^www\./, '')}, and this task hasn't been to that address. Click a link on the page instead, or ask the user.`;
+  }
+
+  const carried = [decoded(url.pathname), ...[...url.searchParams].flat(), decoded(url.hash.slice(1))].flatMap((part) => wordsOf(part, 2));
+  const unsaid = [...new Set(carried.filter((word) => !said.includes(word)))];
+  if (unsaid.length) {
+    return `That address has words the user didn't say (${unsaid.slice(0, 3).map((word) => JSON.stringify(word)).join(', ')}), so it can't be opened. Click a link on the page instead, or ask the user.`;
+  }
 
   return undefined;
 };
@@ -254,7 +319,7 @@ export const evaluate = (raw: unknown, ctx: PolicyContext): PolicyDecision => {
   }
 
   if (action.type === 'goto') {
-    const problem = checkUrl(action.url, ctx.allowPrivateNetwork);
+    const problem = checkUrl(action.url, ctx.allowPrivateNetwork) ?? (ctx.goto && checkGotoProvenance(action.url, ctx.goto));
     if (problem) return refuse('blocked_by_policy', problem, action);
   }
 

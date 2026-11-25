@@ -187,6 +187,14 @@ const clean = (raw: unknown, max: number) => {
 const isSecretField = (dom?: DomInfo) =>
   dom?.type === 'password' || /one-time-code/.test(dom?.autocomplete ?? '');
 
+// 13 to 19 digits, optionally grouped by spaces or dashes: the shape of a payment card number. In any field,
+// whatever it's labelled, only the last four digits reach the model. No checksum test, so a long account or
+// order number is masked too: better hidden than read out.
+const CARD_NUMBER = /(?<!\d)\d(?:[ -]?\d){12,18}(?!\d)/g;
+
+export const maskCardNumbers = (raw: unknown) =>
+  typeof raw === 'string' ? raw.replace(CARD_NUMBER, (digits) => `•••• ${digits.replace(/\D/g, '').slice(-4)}`) : raw;
+
 const statesOf = (node: AXNode, role: string) => {
   const states: string[] = [];
   const level = prop(node, 'level');
@@ -293,7 +301,8 @@ const walkFrame = (frame: RawFrame, tree: AXNode[], isTopTree: boolean, out: Wal
       const states = statesOf(node, role);
       const focused = states.includes('focused');
       const interactive = INTERACTIVE.has(role);
-      const rawValue = HAS_VALUE.has(role) && !isSecretField(dom) ? clean(node.value?.value, MAX_NAME) : '';
+      // Masked before it's cut to length, so a cut can't leave more than the last four digits showing.
+      const rawValue = HAS_VALUE.has(role) && !isSecretField(dom) ? clean(maskCardNumbers(node.value?.value), MAX_NAME) : '';
 
       out.push({
         key: `${frame.sessionId ?? ''}:${node.backendDOMNodeId ?? `ax${node.nodeId}`}`,

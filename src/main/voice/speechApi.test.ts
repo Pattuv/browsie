@@ -12,7 +12,7 @@ describe('speechApi', () => {
 
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(OPENROUTER_TRANSCRIBE_URL);
-    expect(JSON.parse(String(init.body))).toEqual({ model: TRANSCRIBE_MODEL, input_audio: { data: 'UklGRg==', format: 'wav' } });
+    expect(JSON.parse(String(init.body))).toEqual({ model: TRANSCRIBE_MODEL, input_audio: { data: 'UklGRg==', format: 'wav' }, provider: { data_collection: 'deny', zdr: true } });
   });
 
   it('speaks with Eleven v4 Turbo in Eric’s voice, and caches lines', async () => {
@@ -24,7 +24,7 @@ describe('speechApi', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(OPENROUTER_SPEECH_URL);
-    expect(JSON.parse(String(init.body))).toEqual({ model: TTS_MODEL, input: 'Stopped.', voice: TTS_VOICE, response_format: 'mp3' });
+    expect(JSON.parse(String(init.body))).toEqual({ model: TTS_MODEL, input: 'Stopped.', voice: TTS_VOICE, response_format: 'mp3', provider: { data_collection: 'deny', zdr: true } });
   });
 
   it('names failures', async () => {
