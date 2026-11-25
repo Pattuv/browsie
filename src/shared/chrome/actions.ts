@@ -38,7 +38,6 @@ const BookmarksRemove = z.strictObject({ type: z.literal('bookmarks.remove'), id
 const BookmarksOpen = z.strictObject({ type: z.literal('bookmarks.open'), id: bookmarkId });
 const BookmarksList = z.strictObject({ type: z.literal('bookmarks.list') });
 const HistorySearch = z.strictObject({ type: z.literal('history.search'), query: text });
-const BookmarksBarSet = z.strictObject({ type: z.literal('bookmarksBar.set'), visible: z.boolean() });
 const StateRead = z.strictObject({ type: z.literal('state.read') });
 
 export const ChromeAction = z.discriminatedUnion('type', [
@@ -61,7 +60,6 @@ export const ChromeAction = z.discriminatedUnion('type', [
   BookmarksOpen,
   BookmarksList,
   HistorySearch,
-  BookmarksBarSet,
   StateRead,
 ]);
 
@@ -92,7 +90,6 @@ export const BASE_RISK: Record<ChromeActionType, ChromeRisk> = {
   'bookmarks.open': 'interact',
   'bookmarks.list': 'read',
   'history.search': 'read',
-  'bookmarksBar.set': 'interact',
   'state.read': 'read',
 };
 
@@ -138,8 +135,6 @@ export const describe = (action: ChromeAction): string => {
       return 'Checking your bookmarks';
     case 'history.search':
       return `Searching history for ${quote(action.query)}`;
-    case 'bookmarksBar.set':
-      return action.visible ? 'Showing the bookmarks bar' : 'Hiding the bookmarks bar';
     case 'state.read':
       return 'Checking the browser';
   }

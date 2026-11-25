@@ -14,7 +14,6 @@ import {
   moveTab,
   navigateToWeb,
   newTab,
-  setBookmarksBarMode,
   showBrowsiePage,
   toggleMuteTabById,
   toUrl,
@@ -118,11 +117,6 @@ export const chromeOperations: ChromeOperations = {
 
   listBookmarks,
   searchHistory: (query) => searchHistory(query, 20),
-
-  setBookmarksBarVisible: (visible) => {
-    setBookmarksBarMode(visible ? 'always' : 'never');
-    return true;
-  },
 
   readState: state,
   emitActivity: emitAgentActivity,

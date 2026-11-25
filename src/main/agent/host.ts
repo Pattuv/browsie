@@ -6,7 +6,7 @@ import { RPC, TURN_LABELS, type ActResponse, type AgentLane, type AgentMessage, 
 import { describe as describeChrome, parseChromeAction } from '../../shared/chrome/actions';
 import { addressOf, checkNavigation } from '../../shared/chrome/policy';
 import { textForModel, type Snapshot } from '../web/snapshot';
-import { checkLimits, evaluate, evaluateBatch, grantFor, type ConfirmGrant, type PolicyContext } from '../web/policy';
+import { checkLimits, evaluate, evaluateBatch, grantFor, urlKey, type ConfirmGrant, type PolicyContext } from '../web/policy';
 import { ElectronCdpExecutor, type AgentCursor, type Executor, type TabResolver } from '../web/executor';
 import { listUploadable, resolveUploadable } from '../web/files';
 import { TASK_SPEND_CAP_USD } from './config';
@@ -54,8 +54,13 @@ type HostTask = {
   lane: AgentLane;
   turnId: string;
   goal: string;
+  // What the user said in the turn that started this task. The goal can be the model's own words (a plan
+  // step or a handoff), so a goto's address is checked against this instead.
+  transcript?: string;
   sources: Map<string, string>;
   answers: number;
+  // WEB tasks only: every address the tab has shown during the task, without its #fragment.
+  visitedUrls: Set<string>;
   controller: AbortController;
   startedAt: number;
   steps: number;
@@ -77,6 +82,7 @@ type HostTask = {
 // One thing the user said, while the agent works out the reply. Its tasks run as ordinary tasks.
 type HostTurn = {
   id: string;
+  transcript: string;
   controller: AbortController;
   taskIds: Set<string>;
 };
@@ -198,15 +204,24 @@ export const createAgentHost = (deps: HostDeps) => {
 
   const takeSnapshot = async (task: HostTask) => {
     const snapshot = await web(task).snapshot(task.controller.signal);
+    task.visitedUrls.add(urlKey(snapshot.url));
     trace(task, { t: 'snapshot', step: task.steps, snapshot: serializeSnapshot(snapshot) });
     return snapshot;
   };
+
+  // The user's own words this task: the turn's transcript (or the goal, when no turn started it), confirmed
+  // facts and their answers.
+  const saidByUser = (task: HostTask) => [
+    task.transcript ?? task.goal,
+    ...[...task.sources].filter(([id]) => id !== 'u1').map(([, text]) => text),
+  ];
 
   const policyContext = (task: HostTask, snapshot: Snapshot | undefined): PolicyContext => ({
     snapshot,
     sources: task.sources,
     grant: task.grant,
     allowPrivateNetwork: deps.allowPrivateNetwork,
+    goto: { said: saidByUser(task), visitedUrls: task.visitedUrls },
   });
 
   const askToConfirm = (task: HostTask, decision: ReturnType<typeof evaluate>, snapshot: Snapshot) => {
@@ -243,6 +258,7 @@ export const createAgentHost = (deps: HostDeps) => {
     const run = decision.run.map((entry) => entry.action);
     const usedGrant = task.grant;
     const batch = await web(task).runBatch(run, task.controller.signal);
+    task.visitedUrls.add(urlKey(batch.snapshot.url));
     task.steps += batch.ran;
     // The batch has one outcome. Recorded against each action that ran, or the one that failed.
     for (const action of run.slice(0, Math.max(batch.ran, 1))) trace(task, { t: 'result', step: task.steps, action, result: batch.result });
@@ -336,7 +352,7 @@ export const createAgentHost = (deps: HostDeps) => {
 
     const key = callKey(name, args);
     try {
-      if (g.tools.needsConfirm(name, args)) {
+      if (await g.tools.needsConfirm(name, args)) {
         if (task.googleGrant !== key) {
           const confirm = await g.tools.confirmation(name, args);
           task.pendingGoogleGrant = key;
@@ -524,8 +540,10 @@ export const createAgentHost = (deps: HostDeps) => {
       lane,
       turnId: turnId ?? id,
       goal,
+      transcript: turnId ? turns.get(turnId)?.transcript : undefined,
       sources,
       answers: 0,
+      visitedUrls: new Set(),
       controller: new AbortController(),
       startedAt: Date.now(),
       steps: 0,
@@ -543,7 +561,7 @@ export const createAgentHost = (deps: HostDeps) => {
     startTurn(transcript: string, context: TurnContext) {
       ensureWorker();
       const id = `turn${++taskCounter}-${Date.now().toString(36)}`;
-      turns.set(id, { id, controller: new AbortController(), taskIds: new Set() });
+      turns.set(id, { id, transcript, controller: new AbortController(), taskIds: new Set() });
       post({ kind: 'turn', turnId: id, transcript, context });
       return id;
     },

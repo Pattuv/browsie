@@ -91,6 +91,13 @@ interface BrowsieAuthAPI {
   // removeDeviceData also deletes this account's web logins, cookies and site data from this computer.
   // resetSetup also forgets that this account finished setup, so its next sign-in goes through setup again.
   signOut: (options?: { removeDeviceData?: boolean; resetSetup?: boolean }) => Promise<void>;
+  // Whether Browsie's browser is signed in to Google websites (Gmail, YouTube…). Null while unknown.
+  // Separate from connectGoogle, which is Browsie's own access to Gmail, Calendar and Drive.
+  getGoogleWebLogin: () => Promise<boolean | null>;
+  // Opens Google's sign-in page in a browser tab (opening the browser if it isn't).
+  signInToGoogleWeb: () => Promise<void>;
+  // Returns an unsubscribe function.
+  onGoogleWebLoginChanged: (callback: (signedIn: boolean) => void) => () => void;
   // Returns an unsubscribe function.
   onSessionChanged: (callback: (session: AuthSession) => void) => () => void;
 }
@@ -176,6 +183,8 @@ type SiteCertificate = {
 };
 
 // What a website can be allowed to use, per site. Everything else is always blocked.
+type MicAccess = 'granted' | 'denied' | 'restricted' | 'not-determined' | 'unknown';
+
 type SitePermissionKind = 'geolocation' | 'camera' | 'microphone' | 'notifications';
 
 type SitePermission = {
@@ -387,6 +396,13 @@ interface BrowsieAPI {
   library: BrowsieLibraryAPI;
   session: BrowsieSessionAPI;
   openExternal: (url: string) => Promise<void>;
+  // The OS microphone permission (macOS Privacy & Security, Windows Privacy > Microphone).
+  mic: {
+    status: () => Promise<MicAccess>;
+    // macOS: shows the system prompt if it hasn't been answered yet. Returns the status afterwards.
+    request: () => Promise<MicAccess>;
+    openSettings: () => Promise<void>;
+  };
   // Asks OpenRouter at most once a minute; the menu can call it every time it opens.
   getAiUsage: () => Promise<AiUsage>;
   shouldAnimateDashboard: () => Promise<boolean>;

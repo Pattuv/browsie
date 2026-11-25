@@ -173,6 +173,21 @@ describe('conductor', () => {
     expect(t.conductor.onSpacePress()).toBe(false);
   });
 
+  it('lets Space cut a question short without stopping the task', async () => {
+    t.player.auto = false;
+    await t.conductor.onAudio(wav, 1_200);
+    t.task({ type: 'ask_user', taskId: 'task1', question: 'Header or footer?' });
+    await flush();
+    expect(t.conductor.mode()).toBe('awaiting');
+    // Still asking: the press only cuts it off (holding it is what opens the mic, in tabs.ts).
+    expect(t.conductor.onSpacePress()).toBe(true);
+    expect(t.audio.stop).toHaveBeenCalled();
+    expect(t.host.abortTurn).not.toHaveBeenCalled();
+    expect(t.conductor.mode()).toBe('awaiting');
+    // Once it's quiet, Space answers.
+    expect(t.conductor.onSpacePress()).toBe(false);
+  });
+
   it('lets Space cut Browsie off when idle', () => {
     expect(t.conductor.onSpacePress()).toBe(false);
     expect(t.audio.stop).toHaveBeenCalled();

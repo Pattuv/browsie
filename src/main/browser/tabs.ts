@@ -4,6 +4,7 @@ import {
   Menu,
   WebContentsView,
   clipboard,
+  dialog,
   type ContextMenuParams,
   type Input,
   type MenuItemConstructorOptions,
@@ -20,6 +21,7 @@ import { recordVisit, updateVisitTitle } from '../data/history';
 import { clearFaviconCache, resolveFavicon } from './favicons';
 import { getGoogleLogin, googleSignInUrl, isGoogleAccountsUrl, onGoogleLoginChange } from './googleWebLogin';
 import { clearGoogleRejectionCookies, getWebPartition, isGoogleSignInRejection, isWebUrl } from './webSession';
+import { matchGoogleTheme } from './webTheme';
 
 // One tab. The chrome draws Browsie's own New Tab page itself; a website only gets a view
 // (its own sandboxed process) once one is opened.
@@ -252,6 +254,29 @@ let spaceGate: (() => boolean) | null = null;
 // same keydown. Cleared on release, or shortly after, in case blocking the keydown drops the keyup.
 let spaceUsed = false;
 let spaceUsedTimer: ReturnType<typeof setTimeout> | null = null;
+// A press that cut Browsie off and is still held. Tap = only the cut-off; keep holding past HOLD_TO_TALK_MS
+// and it opens the mic for a new request. The release can be lost (see above), so the hold is read from
+// the key's repeats instead, and it's forgotten when they stop coming.
+const HOLD_TO_TALK_MS = 300;
+let cutOffAt = 0;
+let cutOffWatch: ReturnType<typeof setTimeout> | null = null;
+
+const endCutOff = () => {
+  cutOffAt = 0;
+
+  if (cutOffWatch) {
+    clearTimeout(cutOffWatch);
+    cutOffWatch = null;
+  }
+};
+
+const watchCutOff = () => {
+  if (cutOffWatch) {
+    clearTimeout(cutOffWatch);
+  }
+
+  cutOffWatch = setTimeout(endCutOff, TALK_REPEAT_TIMEOUT_MS);
+};
 // Space was let go and the recording hasn't been settled yet. Keeps the pill from sliding away, and keeps
 // Space from opening the mic again until that recording is dealt with.
 let talkLatch = false;
@@ -869,6 +894,7 @@ const wireContents = (tab: Tab, contents: WebContents) => {
   contents.on('will-navigate', blockNonWeb);
   contents.on('will-redirect', blockNonWeb);
 
+  matchGoogleTheme(contents);
   contents.on('did-start-loading', emit);
   contents.on('did-stop-loading', () => {
     faviconFallback(tab, contents);
@@ -1092,8 +1118,59 @@ export const newTab = (url?: string) => {
   emit();
 };
 
-export const closeTab = (id: unknown) => {
-  const index = tabs.findIndex((tab) => tab.id === id);
+// Sign-in tabs whose "are you sure?" question is on screen, so a second close doesn't ask twice.
+const confirmingClose = new Set<number>();
+
+// Closing Google's sign-in page leaves this account's browser signed out of Google, and nothing opens the
+// page again on its own until Browsie restarts. So ask first. A native dialog, so screen readers announce it.
+const confirmCloseGoogleSignIn = async () => {
+  if (!host || host.isDestroyed()) {
+    return true;
+  }
+
+  const { response } = await dialog.showMessageBox(host, {
+    type: 'warning',
+    title: 'Close Google sign-in?',
+    message: 'Close Google sign-in?',
+    detail:
+      "If you close this, Browsie won't be signed in to Google, so Gmail, YouTube and other Google sites won't open signed in. You can sign in again any time from Settings, under Integrations.",
+    buttons: ['Keep signing in', 'Close anyway'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  });
+
+  return response === 1;
+};
+
+// Every way a tab closes (its ✕, Ctrl+W, the agent) comes through here.
+export const closeTab = async (id: unknown) => {
+  const target = tabs.find((tab) => tab.id === id);
+
+  if (!target) {
+    return;
+  }
+
+  if (target.googleSignIn) {
+    if (confirmingClose.has(target.id)) {
+      return;
+    }
+
+    confirmingClose.add(target.id);
+    let close: boolean;
+    try {
+      close = await confirmCloseGoogleSignIn();
+    } finally {
+      confirmingClose.delete(target.id);
+    }
+
+    if (!close) {
+      return;
+    }
+  }
+
+  // Looked up again: the tab may have moved, or gone, while the question was up.
+  const index = tabs.indexOf(target);
 
   if (index === -1) {
     return;
@@ -1579,20 +1656,38 @@ export const handleTalkKey = (input: Input) => {
       return true;
     }
 
-    // Stop comes before the cooldown. The cooldown is only there so the pill can't be opened again
-    // the instant it's let go, and that must not swallow Space while a request can still be cut off.
-    if (!talking && input.isAutoRepeat) {
+    // Still holding the press that cut Browsie off: once it's clearly a hold, it talks. Until then (and
+    // for a tap) the cut-off is all it does.
+    const heldPastCutOff = !talking && cutOffAt > 0 && input.isAutoRepeat;
+
+    if (heldPastCutOff && Date.now() - cutOffAt < HOLD_TO_TALK_MS) {
+      watchCutOff();
       return true;
     }
 
-    // Mashing Space: one press at a time, with a short pause after each.
-    if (!talking && Date.now() < Math.max(talkCooldownUntil, talkReadyAt)) {
-      return true;
+    if (heldPastCutOff) {
+      endCutOff();
+      // The stop's cooldown and its leftover latch are for fresh presses, not this one.
+      talkCooldownUntil = 0;
+      settleTalkLatch();
+    } else {
+      // Stop comes before the cooldown. The cooldown is only there so the pill can't be opened again
+      // the instant it's let go, and that must not swallow Space while a request can still be cut off.
+      if (!talking && input.isAutoRepeat) {
+        return true;
+      }
+
+      // Mashing Space: one press at a time, with a short pause after each.
+      if (!talking && Date.now() < Math.max(talkCooldownUntil, talkReadyAt)) {
+        return true;
+      }
     }
 
-    if (!talking && spaceGate?.()) {
+    if (!talking && !heldPastCutOff && spaceGate?.()) {
       spaceUsed = true;
       talkCooldownUntil = Date.now() + STOP_COOLDOWN_MS;
+      cutOffAt = Date.now();
+      watchCutOff();
 
       if (spaceUsedTimer) {
         clearTimeout(spaceUsedTimer);
@@ -1629,6 +1724,9 @@ export const handleTalkKey = (input: Input) => {
   }
 
   if (input.type === 'keyUp') {
+    // Let go before it became a hold: that press was only a cut-off.
+    endCutOff();
+
     if (spaceUsed) {
       spaceUsed = false;
 
@@ -1702,7 +1800,7 @@ export const handleShortcut = (input: Input, source: 'chrome' | 'tab') => {
   }
 
   if (command && key === 'w') {
-    return once(() => closeTab(activeTabId));
+    return once(() => void closeTab(activeTabId));
   }
 
   if ((command && key === 'l') || key === 'f6' || (input.alt && key === 'd')) {
@@ -1778,6 +1876,33 @@ const openStartTab = () => {
   layout();
   emit();
   startTabId = tab && getGoogleLogin() === null ? tab.id : null;
+};
+
+// Settings' "Sign in" for Google: Google's sign-in page in a tab of its own, as on first launch. An open
+// sign-in tab is brought forward instead of opening a second. False when there's nothing to sign in to
+// (no Browsie account, or this account's browser is already signed in to Google).
+export const openGoogleSignInTab = () => {
+  const existing = tabs.find((tab) => tab.googleSignIn);
+
+  if (existing) {
+    activateTab(existing.id);
+    return true;
+  }
+
+  const { email } = getSession();
+
+  if (!host || host.isDestroyed() || !email || getGoogleLogin() === true) {
+    return false;
+  }
+
+  const tab = blankTab({ showingNewTab: true });
+  tabs.push(tab);
+  activeTabId = tab.id;
+  startGoogleSignIn(tab);
+  load(tab, googleSignInUrl(email));
+  layout();
+  emit();
+  return true;
 };
 
 // Sign-in is done once Google's login cookie exists and the tab has left the sign-in pages. The tab

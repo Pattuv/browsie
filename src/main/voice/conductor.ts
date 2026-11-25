@@ -379,12 +379,18 @@ export const createConductor = (deps: ConductorDeps) => {
       syncPill();
     },
 
+    // A press that returns true is a cut-off: keep holding it and tabs.ts opens the mic after all.
     onSpacePress() {
       if (mode === 'working' || transcribing || (mode !== 'awaiting' && speaking())) {
         stop(true);
         return true;
       }
-      // Talking over Browsie cuts it off. In awaiting, that press is the answer, so the mic opens.
+      // Still asking its question: the press cuts the question short, and the question stays open.
+      if (mode === 'awaiting' && speaking()) {
+        silence();
+        return true;
+      }
+      // Nothing to cut off, so the press talks (or, in awaiting, answers).
       silence();
       return false;
     },

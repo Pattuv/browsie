@@ -300,3 +300,40 @@ describe('limits', () => {
     );
   });
 });
+
+describe('goto provenance', () => {
+  const gotoCtx = (said: string[], visited: string[] = []): PolicyContext => ({
+    sources: new Map(),
+    goto: { said, visitedUrls: new Set(visited) },
+  });
+  const go = (url: string, ctx: PolicyContext) => evaluate({ type: 'goto', url }, ctx);
+
+  it('opens a site the user named, with only their words in the address', () => {
+    expect(go('https://www.youtube.com/', gotoCtx(['go to you tube'])).ok).toBe(true);
+    expect(go('https://www.bbc.co.uk/news', gotoCtx(['open bbc news'])).ok).toBe(true);
+    expect(go('https://www.google.com/search?q=red+shoes', gotoCtx(['search google for red shoes'])).ok).toBe(true);
+  });
+
+  it('refuses a host the user never named', () => {
+    expect(go('https://evil.example/', gotoCtx(['open bbc news']))).toMatchObject({ ok: false, error: 'blocked_by_policy' });
+    // Every label counts, so page text can't ride along as a subdomain.
+    expect(go('https://secret123.bbc.co.uk/', gotoCtx(['open bbc'])).ok).toBe(false);
+  });
+
+  it('refuses an address carrying words the user did not say', () => {
+    const ctx = gotoCtx(['search google for red shoes']);
+    expect(go('https://www.google.com/search?q=red+shoes+card+4242', ctx)).toMatchObject({ ok: false, error: 'blocked_by_policy' });
+    expect(go('https://www.google.com/red/shoes#token=abc123', ctx).ok).toBe(false);
+    expect(go('https://www.google.com/search?q=%E7%A7%98%E5%AF%86', ctx).ok).toBe(false);
+  });
+
+  it('allows going back to an address the task already reached, fragment aside', () => {
+    const visited = 'https://shop.example.com/item/8812?ref=home';
+    expect(go(`${visited}#reviews`, gotoCtx(['find me a lamp'], [visited])).ok).toBe(true);
+    expect(go('https://shop.example.com/item/9999', gotoCtx(['find me a lamp'], [visited])).ok).toBe(false);
+  });
+
+  it('is skipped where there is no goto context (the agent-side early check)', () => {
+    expect(go('https://anywhere.example/', { sources: new Map() }).ok).toBe(true);
+  });
+});

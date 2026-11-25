@@ -10,15 +10,16 @@ import Auth, { type Phase } from "./setup-pages/Auth";
 import AppearanceSetup from "./setup-pages/AppearanceSetup";
 import FinalConfirmation from "./setup-pages/FinalConfirmation";
 import KeySetup from "./setup-pages/KeySetup";
+import MicSetup from "./setup-pages/MicSetup";
 import GoogleSetup from "./setup-pages/GoogleSetup";
 import SetupGuide from "./setup-pages/SetupGuide";
 
 // What the gate wants: signed out is always Auth; signed in but not set up runs the setup steps.
 export type SetupStep = "auth" | "setup";
 // The steps after Auth, in order. Setup walks these itself; the gate only knows "not set up yet".
-type SetupPage = "guide" | "key" | "google" | "appearance" | "done";
+type SetupPage = "guide" | "mic" | "key" | "google" | "appearance" | "done";
 
-const SETUP_PAGES: SetupPage[] = ["guide", "key", "google", "appearance", "done"];
+const SETUP_PAGES: SetupPage[] = ["guide", "mic", "key", "google", "appearance", "done"];
 
 type SetupProps = {
   // true: first-time install (white → hello → mascot → welcome, with the soundtrack).
@@ -147,7 +148,10 @@ function Setup({ playIntro, step }: SetupProps) {
         <Auth playIntro={playIntro} phase={phase} onPhase={setPhase} />
       )}
       {step === "setup" && page === "guide" && (
-        <SetupGuide onContinue={() => setPage("key")} />
+        <SetupGuide onContinue={() => setPage("mic")} />
+      )}
+      {step === "setup" && page === "mic" && (
+        <MicSetup onContinue={() => setPage("key")} />
       )}
       {step === "setup" && page === "key" && (
         <KeySetup onContinue={() => setPage("google")} />
